@@ -335,23 +335,28 @@ static void statusBar() {
 #include "quick_settings.h"
 
 static void heartCard(int y, int h) {
-  card(6, y, 228, h, darkTheme ? 0x0940 : 0xD753);
-  uint16_t hrFg = darkTheme ? 0x7FE0 : 0x2400;
+  int hrVal = bleHRReady ? bleHR : 149;
+  int zone = calcHrZone(hrVal);
+  const HrZoneColors &zc = HR_ZONE_PALETTES[zone - 1];
+
+  uint16_t cardBg = darkTheme ? zc.bgDark : zc.bgLight;
+  uint16_t hrFg   = darkTheme ? zc.textDark : zc.textLight;
+  uint16_t hrSub  = darkTheme ? zc.subDark : zc.subLight;
+
+  card(6, y, 228, h, cardBg);
 
   // AVG
-  label(16, y + 8, "AVG", 1, darkTheme ? 0x5D00 : 0x4B60);
+  label(16, y + 8, "AVG", 1, hrSub);
   label(16, y + 18, bleHRReady ? String(max(40, bleHR - 9)) : "140", 2, hrFg);
 
   // Current HR & Zone
-  int hrVal = bleHRReady ? bleHR : 149;
-  int zone = (hrVal < 115) ? 1 : (hrVal < 135) ? 2 : (hrVal < 155) ? 3 : (hrVal < 175) ? 4 : 5;
   label(42, y + 18, "ZONE " + String(zone), 1, hrFg);
   label(84, y + 10, String(hrVal), 3, hrFg);
   label(144, y + 18, "BPM", 1, hrFg);
   drawHeartIcon(display, 168, y + 17, hrFg);
 
   // MAX
-  label(192, y + 8, "MAX", 1, darkTheme ? 0x5D00 : 0x4B60);
+  label(192, y + 8, "MAX", 1, hrSub);
   label(192, y + 18, bleHRReady ? String(bleHR + 31) : "180", 2, hrFg);
 
   // 5-Zone Bar with Active Indicator
@@ -432,12 +437,18 @@ static void drawMetricsScreen() {
   label(46, y + 12, tempStr, 2, uiFg());
   label(18, y + 38, "TEMPERATURE", 1, uiMuted());
 
-  card(123, y, 111, 57, darkTheme ? 0x0940 : 0xD753);
-  uint16_t hrCol = darkTheme ? 0x7FE0 : 0x2400;
+  // Dynamic Heart Rate Card matching active zone
+  int hrVal = bleHRReady ? bleHR : 149;
+  int zone = calcHrZone(hrVal);
+  const HrZoneColors &zc = HR_ZONE_PALETTES[zone - 1];
+  uint16_t hrCardBg = darkTheme ? zc.bgDark : zc.bgLight;
+  uint16_t hrCol    = darkTheme ? zc.textDark : zc.textLight;
+
+  card(123, y, 111, 57, hrCardBg);
   drawHeartIcon(display, 134, y + 14, hrCol);
   label(154, y + 12, bleHRReady ? String(bleHR) : "149", 2, hrCol);
   label(194, y + 17, "BPM", 1, hrCol);
-  label(148, y + 38, "ZONE 3", 1, hrCol);
+  label(148, y + 38, "ZONE " + String(zone), 1, hrCol);
 
   // Row 2: Full-width Power Card
   y = 90;

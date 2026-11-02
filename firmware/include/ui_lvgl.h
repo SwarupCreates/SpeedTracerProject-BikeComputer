@@ -123,6 +123,28 @@ static void build_heart_card(lv_obj_t *parent, UiTheme theme) {
   }
 }
 
+// Dynamic HR Zone Background & Text Color Update
+static const uint32_t LV_HR_BG_LIGHT[5]  = {0xEEEEF0, 0xD8F5FA, 0xDDF6DD, 0xFFF9DE, 0xFFE6E6};
+static const uint32_t LV_HR_BG_DARK[5]   = {0x222428, 0x08232E, 0x0C240C, 0x2B2300, 0x360505};
+static const uint32_t LV_HR_TXT_LIGHT[5] = {0x424242, 0x006675, 0x1B5E20, 0x855800, 0x990000};
+static const uint32_t LV_HR_TXT_DARK[5]  = {0xDFE2E6, 0x4DD0E1, 0x76FF03, 0xFFD54F, 0xFF7070};
+
+static inline void update_hr_zone(int hrBpm, bool dark) {
+  int zone = (hrBpm < 115) ? 1 : (hrBpm < 135) ? 2 : (hrBpm < 155) ? 3 : (hrBpm < 175) ? 4 : 5;
+  uint32_t bg  = dark ? LV_HR_BG_DARK[zone - 1] : LV_HR_BG_LIGHT[zone - 1];
+  uint32_t txt = dark ? LV_HR_TXT_DARK[zone - 1] : LV_HR_TXT_LIGHT[zone - 1];
+
+  if (uiDash.hr_card) {
+    lv_obj_set_style_bg_color(uiDash.hr_card, lv_color_hex(bg), 0);
+  }
+  if (uiDash.label_hr_val) {
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%d BPM", hrBpm);
+    lv_label_set_text(uiDash.label_hr_val, buf);
+    lv_obj_set_style_text_color(uiDash.label_hr_val, lv_color_hex(txt), 0);
+  }
+}
+
 // ── Create Figma Hero Speed Card ─────────────────────────────────────────────
 static void build_speed_card(lv_obj_t *parent, UiTheme theme) {
   uiDash.speed_card = lv_obj_create(parent);

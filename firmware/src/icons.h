@@ -201,32 +201,57 @@ static inline void drawThemeIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color
   }
 }
 
-// 14. 5-Zone Heart Rate Color Bar with Pointer Triangle
+// 14. 5-Zone Heart Rate Color Scheme & Palettes
+// Dynamic card backgrounds and high-contrast text shades for each training zone
+struct HrZoneColors {
+  uint16_t bgLight;   // Lighter shade of the zone color for Light Mode card background
+  uint16_t bgDark;    // Deep/dark shade of the zone color for Dark Mode card background
+  uint16_t textLight; // Primary high-contrast text color for Light Mode
+  uint16_t textDark;  // Primary high-contrast text color for Dark Mode
+  uint16_t subLight;  // Muted label color for Light Mode
+  uint16_t subDark;   // Muted label color for Dark Mode
+  uint16_t barColor;  // Vibrant saturated bar color
+};
+
+static const HrZoneColors HR_ZONE_PALETTES[5] = {
+  // Zone 1: Active Recovery (<115 BPM) - Soft Gray
+  { 0xEF7D, 0x2124, 0x4208, 0xDEFB, 0x7BEF, 0x8C71, 0xAD55 },
+  // Zone 2: Endurance (115-134 BPM) - Ice Cyan
+  { 0xD7FB, 0x0A2C, 0x034E, 0x5EFB, 0x2BCE, 0x23EF, 0x3DF7 },
+  // Zone 3: Tempo (135-154 BPM) - Mint Green (Figma Frame 1 & 2)
+  { 0xD753, 0x0940, 0x2400, 0x7FE0, 0x4B60, 0x5D00, 0x2564 },
+  // Zone 4: Threshold (155-174 BPM) - Buttercup Yellow
+  { 0xFFF1, 0x2920, 0x8380, 0xFFE0, 0x9CE0, 0x73E0, 0xFE60 },
+  // Zone 5: Anaerobic (>174 BPM) - Pastel Coral / Crimson
+  { 0xFDE7, 0x3000, 0x9800, 0xFA6A, 0xAB65, 0x7884, 0xFA08 }
+};
+
+static inline int calcHrZone(int hrBpm) {
+  if (hrBpm < 115) return 1;
+  if (hrBpm < 135) return 2;
+  if (hrBpm < 155) return 3;
+  if (hrBpm < 175) return 4;
+  return 5;
+}
+
+// 15. 5-Zone Heart Rate Color Bar with Pointer Triangle
 static inline void drawHRZoneBar(Adafruit_GFX &gfx, int x, int y, int totalW, int activeZone) {
-  // Colors matching Figma: Gray, Cyan, Green, Yellow, Coral/Red
-  const uint16_t zoneCols[5] = {
-    0xAD55, // Zone 1: Gray
-    0x3DF7, // Zone 2: Cyan
-    0x2564, // Zone 3: Green
-    0xFE60, // Zone 4: Yellow
-    0xFA08  // Zone 5: Salmon/Red
-  };
   activeZone = constrain(activeZone, 1, 5);
   int barW = (totalW - 16) / 5; // e.g. (200 - 16)/5 = ~36px
   int barH = 5;
 
   for (int z = 0; z < 5; z++) {
     int bx = x + z * (barW + 4);
-    gfx.fillRoundRect(bx, y, barW, barH, 2, zoneCols[z]);
+    gfx.fillRoundRect(bx, y, barW, barH, 2, HR_ZONE_PALETTES[z].barColor);
     // If this is the active zone, draw inverted pointer triangle below it
     if (z + 1 == activeZone) {
       int tx = bx + barW / 2;
-      gfx.fillTriangle(tx - 4, y - 5, tx + 4, y - 5, tx, y - 1, zoneCols[z]);
+      gfx.fillTriangle(tx - 4, y - 5, tx + 4, y - 5, tx, y - 1, HR_ZONE_PALETTES[z].barColor);
     }
   }
 }
 
-// 15. Compass Coin Badge (for Map Screen)
+// 16. Compass Coin Badge (for Map Screen)
 static inline void drawCompassCoin(Adafruit_GFX &gfx, int cx, int cy, float headingDeg) {
   // Circular badge
   gfx.fillCircle(cx, cy, 14, 0xFFFF);

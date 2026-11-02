@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="artwork/banner.png" alt="SpeedTracer - Sunlight Cycling Navigation Computer" width="100%">
+</p>
+
 # SpeedTracer 🚴‍♂️💨
 ### Sunlight Cycling Navigation Computer
 

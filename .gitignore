@@ -1,0 +1,13 @@
+/.vscode
+/.pio
+/.pytest_cache
+/.idf
+/.ccls-cache
+/.cache
+/.DS_Store
+env/
+build/
+firmware/.pio/
+firmware/.vscode/
+sdkconfig
+sdkconfig.old

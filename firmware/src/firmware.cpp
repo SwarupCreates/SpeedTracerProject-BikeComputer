@@ -120,7 +120,7 @@ class CycleDisplay : public GFXcanvas16 {
  uint8_t *compact=nullptr;
  // Ten neutral shades preserve card contrast and antialiased text even without PSRAM.
  static uint16_t palette(int i){
-   static const uint16_t colors[16]={0x0000,0x18C3,0x3186,0x528A,0x738E,0x9492,0xB5B6,0xD6BA,0xEF7D,0xFFFF,0xF208,0x3DF7,0x2564,0xFA60,0x7FE0,0x0940};
+   static const uint16_t colors[16]={0x0000,0x18C3,0x3186,0x528A,0x738E,0x9492,0xB5B6,0xD6BA,0xEF7D,0xFFFF,0xF800,0x3DF7,0x2564,0xFA60,0x7FE0,0x0940};
    return colors[i];
  }
  static uint8_t pack(uint16_t c){
@@ -403,7 +403,7 @@ static uint16_t uiBg()   { return darkTheme ? 0x0000 : 0xFFFF; }
 static uint16_t uiCard() { return darkTheme ? 0x18C3 : 0xDEFB; }
 static uint16_t uiFg()   { return darkTheme ? 0xFFFF : 0x18C3; }
 static uint16_t uiMuted(){ return 0x8410; }
-static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60;
+static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60, RED = 0xF800;
 
 // Native-resolution, 4-bit coverage glyphs, blended over the actual card background.
 // Use one shared baseline and measured advances; no enlarged 5x7 bitmap text.
@@ -470,7 +470,7 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
   const int count = recording ? 4 : 3;
   int x = (DISP_W - (count * iconSize + (count - 1) * gap)) / 2;
   const bool blinkOn = (millis() / 500) % 2;
-  const uint16_t unavailable = blinkOn ? 0xF208 : uiBg();
+  const uint16_t unavailable = blinkOn ? RED : uiBg();
   // Only a deliberately disabled radio is grey. Missing hardware, no fix,
   // or no sensor connection must not look like a manually disabled feature.
   const wifi_mode_t mode = WiFi.getMode();
@@ -479,7 +479,7 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
                        uint32_t(WiFi.softAPIP()) != 0;
   const bool wifiAvailable = WiFi.status() == WL_CONNECTED || apReady;
   if (recording) {
-    drawBikeIcon(display, x, 5, blinkOn ? 0xF208 : uiBg());
+    drawBikeIcon(display, x, 5, blinkOn ? RED : uiBg());
     x += iconSize + gap;
   }
   drawSatelliteIcon(display, x, 5, ride.gpsFixed ? uiFg() : unavailable);

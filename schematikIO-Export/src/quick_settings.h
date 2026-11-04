@@ -365,7 +365,7 @@ static bool drawLifecycleScreen() {
     label(16,140,"USB uses deep-sleep standby",1,0x8410);
     if(shutdownPending){label(16,185,"Release power button",1,0xFFFF);return true;}
     card(12,205,102,48,0x4208);label(30,222,"CANCEL",1,0xFFFF);
-    card(126,205,102,48,0xF208);label(147,222,"CONFIRM",1,0xFFFF);
+    card(126,205,102,48,0xF800);label(147,222,"CONFIRM",1,0xFFFF);
   } else if(gpsWaiting) {
     drawSatelliteIcon(display,110,48,0xFFFF);
     label(30,88,"WAITING FOR GPS",2,0xFFFF);
@@ -603,7 +603,7 @@ static void drawQuickSettings() {
       label(16, 102, rideStarted ? (ridePaused ? "PAUSED" : "RECORDING") : "STOPPED");
       card(16,120,208,44,0x2564);
       label(32,136,rideStarted?(ridePaused?"RESUME":"PAUSE"):(runningMode?"START RUN":"START RIDE"),1,0xFFFF);
-      card(16,175,208,44,0xF208);label(32,191,"STOP & SAVE",1,0xFFFF);
+      card(16,175,208,44,0xF800);label(32,191,"STOP & SAVE",1,0xFFFF);
       label(16,232,activityMessage);
       label(16,248,sdOk ? "SD card ready" : "NO SD: RAM ONLY");
       label(16,264,String(activityPoints)+" FIT points saved");
@@ -658,7 +658,7 @@ static void drawQuickSettings() {
 
   const int offset=quickScroll;
   // Activity mode follows the shared home-page selection.
-  card(6, 32-offset, 228, 69, 0xF208); // Vibrant Coral Red
+  card(6, 32-offset, 228, 69, 0xF800); // Vibrant Coral Red
   drawCustomIcon(display,18,44-offset,0xFFFF,runningMode?CustomIcon::runIcon:CustomIcon::bikeIcon);
   label(42,44-offset,runningMode?"OUTDOOR RUNNING":"OUTDOOR CYCLING",1,0xFFFF);
   label(16,68-offset,durationText(),3,0xFFFF);
@@ -666,10 +666,10 @@ static void drawQuickSettings() {
   // Big White Pause/Play Button on right of banner
   display.fillCircle(206, 66-offset, 18, 0xFFFF);
   if (rideStarted && !ridePaused) {
-    display.fillRect(201, 58-offset, 4, 16, 0xF208);
-    display.fillRect(208, 58-offset, 4, 16, 0xF208);
+    display.fillRect(201, 58-offset, 4, 16, 0xF800);
+    display.fillRect(208, 58-offset, 4, 16, 0xF800);
   } else {
-    display.fillTriangle(202, 58-offset, 202, 74-offset, 215, 66-offset, 0xF208);
+    display.fillTriangle(202, 58-offset, 202, 74-offset, 215, 66-offset, 0xF800);
   }
 
   card(6,106-offset,228,50,uiCard());

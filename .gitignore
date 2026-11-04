@@ -11,3 +11,6 @@ firmware/.pio/
 firmware/.vscode/
 sdkconfig
 sdkconfig.old
+
+crashed_firmware.bin
+compile_commands.json

@@ -21,7 +21,7 @@ class GeprcGps {
     pdop=(p[76]+256*p[77])*0.01f;lastPvt=millis();
   }
 public:
-  float pdop=99;uint32_t lastPvt=0;
+  float pdop=99;uint32_t lastPvt=0,lastMessage=0,lastStatus=0;uint8_t satellitesUsed=0;
   void feed(uint8_t c,TinyGPSPlus &gps){
     if(state && millis()-byteMs>200)state=0;byteMs=millis();
     if(state==0){if(c==0xB5)state=1;else gps.encode(c);return;}
@@ -30,7 +30,7 @@ public:
     else if(state==4){len=c;state=5;}else if(state==5){len|=uint16_t(c)<<8;pos=0;if(len>2048){state=0;return;}state=len?6:7;}
     else if(state==6){if(pos<sizeof(p))p[pos]=c;if(++pos==len)state=7;}
     else if(state==7){ca=c;state=8;return;}
-    else if(state==8){if(ca==a && c==b)publish(gps);state=0;return;}
+    else if(state==8){if(ca==a && c==b){lastMessage=millis();if(cls==1 && id==7 && len==92){satellitesUsed=p[23];lastStatus=millis();}publish(gps);}state=0;return;}
     a+=c;b+=a;
   }
   void poll(HardwareSerial &port){static uint32_t ms=0;if(millis()-ms<1000 || millis()-lastPvt<1000)return;ms=millis();const uint8_t request[]={0xB5,0x62,1,7,0,0,8,0x19};port.write(request,sizeof(request));}
@@ -42,7 +42,7 @@ class GeprcCompass {
   float offset[2]={0,0},scale[2]={1,1};int16_t mn[2],mx[2];uint32_t sampleMs=0;
 public:
   bool ready=false,calibrated=false,calibrating=false;uint32_t lastSample=0;float heading=0,yawOffset=0,declination=0;int16_t raw[3]{};
-  void begin(){Preferences p;p.begin("qmc",true);calibrated=p.getBool("valid",false);for(int i=0;i<2;i++){String k="o"+String(i);offset[i]=p.getFloat(k.c_str(),0);k="s"+String(i);scale[i]=p.getFloat(k.c_str(),1);}yawOffset=p.getFloat("yaw",0);declination=p.getFloat("decl",0);p.end();ready=write(0x0B,1)&&write(0x09,0x11);}
+  void begin(){Preferences p;p.begin("qmc",false);calibrated=p.getBool("valid",false);for(int i=0;i<2;i++){String k="o"+String(i);offset[i]=p.getFloat(k.c_str(),0);k="s"+String(i);scale[i]=p.getFloat(k.c_str(),1);}yawOffset=p.getFloat("yaw",0);declination=p.getFloat("decl",0);p.end();ready=write(0x0B,1)&&write(0x09,0x11);}
   void start(){calibrating=true;calibrated=false;for(int i=0;i<2;i++){mn[i]=32767;mx[i]=-32768;}}
   bool finish(){for(int i=0;i<2;i++)if(int(mx[i])-mn[i]<200)return false;float radius[2];for(int i=0;i<2;i++){offset[i]=(float(mx[i])+mn[i])/2;radius[i]=(float(mx[i])-mn[i])/2;}for(int i=0;i<2;i++)scale[i]=(radius[0]+radius[1])/(2*radius[i]);calibrating=false;calibrated=true;save();return true;}
   void save(){Preferences p;p.begin("qmc",false);p.putBool("valid",calibrated);for(int i=0;i<2;i++){String k="o"+String(i);p.putFloat(k.c_str(),offset[i]);k="s"+String(i);p.putFloat(k.c_str(),scale[i]);}p.putFloat("yaw",yawOffset);p.putFloat("decl",declination);p.end();}

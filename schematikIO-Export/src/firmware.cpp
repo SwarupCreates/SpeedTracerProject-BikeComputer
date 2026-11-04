@@ -459,8 +459,8 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
     clock = t;
     meridiem = local.tm_hour < 12 ? "am" : "pm";
   }
-  label(4, 8, clock, 1, uiFg());
-  label(4 + textWidth(clock, 1) + 3, 8, meridiem, 1, uiMuted());
+  label(4, 9, clock, 1, uiFg());
+  label(4 + textWidth(clock, 1) + 6, 9, meridiem, 1, uiMuted());
 
   // Quick Settings uses a chevron instead of the four centre indicators.
   if (showStatusIcons) {
@@ -492,7 +492,7 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
 
   // Battery Status
   const String batteryText = "N/A";
-  label(206 - 3 - textWidth(batteryText, 1), 8, batteryText, 1, uiMuted());
+  label(206 - 4 - textWidth(batteryText, 1), 9, batteryText, 1, uiMuted());
   drawBatteryIcon(display, 206, 7, 0, uiFg());
   display.drawLine(206, 6, 228, 19, uiMuted());
   display.drawLine(206, 19, 228, 6, uiMuted()); // Status unavailable, not proof of disconnection

@@ -129,7 +129,7 @@ static void drawFileDetail(){
   // Icon & Type Header
   card(6,64,48,46,uiCard());
   if(fileDetailIsFit){
-    drawCustomIcon(display,22,79,TEAL,CustomIcon::bikeIcon);
+    drawCustomIcon(display,22,79,TEAL,CustomIcon::runIcon);
   } else if(fileDetailIsGpx){
     drawCustomIcon(display,22,79,0x3DF7,CustomIcon::routeMapIcon);
   } else {
@@ -243,7 +243,7 @@ static void serviceAppRefresh(){
 }
 static void drawLibrary(){
   bool routes=homePage==HOME_ROUTES;
-  drawCustomIcon(display,10,39,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::folderIcon:CustomIcon::bikeIcon);
+  drawCustomIcon(display,10,39,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::folderIcon:CustomIcon::runIcon);
   label(34,38,routes?"SAVED ROUTES":homePage==HOME_RIDES?"RIDE HISTORY":"PAST ACTIVITY",1);
   
   if(librarySelection.length()){
@@ -265,13 +265,13 @@ static void drawLibrary(){
   label(10,65,routes?"Your route library":"Completed recordings",1,uiMuted());
   if(!libraryCount){
     card(6,100,228,142,uiCard());
-    drawCustomIcon(display,108,119,uiMuted(),routes?CustomIcon::routeMapIcon:CustomIcon::bikeIcon);
+    drawCustomIcon(display,108,119,uiMuted(),routes?CustomIcon::routeMapIcon:CustomIcon::runIcon);
     centeredLabel(6,160,228,libraryMessage.length()?libraryMessage:routes?"No saved routes":"No saved activities",1,uiMuted());
     centeredLabel(6,190,228,routes?"Add routes to SD /routes":"Finish and save an activity",1,uiMuted());
   }
   for(int i=0;i<libraryCount;i++){
     int y=89+i*44;card(6,y,228,40,uiCard());
-    drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:libraryNames[i].startsWith("run-")?CustomIcon::runIcon:CustomIcon::bikeIcon);
+    drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:CustomIcon::runIcon);
     String title=libraryNames[i];title.replace(".fit","");title.replace(".json","");title.replace(".gpx","");
     label(38,y+5,fitBrowserText(title,184),1);
     label(38,y+23,routes?"Route - tap to view":libraryNames[i].startsWith("run-")?"Run - tap to view":"Ride - tap to view",1,uiMuted());
@@ -347,7 +347,7 @@ static void drawHomeSubpage(){
     drawCustomIcon(display,10,41,uiFg(),CustomIcon::allAppsIcon);
     label(34,40,"ALL APPS",2);
     const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","MAP"};
-    CustomIcon icons[]={CustomIcon::bikeIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
+    CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
     for(int i=0;i<6;i++){int x=6+(i%2)*117,y=72+(i/2)*70;
       card(x,y,111,62,uiCard());drawCustomIcon(display,x+47,y+10,uiFg(),icons[i]);
       centeredLabel(x,y+40,111,names[i],1);
@@ -370,7 +370,7 @@ static void drawHomeSubpage(){
       card(6,y,228,34,uiCard());
       String low=browserNames[i];low.toLowerCase();
       CustomIcon icon = browserDirs[i] ? CustomIcon::folderIcon :
-                        low.endsWith(".fit") ? CustomIcon::bikeIcon :
+                        low.endsWith(".fit") ? CustomIcon::runIcon :
                         low.endsWith(".gpx") ? CustomIcon::routeMapIcon :
                         CustomIcon::sdCardIcon;
       uint16_t iconColor = browserDirs[i] ? uiFg() :

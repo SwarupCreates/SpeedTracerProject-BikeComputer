@@ -1039,7 +1039,109 @@ void setup() {
 static uint32_t lastDispMs  = 0;
 static uint32_t lastTrackMs = 0;
 
+static File uploadFile;
+
+static void handleSerialTransfer() {
+  if (!Serial.available()) return;
+  if (Serial.peek() != 'C') {
+    while (Serial.available() && Serial.peek() != 'C') Serial.read();
+    if (!Serial.available()) return;
+  }
+  String line = Serial.readStringUntil('\n');
+  line.trim();
+  if (line == "CMD:PING") {
+    Serial.println("PONG");
+    return;
+  }
+  if (line.startsWith("CMD:LIST_FILES ")) {
+    String dir = line.substring(15);
+    File d = SD_MMC.open(dir);
+    if (!d || !d.isDirectory()) {
+      Serial.println("ERR:NOT_DIR");
+      return;
+    }
+    Serial.println("START_LIST");
+    File entry = d.openNextFile();
+    while (entry) {
+      Serial.printf("%s %u\n", entry.name(), (unsigned int)entry.size());
+      entry = d.openNextFile();
+    }
+    Serial.println("END_LIST");
+    d.close();
+    return;
+  }
+  if (line.startsWith("CMD:DELETE_FILE ")) {
+    String path = line.substring(16);
+    if (SD_MMC.remove(path)) {
+      Serial.println("OK:DELETED");
+      uiRevision++;
+    } else {
+      Serial.println("ERR:DELETE_FAILED");
+    }
+    return;
+  }
+  if (line.startsWith("CMD:FILE_OPEN ")) {
+    String path = line.substring(14);
+    if (uploadFile) { uploadFile.flush(); uploadFile.close(); }
+    int p = path.lastIndexOf('/');
+    if (p > 0) {
+      String dir = path.substring(0, p);
+      SD_MMC.mkdir(dir);
+    }
+    SD_MMC.remove(path);
+    uploadFile = SD_MMC.open(path, FILE_WRITE);
+    if (!uploadFile) {
+      Serial.println("ERR:OPEN_FAILED");
+    } else {
+      Serial.println("OK:OPEN");
+    }
+    return;
+  }
+  if (line.startsWith("CMD:CHUNK ")) {
+    int length = line.substring(10).toInt();
+    if (!uploadFile) {
+      Serial.println("ERR:NO_FILE");
+      return;
+    }
+    Serial.println("READY");
+    int readBytes = 0;
+    uint8_t buf[1024];
+    uint32_t startMs = millis();
+    while (readBytes < length && millis() - startMs < 3000) {
+      int avail = Serial.available();
+      if (avail > 0) {
+        int toRead = min((uint32_t)avail, (uint32_t)(length - readBytes));
+        toRead = min((uint32_t)toRead, (uint32_t)sizeof(buf));
+        int n = Serial.readBytes((char*)buf, toRead);
+        if (n > 0) {
+          uploadFile.write(buf, n);
+          readBytes += n;
+          startMs = millis();
+        }
+      } else {
+        delay(1);
+      }
+    }
+    if (readBytes == length) {
+      Serial.println("K");
+    } else {
+      Serial.printf("ERR:CHUNK %d/%d\n", readBytes, length);
+    }
+    return;
+  }
+  if (line == "CMD:FILE_CLOSE") {
+    if (uploadFile) {
+      uploadFile.flush();
+      uploadFile.close();
+    }
+    uiRevision++;
+    Serial.println("OK:CLOSED");
+    return;
+  }
+}
+
 void loop() {
+  handleSerialTransfer();
   delay(1); // Yield between UI/input passes; never wait a frame in touch polling.
   bleReadings();
   pollPowerUi();

@@ -14,3 +14,5 @@ sdkconfig.old
 
 crashed_firmware.bin
 compile_commands.json
+scratch/
+

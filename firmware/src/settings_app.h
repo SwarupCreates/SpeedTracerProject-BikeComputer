@@ -367,16 +367,17 @@ static void drawLockHeroScreen() {
   // Date subtitle centered at Y = 112 (size 0 = 12px smooth font, 8px below clock)
   centeredLabel(0, 112, 240, dateStr.c_str(), 0, fg);
 
-  // Inverted downArrow chevron (up-arrow ^) above lock button at Y = 178
-  drawCustomIconFlippedV(display, 112, 178, muted, CustomIcon::downArrowIcon);
+  // Inverted downArrow chevron (up-arrow ^) above lock button centered at X = 108 (w = 24), Y = 178
+  drawCustomIconFlippedV(display, 108, 178, muted, CustomIcon::downArrowIcon);
 
-  // Circular lock button at X = 120, Y = 224, Radius = 24
-  display.fillCircle(120, 224, 24, cardBg);
-  display.drawCircle(120, 224, 24, darkTheme ? 0x2945 : 0xD6BA);
-  drawCustomIcon(display, 112, 216, fg, CustomIcon::lockIcon, 16, 16);
+  // Circular lock button at X = 120, Y = 224, Radius = 26
+  display.fillCircle(120, 224, 26, cardBg);
+  display.drawCircle(120, 224, 26, darkTheme ? 0x2945 : 0xD6BA);
+  // High-resolution unscaled 24x24 lock icon centered at (108, 212)
+  drawCustomIcon(display, 108, 212, fg, CustomIcon::lockIconLarge);
 
-  // Centered label at Y = 262
-  centeredLabel(0, 262, 240, "Swipe up to unlock", 1, fg);
+  // Centered label at Y = 264 (increased font size: size 0 = 12px smooth anti-aliased font)
+  centeredLabel(0, 264, 240, "Swipe up to unlock", 0, fg);
 }
 
 // Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Keypad, Universal Nav Bar)
@@ -610,21 +611,22 @@ static void drawSettingsApp() {
       "Modern Geometric Sans",
       "Clean Balanced Sans",
       "Tech Racing Display",
-      "Modern Monospace Style"
+      "Modern Monospace Style",
+      "Futuristic Tech Modular"
     };
 
-    for (int i = 0; i < 4; i++) {
-      int y = 66 + i * 48;
+    for (int i = 0; i < 5; i++) {
+      int y = 62 + i * 42;
       bool sel = (activeFontId == i);
-      display.fillRoundRect(6, y, 228, 42, 10, uiCard());
-      display.drawRoundRect(6, y, 228, 42, 10, sel ? 0x34C2 : (darkTheme ? 0x2945 : 0xD6BA));
+      display.fillRoundRect(6, y, 228, 38, 8, uiCard());
+      display.drawRoundRect(6, y, 228, 38, 8, sel ? 0x34C2 : (darkTheme ? 0x2945 : 0xD6BA));
 
       // Radio circle
-      display.drawCircle(24, y + 21, 8, sel ? 0x34C2 : uiMuted());
-      if (sel) display.fillCircle(24, y + 21, 4, 0x34C2);
+      display.drawCircle(22, y + 19, 7, sel ? 0x34C2 : uiMuted());
+      if (sel) display.fillCircle(22, y + 19, 3, 0x34C2);
 
-      label(42, y + 8, SYSTEM_FONT_NAMES[i], 1, sel ? 0x34C2 : uiFg());
-      label(42, y + 23, fontDescs[i], 0, uiMuted());
+      label(38, y + 6, SYSTEM_FONT_NAMES[i], 1, sel ? 0x34C2 : uiFg());
+      label(38, y + 21, fontDescs[i], 0, uiMuted());
     }
   }
   else if (settingsPage == SET_LANGUAGE) {
@@ -863,9 +865,9 @@ static void tapSettings(int x, int y) {
   }
   else if (settingsPage == SET_FONT) {
     if (x >= 6 && x < 234) {
-      for (int i = 0; i < 4; i++) {
-        int iy = 66 + i * 48;
-        if (y >= iy && y < iy + 42) {
+      for (int i = 0; i < 5; i++) {
+        int iy = 62 + i * 42;
+        if (y >= iy && y < iy + 38) {
           setActiveFont(i);
           uiRevision++;
           break;

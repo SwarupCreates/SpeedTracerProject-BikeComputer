@@ -1262,7 +1262,7 @@ static void pollQuickTouch() {
   static int startX=0,startY=0,startScroll=0,endX=0,endY=0;
   auto release = [&]() {
     if (screenLocked) {
-      if (lockScreenMode == LOCK_HERO) {
+      if (rootGesture && lockScreenMode == LOCK_HERO) {
         // Swipe up: moved upward by >= 25 px
         if (startY - endY >= 25) {
           if (screenLockEnabled) {
@@ -1312,8 +1312,12 @@ static void pollQuickTouch() {
     if (millis() - lastTouchActivityMs >= (uint32_t)screenTimeoutSec * 1000UL) {
       screenBlanked = true;
       analogWrite(5, 0); // Turn off LCD backlight
-      screenLocked = true;
-      lockScreenMode = LOCK_HERO;
+      if (screenLockEnabled) {
+        screenLocked = true;
+        lockScreenMode = LOCK_HERO;
+      } else {
+        screenLocked = false;
+      }
       uiRevision++;
     }
   }
@@ -1406,6 +1410,7 @@ static void pollQuickTouch() {
     held = true;candidateX=-1;
     if (screenLocked) {
       if (lockScreenMode == LOCK_KEYPAD) {
+        rootGesture = false;
         tapLockScreen(x, y);
         return;
       }

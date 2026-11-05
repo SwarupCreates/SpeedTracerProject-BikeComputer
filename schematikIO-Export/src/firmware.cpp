@@ -298,7 +298,7 @@ static void setDarkTheme(bool value){
 
 uint8_t activeFontId = FONT_METROPOLIS;
 static void setActiveFont(uint8_t id) {
-  if (id > FONT_SPACE_GROTESK) id = FONT_METROPOLIS;
+  if (id > FONT_TEKTUR) id = FONT_METROPOLIS;
   if (activeFontId == id) return;
   activeFontId = id;
   Preferences fontPrefs;
@@ -473,6 +473,8 @@ static const SmoothFont& textFont(int size) {
       return size == 0 ? smoothFont_Michroma_12 : size <= 1 ? smoothFont_Michroma_10 : size == 2 ? smoothFont_Michroma_18 : smoothFont_Michroma_28;
     case FONT_SPACE_GROTESK:
       return size == 0 ? smoothFont_SpaceGrotesk_12 : size <= 1 ? smoothFont_SpaceGrotesk_10 : size == 2 ? smoothFont_SpaceGrotesk_18 : smoothFont_SpaceGrotesk_28;
+    case FONT_TEKTUR:
+      return size == 0 ? smoothFont_Tektur_12 : size <= 1 ? smoothFont_Tektur_10 : size == 2 ? smoothFont_Tektur_18 : smoothFont_Tektur_28;
     case FONT_METROPOLIS:
     default:
       return size == 0 ? smoothFont_Metro_12 : size <= 1 ? smoothFont_Metro_10 : size == 2 ? smoothFont_Metro_18 : smoothFont_Metro_28;
@@ -1232,7 +1234,7 @@ void setup() {
   if(prefs.begin("cyclo", true)){
     darkTheme = prefs.getBool("darkTheme", false);
     activeFontId = prefs.getUChar("fontId", FONT_METROPOLIS);
-    if (activeFontId > FONT_SPACE_GROTESK) activeFontId = FONT_METROPOLIS;
+    if (activeFontId > FONT_TEKTUR) activeFontId = FONT_METROPOLIS;
     prefs.end();
   }
 
@@ -1384,8 +1386,8 @@ static File uploadFile;
 
 static void handleSerialTransfer() {
   if (!Serial.available()) return;
-  if (Serial.peek() != 'C' && Serial.peek() != 'S') {
-    while (Serial.available() && Serial.peek() != 'C' && Serial.peek() != 'S') Serial.read();
+  if (Serial.peek() != 'C' && Serial.peek() != 'S' && Serial.peek() != 'T') {
+    while (Serial.available() && Serial.peek() != 'C' && Serial.peek() != 'S' && Serial.peek() != 'T') Serial.read();
     if (!Serial.available()) return;
   }
   String line = Serial.readStringUntil('\n');

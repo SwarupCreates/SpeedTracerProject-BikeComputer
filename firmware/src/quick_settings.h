@@ -610,7 +610,31 @@ static void drawGpsRadarScreen() {
   int textY = 224 - gpsScroll;
   label(20, textY, "LOCKED", 2, uiFg());
   label(20, textY + 18, "SATELLITES", 2, uiFg());
-  drawBigNumber(220, textY - 2, sats, uiFg());
+  drawBigNumber(220, textY - 2, sats, uiFg());
+  // Satellite Connection Quality Progress Bar (max 6 sats for stable connection)
+  int barY = 266 - gpsScroll;
+  if (barY < 282 && barY > 24) {
+    const int barX = 20;
+    const int barW = 200;
+    const int barH = 7;
+    const int barR = 3;
+    const int maxSats = 6;
+    uint16_t trackColor = darkTheme ? 0x31A6 : 0xD6BA;
+    uint16_t fillColor;
+    if (sats < 3) {
+      fillColor = darkTheme ? 0xF800 : 0xD000;      // Red (Poor / Searching)
+    } else if (sats < maxSats) {
+      fillColor = darkTheme ? 0xFE20 : 0xD540;      // Amber Yellow #FFC21C (Fair / Locking)
+    } else {
+      fillColor = radarLineColor;                   // Vibrant Green (Stable connection / 6+ sats)
+    }
+    display.fillRoundRect(barX, barY, barW, barH, barR, trackColor);
+    int fillW = constrain(sats * barW / maxSats, 0, barW);
+    if (sats > 0 && fillW < barH) fillW = barH;
+    if (fillW > 0) {
+      display.fillRoundRect(barX, barY, fillW, barH, barR, fillColor);
+    }
+  }
 
   // Coordinates (visible when scrolled down)
   int latY = 282 - gpsScroll;

@@ -1236,6 +1236,10 @@ void setup() {
     prefs.end();
   }
 
+  // Restore clock and load security settings
+  restoreSystemTime();
+  initSecuritySettings();
+
   // 3. Initialize Display & Turn ON Backlight IMMEDIATELY
   lcdSPI.begin(40, -1, 45, 42);
   display.init(240, 320);
@@ -1525,6 +1529,12 @@ static void handleSerialTransfer() {
 }
 
 void loop() {
+  static uint32_t s_lastTimePersist = 0;
+  if (millis() - s_lastTimePersist >= 30000UL) {
+    s_lastTimePersist = millis();
+    persistSystemTime();
+  }
+
   handleSerialTransfer();
   delay(1); // Yield between UI/input passes; never wait a frame in touch polling.
   bleReadings();

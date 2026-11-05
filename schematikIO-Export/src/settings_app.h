@@ -1,4 +1,44 @@
 #pragma once
+RTC_DATA_ATTR static uint32_t rtc_last_epoch = 0;
+RTC_DATA_ATTR static uint32_t rtc_last_millis = 0;
+
+static void persistSystemTime() {
+  time_t now = time(nullptr);
+  if (now >= 1704067200) {
+    rtc_last_epoch = (uint32_t)now;
+    rtc_last_millis = millis();
+    Preferences p;
+    if (p.begin("clock", false)) {
+      p.putULong("epoch", (uint32_t)now);
+      p.end();
+    }
+  }
+}
+
+static void restoreSystemTime() {
+  time_t now = time(nullptr);
+  if (now >= 1704067200) return; // Already valid
+
+  if (rtc_last_epoch >= 1704067200) {
+    uint32_t elapsedSec = (millis() - rtc_last_millis) / 1000UL;
+    timeval tv = {(time_t)(rtc_last_epoch + elapsedSec), 0};
+    settimeofday(&tv, nullptr);
+    return;
+  }
+
+  Preferences p;
+  if (p.begin("clock", true)) {
+    uint32_t saved = p.getULong("epoch", 0);
+    p.end();
+    if (saved >= 1704067200) {
+      timeval tv = {(time_t)saved, 0};
+      settimeofday(&tv, nullptr);
+    }
+  }
+}
+
+#include "smooth_clock56.h"
+
 #include <Preferences.h>
 #include "smooth_digits48.h"
 
@@ -245,6 +285,47 @@ static void drawSmoothClock48(int startY, int h12, int min, uint16_t fg) {
 }
 
 // Frame 14: Lock Screen Hero (Clock, Date, Up Chevron, Lock Button, "Swipe up to unlock")
+static void drawSmoothClock56(int startY, int hour, int min, uint16_t fg) {
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%02d:%02d", hour, min);
+  int totalAdvance = 0;
+  for (int i = 0; i < 5; i++) {
+    char c = buf[i];
+    int idx = (c >= '0' && c <= '9') ? (c - '0') : (c == ':' ? 10 : -1);
+    if (idx >= 0) totalAdvance += pgm_read_word(&smoothClockGlyphs56[idx].advance);
+  }
+  int pen = (120 * 16) - (totalAdvance / 2);
+  for (int i = 0; i < 5; i++) {
+    char c = buf[i];
+    int idx = (c >= '0' && c <= '9') ? (c - '0') : (c == ':' ? 10 : -1);
+    if (idx >= 0) {
+      uint16_t offset = pgm_read_word(&smoothClockGlyphs56[idx].offset);
+      uint16_t advance = pgm_read_word(&smoothClockGlyphs56[idx].advance);
+      uint8_t w = pgm_read_byte(&smoothClockGlyphs56[idx].w);
+      uint8_t h = pgm_read_byte(&smoothClockGlyphs56[idx].h);
+      int8_t gx_ofs = (int8_t)pgm_read_byte(&smoothClockGlyphs56[idx].x);
+      int8_t gy_ofs = (int8_t)pgm_read_byte(&smoothClockGlyphs56[idx].y);
+
+      int gx = (pen + 8) / 16 + gx_ofs;
+      int gy = startY + (42 - h - gy_ofs);
+
+      for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+          int bitIdx = row * w + col;
+          uint8_t bits = pgm_read_byte(&smoothClockBits56[offset + bitIdx / 2]);
+          int a = (bits >> ((bitIdx & 1) ? 0 : 4)) & 15;
+          if (a) {
+            uint16_t bg = display.backgroundPixel(gx + col, gy + row);
+            display.drawPixel(gx + col, gy + row, blendText(fg, bg, a));
+          }
+        }
+      }
+      pen += advance;
+    }
+  }
+}
+
+// Frame 14: Lock Screen Hero (Clock, Date, Up Chevron, Lock Button, "Swipe up to unlock")
 static void drawLockHeroScreen() {
   uint16_t bg = uiBg();
   uint16_t fg = uiFg();
@@ -261,12 +342,13 @@ static void drawLockHeroScreen() {
     localtime_r(&now, &local);
   } else {
     memset(&local, 0, sizeof(local));
-    local.tm_hour = 5;
-    local.tm_min = 15;
-    local.tm_wday = 5; // Friday
-    local.tm_mday = 6;
-    local.tm_mon = 10; // November
-    local.tm_year = 126; // 2026
+    uint32_t sec = millis() / 1000UL;
+    local.tm_hour = (sec / 3600UL) % 24;
+    local.tm_min = (sec / 60UL) % 60;
+    local.tm_sec = sec % 60;
+    local.tm_mday = 1;
+    local.tm_mon = 0;
+    local.tm_year = 124;
   }
 
   const char* const days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -274,27 +356,32 @@ static void drawLockHeroScreen() {
   int h12 = local.tm_hour % 12;
   if (h12 == 0) h12 = 12;
 
-  String dateStr = String(days[local.tm_wday]) + " " + String(local.tm_mday) + " " + String(months[local.tm_mon]) + ", " + String(1900 + local.tm_year);
+  String dateStr;
+  if (timeValid) {
+    dateStr = String(days[local.tm_wday]) + " " + String(local.tm_mday) + " " + String(months[local.tm_mon]) + ", " + String(1900 + local.tm_year);
+  } else {
+    dateStr = "Waiting for time sync";
+  }
 
-  // Big digital clock centered at Y = 74
-  drawSmoothClock48(74, h12, local.tm_min, fg);
+  // Large 56px smooth digital clock centered at Y = 60
+  drawSmoothClock56(60, h12, local.tm_min, fg);
 
-  // Date subtitle centered at Y = 126
-  centeredLabel(0, 126, 240, dateStr.c_str(), 1, fg);
+  // Date subtitle centered at Y = 112 (size 0 = 12px smooth font, 8px below clock)
+  centeredLabel(0, 112, 240, dateStr.c_str(), 0, fg);
 
-  // Inverted downArrow chevron (up-arrow ^) above lock button at Y = 186
-  drawCustomIconFlippedV(display, 108, 186, muted, CustomIcon::downArrowIcon);
+  // Inverted downArrow chevron (up-arrow ^) above lock button at Y = 178
+  drawCustomIconFlippedV(display, 112, 178, muted, CustomIcon::downArrowIcon);
 
-  // Circular lock button at X = 120, Y = 230, Radius = 24
-  display.fillCircle(120, 230, 24, cardBg);
-  display.drawCircle(120, 230, 24, darkTheme ? 0x2945 : 0xD6BA);
-  drawCustomIcon(display, 112, 222, fg, CustomIcon::lockIcon, 16, 16);
+  // Circular lock button at X = 120, Y = 224, Radius = 24
+  display.fillCircle(120, 224, 24, cardBg);
+  display.drawCircle(120, 224, 24, darkTheme ? 0x2945 : 0xD6BA);
+  drawCustomIcon(display, 112, 216, fg, CustomIcon::lockIcon, 16, 16);
 
-  // Centered label at Y = 274
-  centeredLabel(0, 274, 240, "Swipe up to unlock", 0, fg);
+  // Centered label at Y = 262
+  centeredLabel(0, 262, 240, "Swipe up to unlock", 1, fg);
 }
 
-// Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Circular Keypad, Nav Bar)
+// Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Circular Keypad, Universal Nav Bar)
 static void drawLockKeypadScreen() {
   uint16_t bg = uiBg();
   uint16_t fg = uiFg();
@@ -308,58 +395,56 @@ static void drawLockKeypadScreen() {
     pinError = false;
   }
 
-  // 4 PIN Dots at Y = 56
+  // 4 PIN Dots at Y = 54
   for (int i = 0; i < 4; i++) {
     int dx = 87 + i * 22;
     if (pinError) {
-      display.fillCircle(dx, 56, 5, 0xF800);
+      display.fillCircle(dx, 54, 5, 0xF800);
     } else if (i < (int)pinInput.length()) {
-      display.fillCircle(dx, 56, 5, fg);
+      display.fillCircle(dx, 54, 5, fg);
     } else {
-      display.fillCircle(dx, 56, 5, cardBg);
-      display.drawCircle(dx, 56, 5, muted);
+      display.fillCircle(dx, 54, 5, cardBg);
+      display.drawCircle(dx, 54, 5, muted);
     }
   }
 
-  // 3x4 Keypad buttons
+  // 3x3 Keypad buttons
   const char* digits[3][3] = {
     {"1", "2", "3"},
     {"4", "5", "6"},
     {"7", "8", "9"}
   };
-  const int rowY[3] = {104, 152, 200};
+  const int rowY[3] = {96, 144, 192};
   const int colX[3] = {60, 120, 180};
   for (int r = 0; r < 3; r++) {
     for (int c = 0; c < 3; c++) {
       int cx = colX[c];
       int cy = rowY[r];
-      display.fillCircle(cx, cy, 22, cardBg);
-      display.drawCircle(cx, cy, 22, darkTheme ? 0x2945 : 0xD6BA);
-      centeredLabel(cx - 22, cy - 7, 44, digits[r][c], 2, fg);
+      display.fillCircle(cx, cy, 21, cardBg);
+      display.drawCircle(cx, cy, 21, darkTheme ? 0x2945 : 0xD6BA);
+      centeredLabel(cx - 21, cy - 7, 42, digits[r][c], 2, fg);
     }
   }
 
-  // Row 3: Backspace Capsule (Cols 0 & 1: x = 38 to 142, y = 226, w = 104, h = 44, r = 22)
-  display.fillRoundRect(38, 226, 104, 44, 22, cardBg);
-  display.drawRoundRect(38, 226, 104, 44, 22, darkTheme ? 0x2945 : 0xD6BA);
-  // Crisp Backspace Arrow in center (cx = 90, cy = 248)
-  display.fillRect(80, 247, 20, 2, fg);
-  display.drawLine(80, 248, 87, 241, fg);
-  display.drawLine(80, 249, 87, 242, fg);
-  display.drawLine(80, 248, 87, 255, fg);
-  display.drawLine(80, 247, 87, 254, fg);
+  // Row 3: Backspace Capsule (Cols 0 & 1: x = 38 to 142, y = 218, w = 104, h = 42, r = 21)
+  display.fillRoundRect(38, 218, 104, 42, 21, cardBg);
+  display.drawRoundRect(38, 218, 104, 42, 21, darkTheme ? 0x2945 : 0xD6BA);
+  // Crisp Backspace Arrow in center (cx = 90, cy = 239)
+  display.fillRect(80, 238, 20, 2, fg);
+  display.drawLine(80, 239, 87, 232, fg);
+  display.drawLine(80, 240, 87, 233, fg);
+  display.drawLine(80, 239, 87, 246, fg);
+  display.drawLine(80, 238, 87, 245, fg);
 
-  // '0' circular button at (180, 248)
-  display.fillCircle(180, 248, 22, cardBg);
-  display.drawCircle(180, 248, 22, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(180 - 22, 248 - 7, 44, "0", 2, fg);
+  // '0' circular button at (180, 239), radius 21
+  display.fillCircle(180, 239, 21, cardBg);
+  display.drawCircle(180, 239, 21, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(180 - 21, 239 - 7, 42, "0", 2, fg);
 
-  // Bottom Navigation Bar at Y = 298
-  // Back arrow on left (cx = 60)
-  drawCustomIcon(display, 60 - 8, 298 - 8, fg, CustomIcon::GoBackIcon, 16, 16);
-  // Home circle in center (cx = 120)
-  display.drawCircle(120, 298, 8, fg);
-  display.drawCircle(120, 298, 7, fg);
+  // Universal Bottom Navigation Bar (y = 290..319)
+  display.fillRect(0, 290, 240, 30, uiBg());
+  drawCustomIcon(display, 42, 297, fg, CustomIcon::GoBackIcon);
+  drawCustomIcon(display, 112, 297, fg, CustomIcon::HomeIcon);
 }
 
 static void drawLockScreen() {
@@ -376,12 +461,21 @@ static void drawLockScreen() {
 }
 
 static void tapLockScreen(int x, int y) {
-  if (lockScreenMode == LOCK_HERO) {
-    int dx = x - 120, dy = y - 232;
-    bool lockBtnTapped = (dx * dx + dy * dy <= 30 * 30);
-    bool unlockAreaTapped = (y >= 170 && y < 300);
+  // Universal Navigation Bar tap: y >= 285
+  if (y >= 285) {
+    if (lockScreenMode == LOCK_KEYPAD) {
+      lockScreenMode = LOCK_HERO;
+      pinInput = "";
+      pinError = false;
+      uiRevision++;
+    }
+    return;
+  }
 
-    if (lockBtnTapped || unlockAreaTapped) {
+  if (lockScreenMode == LOCK_HERO) {
+    // Only taps on circular lock button (cx = 120, cy = 224, radius = 32)
+    int dx = x - 120, dy = y - 224;
+    if (dx * dx + dy * dy <= 32 * 32) {
       if (screenLockEnabled) {
         lockScreenMode = LOCK_KEYPAD;
         pinInput = "";
@@ -395,25 +489,16 @@ static void tapLockScreen(int x, int y) {
   }
 
   // LOCK_KEYPAD mode
-  // Bottom navigation bar tap
-  if (y >= 280) {
-    lockScreenMode = LOCK_HERO;
-    pinInput = "";
-    pinError = false;
-    uiRevision++;
-    return;
-  }
-
-  // Keypad row 0: 1, 2, 3 (y: 82 to 126)
-  // Keypad row 1: 4, 5, 6 (y: 130 to 174)
-  // Keypad row 2: 7, 8, 9 (y: 178 to 222)
-  if (y >= 82 && y < 222) {
-    int r = (y - 82) / 48;
+  // Keypad row 0: 1, 2, 3 (y: 74 to 122)
+  // Keypad row 1: 4, 5, 6 (y: 122 to 170)
+  // Keypad row 2: 7, 8, 9 (y: 170 to 218)
+  if (y >= 74 && y < 218) {
+    int r = (y - 74) / 48;
     if (r >= 0 && r < 3) {
       int c = -1;
-      if (x >= 38 && x < 82) c = 0;
-      else if (x >= 98 && x < 142) c = 1;
-      else if (x >= 158 && x < 202) c = 2;
+      if (x >= 36 && x < 84) c = 0;
+      else if (x >= 96 && x < 144) c = 1;
+      else if (x >= 156 && x < 204) c = 2;
 
       if (c >= 0) {
         char digit = '1' + (r * 3 + c);
@@ -424,7 +509,7 @@ static void tapLockScreen(int x, int y) {
         }
       }
     }
-  } else if (y >= 226 && y < 270) {
+  } else if (y >= 218 && y < 265) {
     // Backspace capsule: x = 38 to 142
     if (x >= 38 && x < 142) {
       if (pinInput.length() > 0) {
@@ -434,8 +519,8 @@ static void tapLockScreen(int x, int y) {
         return;
       }
     }
-    // '0': x = 158 to 202
-    else if (x >= 158 && x < 202) {
+    // '0': x = 156 to 204
+    else if (x >= 156 && x < 204) {
       if (pinInput.length() < 4) {
         pinInput += '0';
         pinError = false;

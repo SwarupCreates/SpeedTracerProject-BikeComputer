@@ -1056,8 +1056,7 @@ static void drawGpsRadarScreen() {
 }
 
 static void quickTap(int x, int y) {
-  if(screenLocked){
-    tapLockScreen(x, y);
+  if (screenLocked) {
     return;
   }
   if(y>=290){
@@ -1253,21 +1252,40 @@ static void pollQuickTouch() {
   static uint32_t candidateMs=0;
   static bool rootGesture=false, sliderGesture=false, moved=false;
   static int startX=0,startY=0,startScroll=0,endX=0,endY=0;
-  auto release=[&](){
-    if (screenLocked && lockScreenMode == LOCK_HERO) {
-      if (moved && (startY - endY >= 20)) {
-        if (screenLockEnabled) {
-          lockScreenMode = LOCK_KEYPAD;
-          pinInput = "";
-          pinError = false;
-        } else {
-          screenLocked = false;
+  auto release = [&]() {
+    if (screenLocked) {
+      if (lockScreenMode == LOCK_HERO) {
+        // Swipe up: moved upward by >= 25 px
+        if (moved && (startY - endY >= 25)) {
+          if (screenLockEnabled) {
+            lockScreenMode = LOCK_KEYPAD;
+            pinInput = "";
+            pinError = false;
+          } else {
+            screenLocked = false;
+          }
+          uiRevision++;
         }
-        uiRevision++;
-      } else if (!moved) {
-        quickTap(endX, endY);
+        // Tap on circular lock button ONLY: (120, 224), radius 32
+        else if (!moved) {
+          int dx = endX - 120, dy = endY - 224;
+          if (dx * dx + dy * dy <= 32 * 32) {
+            if (screenLockEnabled) {
+              lockScreenMode = LOCK_KEYPAD;
+              pinInput = "";
+              pinError = false;
+            } else {
+              screenLocked = false;
+            }
+            uiRevision++;
+          }
+        }
+      } else if (lockScreenMode == LOCK_KEYPAD) {
+        if (!moved) {
+          tapLockScreen(endX, endY);
+        }
       }
-      rootGesture=false; sliderGesture=false; mapPanGesture=false; held=false; candidateX=-1;
+      rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
       return;
     }
     if(rootGesture && !sliderGesture && !moved)quickTap(endX,endY);
@@ -1328,8 +1346,12 @@ static void pollQuickTouch() {
   if (screenBlanked) {
     screenBlanked = false;
     analogWrite(5, (brightnessPercent * 255 + 50) / 100);
-    screenLocked = true;
-    lockScreenMode = LOCK_HERO;
+    if (screenLockEnabled) {
+      screenLocked = true;
+      lockScreenMode = LOCK_HERO;
+    } else {
+      screenLocked = false;
+    }
     uiRevision++;
     return;
   }
@@ -1370,12 +1392,13 @@ static void pollQuickTouch() {
     }
     if(millis()-candidateMs<25)return;
     held = true;candidateX=-1;
-    if (screenLocked && lockScreenMode == LOCK_HERO) {
+    if (screenLocked) {
       rootGesture = true;
       moved = false;
       startX = endX = x;
       startY = endY = y;
       sliderGesture = false;
+      return;
     } else if(quickOpen && !quickDetail && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=quickScroll;
       sliderGesture=y+quickScroll>=107 && y+quickScroll<155 && x>=36 && x<225;

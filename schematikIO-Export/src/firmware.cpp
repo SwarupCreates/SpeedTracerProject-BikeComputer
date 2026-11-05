@@ -407,7 +407,7 @@ static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60;
 
 // Native-resolution, 4-bit coverage glyphs, blended over the actual card background.
 // Use one shared baseline and measured advances; no enlarged 5x7 bitmap text.
-static const SmoothFont& textFont(int size){return size<=1?smoothFont10:size==2?smoothFont18:smoothFont28;}
+static const SmoothFont& textFont(int size){return size==0?smoothFont12:size<=1?smoothFont10:size==2?smoothFont18:smoothFont28;}
 static int textWidth(const String& v,int size){const auto& f=textFont(size);int w=0;for(unsigned char c:v){if(c<32||c>126)c='?';w+=f.glyphs[c-32].advance;}return (w+8)/16;}
 static uint16_t blendText(uint16_t fg,uint16_t bg,int a){
  int r=((fg>>11)*a+(bg>>11)*(15-a)+7)/15;
@@ -457,10 +457,10 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
     char t[16];
     snprintf(t, sizeof(t), "%d:%02d", local.tm_hour % 12 == 0 ? 12 : local.tm_hour % 12, local.tm_min);
     clock = t;
-    meridiem = local.tm_hour < 12 ? "am" : "pm";
+    meridiem = local.tm_hour < 12 ? "AM" : "PM";
   }
-  label(4, 9, clock, 1, uiFg());
-  label(4 + textWidth(clock, 1) + 6, 9, meridiem, 1, uiMuted());
+  String clockText = meridiem.length() ? (clock + " " + meridiem) : clock;
+  label(12, 10, clockText, 0, uiFg());
 
   // Quick Settings uses a chevron instead of the four centre indicators.
   if (showStatusIcons) {

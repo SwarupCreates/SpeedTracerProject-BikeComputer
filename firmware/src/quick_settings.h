@@ -19,6 +19,7 @@ uint32_t countdownStart=0;
 bool gpsWaiting=false;
 bool gpsRadarInspector=false;
 int gpsScroll=0;
+int settingsScroll=0;
 // Home subpages stay independent of dashboard navigation and touch calibration.
 enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS };
 HomePage homePage=HOME_MAIN;
@@ -652,7 +653,7 @@ static void globalHome(){
   fileDetailOpen=false;fileDeleteConfirm=false;
   shutdownDialog=false;gpsWaiting=false;gpsRadarInspector=false;countdownStart=0;
   quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;
-  settingsPage=SET_MAIN;settingChangePin=false;settingFormatConfirm=false;pinInput="";
+  settingsPage=SET_MAIN;settingsScroll=0;settingChangePin=false;settingFormatConfirm=false;pinInput="";
   uiRevision++;
 }
 static void globalBack(){
@@ -1143,7 +1144,7 @@ static void quickTap(int x, int y) {
       if(tile==0)openLibrary(HOME_ACTIVITY);
       else if(tile==1)openLibrary(HOME_RIDES);
       else if(tile==2)openLibrary(HOME_ROUTES);
-      else if(tile==3){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;uiRevision++;}
+      else if(tile==3){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;settingsScroll=0;uiRevision++;}
       else if(tile==4)openBrowser("/");
       else {welcomeOpen=false;currentScreen=SCR_MAP;uiRevision++;}
       return;
@@ -1393,6 +1394,9 @@ static void pollQuickTouch() {
           int offset=constrain(startScroll+startY-y,0,maxS);
           if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
         }
+      } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
+        int offset=constrain(startScroll+startY-y,0,80);
+        if(offset!=settingsScroll){settingsScroll=offset;uiRevision++;}
       } else {
         int offset=constrain(startScroll+startY-y,0,140);
         if(offset!=quickScroll){quickScroll=offset;uiRevision++;}
@@ -1438,6 +1442,9 @@ static void pollQuickTouch() {
         startPanLat = previewPanLat;
         startPanLon = previewPanLon;
       }
+    } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 29 && y < 286){
+      rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;
+      sliderGesture=false;
     } else quickTap(x, y);
   }
 }

@@ -740,11 +740,11 @@ static void previewDraw(int y, int h) {
   int sx, sy, ex, ey;
   projectCoord(preview[0].lat, preview[0].lon, sx, sy);
   projectCoord(preview[previewLen - 1].lat, preview[previewLen - 1].lon, ex, ey);
-  if (sy >= clipY1 - 6 && sy <= clipY2 + 6 && sx >= clipX1 - 6 && sx <= clipX2 + 6) {
-    drawStartNodeIcon(display, sx - 6, sy - 6);
+  if (sy >= clipY1 - 8 && sy <= clipY2 + 8 && sx >= clipX1 - 8 && sx <= clipX2 + 8) {
+    drawStartNodeIcon(display, sx - 8, sy - 8);
   }
-  if (ey >= clipY1 - 6 && ey <= clipY2 + 6 && ex >= clipX1 - 6 && ex <= clipX2 + 6) {
-    drawFinishNodeIcon(display, ex - 6, ey - 6);
+  if (ey >= clipY1 - 8 && ey <= clipY2 + 8 && ex >= clipX1 - 8 && ex <= clipX2 + 8) {
+    drawFinishNodeIcon(display, ex - 8, ey - 8);
   }
 
   // Draw clean rounded card border over map layers to frame map neatly
@@ -790,13 +790,13 @@ static void previewDraw(int y, int h) {
   int btnStartY = btnMinusY + 28;
   display.fillRoundRect(btnX, btnStartY, btnW, btnH, 4, 0xFFFF);
   display.drawRoundRect(btnX, btnStartY, btnW, btnH, 4, 0xCE79);
-  drawStartNodeIcon(display, btnX + 7, btnStartY + 6);
+  drawStartNodeIcon(display, btnX + 5, btnStartY + 4);
 
   // 4. Snap to End Point Button
   int btnEndY = btnStartY + 28;
   display.fillRoundRect(btnX, btnEndY, btnW, btnH, 4, 0xFFFF);
   display.drawRoundRect(btnX, btnEndY, btnW, btnH, 4, 0xCE79);
-  drawFinishNodeIcon(display, btnX + 7, btnEndY + 6);
+  drawFinishNodeIcon(display, btnX + 5, btnEndY + 4);
 }
 
 static void archiveGraph(String path,int y,int col,const char* title,const char* subtitle=nullptr){

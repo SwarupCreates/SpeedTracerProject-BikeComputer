@@ -944,11 +944,11 @@ static void drawMapScreen() {
     MapTileCache::latLonToTile(route[routeLen - 1].lat, route[routeLen - 1].lon, etx, ety, efx, efy);
     projectTilePoint((float)stx + sfx, (float)sty + sfy, sx, sy);
     projectTilePoint((float)etx + efx, (float)ety + efy, ex, ey);
-    if (sx >= -6 && sx <= 246 && sy >= -6 && sy <= 226) {
-      drawStartNodeIcon(display, sx - 6, sy - 6);
+    if (sx >= -8 && sx <= 248 && sy >= -8 && sy <= 228) {
+      drawStartNodeIcon(display, sx - 8, sy - 8);
     }
-    if (ex >= -6 && ex <= 246 && ey >= -6 && ey <= 226) {
-      drawFinishNodeIcon(display, ex - 6, ey - 6);
+    if (ex >= -8 && ex <= 248 && ey >= -8 && ey <= 228) {
+      drawFinishNodeIcon(display, ex - 8, ey - 8);
     }
   }
 

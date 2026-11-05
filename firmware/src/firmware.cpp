@@ -195,30 +195,49 @@ public:
  }
  void invertDisplay(bool v){panel.invertDisplay(v);}
  void refresh(){
-   if(!buffer && !compact)return;
-   // Compare tiles, merge adjacent changed tiles into one 16-row transfer.
-   // Reuse fixed scratch storage; do not allocate during a refresh.
-   static uint16_t strip[DISP_W*16];
-   for(int y=0;y<DISP_H;y+=16){
-     bool dirty[DISP_W/16];
-     for(int x=0;x<DISP_W;x+=16){
-       uint32_t hash=2166136261UL;
-       for(int r=0;r<16;r++)for(int c=0;c<16;c++)
-         hash=(hash^pixelAt((y+r)*DISP_W+x+c))*16777619UL;
-       int index=(y/16)*(DISP_W/16)+x/16;
-       dirty[x/16]=first || shown[index]!=hash;
-       shown[index]=hash;
-     }
-     for(int t=0;t<DISP_W/16;){
-       if(!dirty[t]){++t;continue;}
-       int begin=t;while(t<DISP_W/16 && dirty[t])++t;
-       int x=begin*16,w=(t-begin)*16;
-       for(int r=0;r<16;r++)for(int c=0;c<w;c++)strip[r*w+c]=pixelAt((y+r)*DISP_W+x+c);
-       panel.drawRGBBitmap(x,y,strip,w,16);
-     }
-   }
-   first=false;
- }
+    if(!buffer && !compact)return;
+    // Compare tiles with 32-bit unrolled word reads, merge adjacent changed tiles into one 16-row transfer.
+    static uint16_t strip[DISP_W*16];
+    for(int y=0;y<DISP_H;y+=16){
+      bool dirty[DISP_W/16];
+      for(int x=0;x<DISP_W;x+=16){
+        uint32_t hash=2166136261UL;
+        if(buffer){
+          for(int r=0;r<16;r++){
+            const uint32_t* p32=(const uint32_t*)(buffer + (y+r)*DISP_W + x);
+            hash ^= p32[0]; hash *= 16777619UL;
+            hash ^= p32[1]; hash *= 16777619UL;
+            hash ^= p32[2]; hash *= 16777619UL;
+            hash ^= p32[3]; hash *= 16777619UL;
+            hash ^= p32[4]; hash *= 16777619UL;
+            hash ^= p32[5]; hash *= 16777619UL;
+            hash ^= p32[6]; hash *= 16777619UL;
+            hash ^= p32[7]; hash *= 16777619UL;
+          }
+        } else {
+          for(int r=0;r<16;r++)for(int c=0;c<16;c++)
+            hash=(hash^pixelAt((y+r)*DISP_W+x+c))*16777619UL;
+        }
+        int index=(y/16)*(DISP_W/16)+x/16;
+        dirty[x/16]=first || shown[index]!=hash;
+        shown[index]=hash;
+      }
+      for(int t=0;t<DISP_W/16;){
+        if(!dirty[t]){++t;continue;}
+        int begin=t;while(t<DISP_W/16 && dirty[t])++t;
+        int x=begin*16,w=(t-begin)*16;
+        if(buffer){
+          for(int r=0;r<16;r++){
+            memcpy(&strip[r*w], buffer + (y+r)*DISP_W + x, w * sizeof(uint16_t));
+          }
+        } else {
+          for(int r=0;r<16;r++)for(int c=0;c<w;c++)strip[r*w+c]=pixelAt((y+r)*DISP_W+x+c);
+        }
+        panel.drawRGBBitmap(x,y,strip,w,16);
+      }
+    }
+    first=false;
+  }
 } display;
 
 #include "icons.h"
@@ -1610,11 +1629,39 @@ void loop() {
   serviceAppRefresh();
   pollQuickTouch();
 
-  // Check changed content at up to 40 Hz; static content is not transferred.
-  if (millis() - lastDispMs >= 25) {
+  // Target 50 FPS display refresh (20ms period, zero-allocation scalar comparison)
+  if (millis() - lastDispMs >= 20) {
     lastDispMs = millis();
-    String state=String((gpsWaiting||gpsRadarInspector)?(millis()/40):0)+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(darkTheme)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.getMode())+":"+String(WiFi.status())+":"+String(currentScreen)+":"+String(mapZoom)+":"+String(ride.speedKmh,1)+":"+String(ride.distanceKm,2)+":"+String(ride.elapsedSec/60)+":"+String(ride.lat,5)+":"+String(ride.lon,5)+":"+String(ride.altM,1)+":"+String(ride.cadenceRpm)+":"+String(ride.powerW)+":"+String(ride.gpsFixed)+":"+String(routeLen)+":"+String(trackLen)+":"+String(nav.destLat,5)+":"+String(nav.destLon,5)+":"+String(cfg.vo2maxManual)+":"+String(cfg.targetDistanceKm);
-    static String previous; if(state==previous)return;previous=state;
+    struct UIState {
+      uint32_t radarTick;
+      uint32_t blinkTick;
+      uint32_t uiRev;
+      uint32_t elapsedMin;
+      float speedKmh;
+      float distanceKm;
+      float lat, lon, altM;
+      int cadence, power, heading;
+      uint8_t screen, zoom, theme, ble, wifiMode, wifiStatus, gpsFixed, gpsReady;
+      int routeL, trackL;
+      float destLat, destLon;
+    };
+    UIState curState = {
+      (uint32_t)((gpsWaiting || gpsRadarInspector) ? (millis() / 40) : 0),
+      (uint32_t)(millis() / 500),
+      uiRevision,
+      ride.elapsedSec / 60,
+      ride.speedKmh,
+      ride.distanceKm,
+      ride.lat, ride.lon, ride.altM,
+      ride.cadenceRpm, ride.powerW, ride.heading,
+      (uint8_t)currentScreen, (uint8_t)mapZoom, (uint8_t)darkTheme, (uint8_t)bleCount(),
+      (uint8_t)WiFi.getMode(), (uint8_t)WiFi.status(), (uint8_t)ride.gpsFixed, (uint8_t)gpsDataReady,
+      routeLen, trackLen,
+      nav.destLat, nav.destLon
+    };
+    static UIState prevState = {};
+    if (memcmp(&curState, &prevState, sizeof(UIState)) == 0) return;
+    prevState = curState;
     if(drawLifecycleScreen()){drawGlobalNav();drawAppRefresh();display.refresh();return;}
     if(quickOpen){drawQuickSettings();drawGlobalNav();drawAppRefresh();display.refresh();return;}
     switch (currentScreen) {

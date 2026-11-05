@@ -259,14 +259,31 @@ static void bleBegin(){
    }
  }
 
- // Configure Advertising for iPhone discovery
+ // Configure Advertising for iPhone discovery with Apple ANCS solicitation
  NimBLEAdvertising* pAdv=NimBLEDevice::getAdvertising();
  if(pAdv){
-   pAdv->setName("SpeedTracer");
-   pAdv->addServiceUUID(NimBLEUUID((uint16_t)0x1805));
-   pAdv->setAppearance(0x0440); // 0x0440 = Generic Cycling Computer
+   NimBLEAdvertisementData advData;
+   advData.setFlags(0x06); // General Discoverable + BR/EDR Not Supported
+   advData.addServiceUUID(NimBLEUUID((uint16_t)0x1805)); // CTS
+
+   // Apple ANCS Service Solicitation (AD Type 0x15): 7905F431-B5CE-4E99-A40F-4B1E122D00D0
+   // Tells iOS Settings > Bluetooth that SpeedTracer is an Apple companion accessory
+   const uint8_t ancsSolicit[] = {
+     0x11, 0x15,
+     0xD0, 0x00, 0x2D, 0x12, 0x1E, 0x4B, 0x0F, 0xA4,
+     0x99, 0x4E, 0xCE, 0xB5, 0x31, 0xF4, 0x05, 0x79
+   };
+   advData.addData(ancsSolicit, sizeof(ancsSolicit));
+   pAdv->setAdvertisementData(advData);
+
+   // Scan Response packet for complete device name and appearance
+   NimBLEAdvertisementData scanData;
+   scanData.setName("SpeedTracer");
+   scanData.setAppearance(0x0440); // Generic Cycling Computer
+   pAdv->setScanResponseData(scanData);
+
    pAdv->start();
-   Serial.println("BLE: Advertising as 'SpeedTracer' with CTS");
+   Serial.println("BLE: Advertising as 'SpeedTracer' with ANCS solicitation and CTS");
  }
 
  Preferences p;

@@ -182,11 +182,10 @@ static void drawKeypad(int startY) {
 }
 
 static void tapKeypad(int x, int y, int startY, bool isSettingNewPin) {
-  if (x < 31 || x >= 209 || y < startY || y >= startY + 120) return;
-  int c = (x - 31) / 62;
-  if ((x - 31) % 62 >= 54) return;
+  if (x < 15 || x >= 225 || y < startY || y >= startY + 120) return;
+  int c = (x < 93) ? 0 : (x < 147 ? 1 : 2);
   int r = (y - startY) / 30;
-  if ((y - startY) % 30 >= 25) return;
+  if (r < 0 || r > 3) return;
 
   if (r < 3) {
     char digit = '1' + (r * 3 + c);
@@ -332,7 +331,6 @@ static void drawLockHeroScreen() {
   uint16_t muted = uiMuted();
   uint16_t cardBg = uiCard();
 
-  display.fillScreen(bg);
   statusBar(true, false);
 
   time_t now = time(nullptr);
@@ -388,12 +386,7 @@ static void drawLockKeypadScreen() {
   uint16_t muted = uiMuted();
   uint16_t cardBg = uiCard();
 
-  display.fillScreen(bg);
   statusBar(true, false);
-
-  if (pinError && millis() - pinErrorMs > 2000) {
-    pinError = false;
-  }
 
   // 4 PIN Dots at Y = 54
   for (int i = 0; i < 4; i++) {
@@ -450,6 +443,7 @@ static void drawLockKeypadScreen() {
 static void drawLockScreen() {
   bool prevDark = darkTheme;
   if (lockscreenDarkOnly) darkTheme = true;
+  display.fillScreen(uiBg());
 
   if (lockScreenMode == LOCK_HERO) {
     drawLockHeroScreen();
@@ -461,8 +455,8 @@ static void drawLockScreen() {
 }
 
 static void tapLockScreen(int x, int y) {
-  // Universal Navigation Bar tap: y >= 285
-  if (y >= 285) {
+  // Universal Navigation Bar tap: y >= 270 (Back / Home returns to hero lock screen)
+  if (y >= 270) {
     if (lockScreenMode == LOCK_KEYPAD) {
       lockScreenMode = LOCK_HERO;
       pinInput = "";
@@ -473,9 +467,9 @@ static void tapLockScreen(int x, int y) {
   }
 
   if (lockScreenMode == LOCK_HERO) {
-    // Only taps on circular lock button (cx = 120, cy = 224, radius = 32)
+    // Only taps on circular lock button (cx = 120, cy = 224, radius = 36)
     int dx = x - 120, dy = y - 224;
-    if (dx * dx + dy * dy <= 32 * 32) {
+    if (dx * dx + dy * dy <= 36 * 36) {
       if (screenLockEnabled) {
         lockScreenMode = LOCK_KEYPAD;
         pinInput = "";
@@ -489,38 +483,29 @@ static void tapLockScreen(int x, int y) {
   }
 
   // LOCK_KEYPAD mode
-  // Keypad row 0: 1, 2, 3 (y: 74 to 122)
-  // Keypad row 1: 4, 5, 6 (y: 122 to 170)
-  // Keypad row 2: 7, 8, 9 (y: 170 to 218)
-  if (y >= 74 && y < 218) {
-    int r = (y - 74) / 48;
-    if (r >= 0 && r < 3) {
-      int c = -1;
-      if (x >= 36 && x < 84) c = 0;
-      else if (x >= 96 && x < 144) c = 1;
-      else if (x >= 156 && x < 204) c = 2;
-
-      if (c >= 0) {
-        char digit = '1' + (r * 3 + c);
-        if (pinInput.length() < 4) {
-          pinInput += digit;
-          pinError = false;
-          uiRevision++;
-        }
-      }
+  // Rows 0, 1, 2: digits '1' through '9' (y: 70 to 216)
+  if (y >= 70 && y < 216) {
+    int r = (y < 120) ? 0 : (y < 168 ? 1 : 2);
+    int c = (x < 90) ? 0 : (x < 150 ? 1 : 2);
+    char digit = '1' + (r * 3 + c);
+    if (pinInput.length() < 4) {
+      pinInput += digit;
+      pinError = false;
+      uiRevision++;
     }
-  } else if (y >= 218 && y < 265) {
-    // Backspace capsule: x = 38 to 142
-    if (x >= 38 && x < 142) {
+  }
+  // Row 3: Backspace capsule (x < 150) and '0' circle (x >= 150) (y: 216 to 270)
+  else if (y >= 216 && y < 270) {
+    if (x < 150) {
+      // Backspace
       if (pinInput.length() > 0) {
         pinInput.remove(pinInput.length() - 1);
         pinError = false;
         uiRevision++;
         return;
       }
-    }
-    // '0': x = 156 to 204
-    else if (x >= 156 && x < 204) {
+    } else {
+      // '0'
       if (pinInput.length() < 4) {
         pinInput += '0';
         pinError = false;
@@ -529,6 +514,7 @@ static void tapLockScreen(int x, int y) {
     }
   }
 
+  // Check PIN when 4 digits have been entered
   if (pinInput.length() == 4) {
     if (pinInput == screenLockPin) {
       screenLocked = false;

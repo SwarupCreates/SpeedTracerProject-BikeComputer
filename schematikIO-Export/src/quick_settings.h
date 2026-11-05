@@ -1002,8 +1002,16 @@ static void drawGpsRadarScreen() {
  static bool drawLifecycleScreen() {
   static String previous;
   String state;
-  if(screenLocked) state="locked:"+String((int)lockScreenMode)+":"+pinInput+":"+String(pinError)+":"+String(millis()/500);
-
+  if(screenLocked) {
+    if (lockScreenMode == LOCK_HERO) {
+      time_t now = time(nullptr);
+      struct tm l;
+      localtime_r(&now, &l);
+      state = "lock_hero:" + String(l.tm_hour) + ":" + String(l.tm_min) + ":" + String(uiRevision);
+    } else {
+      state = "lock_keypad:" + pinInput + ":" + String(pinError) + ":" + String(uiRevision);
+    }
+  }
   else if(shutdownDialog) state=shutdownPending?"release":"shutdown";
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
   else if(countdownStart) state="count"+String(3-min(2UL,(millis()-countdownStart)/1000));
@@ -1012,11 +1020,11 @@ static void drawGpsRadarScreen() {
   if(state.isEmpty()){previous="";return false;}
   if(state==previous)return true;
   previous=state;
-  display.fillScreen(uiBg());
   if(screenLocked){
     drawLockScreen();
     return true;
   }
+  display.fillScreen(uiBg());
   if(shutdownDialog) {
     label(24,72,"SHUT DOWN?",2,0xFFFF);
     label(16,116,"Current activity will be saved",1,0xFFFF);
@@ -1256,7 +1264,7 @@ static void pollQuickTouch() {
     if (screenLocked) {
       if (lockScreenMode == LOCK_HERO) {
         // Swipe up: moved upward by >= 25 px
-        if (moved && (startY - endY >= 25)) {
+        if (startY - endY >= 25) {
           if (screenLockEnabled) {
             lockScreenMode = LOCK_KEYPAD;
             pinInput = "";
@@ -1266,10 +1274,10 @@ static void pollQuickTouch() {
           }
           uiRevision++;
         }
-        // Tap on circular lock button ONLY: (120, 224), radius 32
-        else if (!moved) {
+        // Tap on circular lock button (cx = 120, cy = 224, radius = 36)
+        else {
           int dx = endX - 120, dy = endY - 224;
-          if (dx * dx + dy * dy <= 32 * 32) {
+          if (dx * dx + dy * dy <= 36 * 36) {
             if (screenLockEnabled) {
               lockScreenMode = LOCK_KEYPAD;
               pinInput = "";
@@ -1280,10 +1288,6 @@ static void pollQuickTouch() {
             uiRevision++;
           }
         }
-      } else if (lockScreenMode == LOCK_KEYPAD) {
-        if (!moved) {
-          tapLockScreen(endX, endY);
-        }
       }
       rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
       return;
@@ -1293,6 +1297,14 @@ static void pollQuickTouch() {
   };
   if (!touchReady || millis() - poll < 25) return;
   poll = millis();
+
+  // Auto-reset PIN error dots after 1.5 seconds
+  if (screenLocked && lockScreenMode == LOCK_KEYPAD && pinError) {
+    if (millis() - pinErrorMs >= 1500) {
+      pinError = false;
+      uiRevision++;
+    }
+  }
 
   // Auto Screen Timeout (inhibited when an activity is actively ongoing)
   if (screenTimeoutSec > 0 && !rideStarted && !screenBlanked) {
@@ -1393,6 +1405,10 @@ static void pollQuickTouch() {
     if(millis()-candidateMs<25)return;
     held = true;candidateX=-1;
     if (screenLocked) {
+      if (lockScreenMode == LOCK_KEYPAD) {
+        tapLockScreen(x, y);
+        return;
+      }
       rootGesture = true;
       moved = false;
       startX = endX = x;

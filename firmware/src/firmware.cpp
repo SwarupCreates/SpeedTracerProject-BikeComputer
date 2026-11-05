@@ -704,9 +704,9 @@ static void drawMapScreen() {
   // Outer Map Viewport Card
   const int cardX = 6, cardY = 28, cardW = 228, cardH = 196, cardR = 10;
   // Background: clean off-white terrain matching Figma Frame 5 & Frame 6
-  const uint16_t terrainBg = 0xEF7D; // #EFEFEF
+  const uint16_t terrainBg = 0xF79D; // #F2F1EE (Strava light beige-grey base color)
   display.fillRoundRect(cardX, cardY, cardW, cardH, cardR, terrainBg);
-  display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, darkTheme ? 0x2945 : 0xCE79);
+  display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, darkTheme ? 0x2945 : 0xD69A);
 
   // Clipping bounds inside the card
   const int clipX1 = cardX + 2;
@@ -864,36 +864,13 @@ static void drawMapScreen() {
     }
   }
 
-  // Pass 3: Minor & Residential roads
-  const uint16_t minorRoadColor = 0xA514; // High-contrast visible gray (#A0A0A0)
-  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
-    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    float baseU = (float)g_mapCache.tiles[s].tileX;
-    float baseV = (float)g_mapCache.tiles[s].tileY;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      uint8_t ft = g_mapCache.tiles[s].features[f].type;
-      if (ft == FEAT_RESIDENTIAL || ft == FEAT_CYCLEWAY) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          if (abs(g_mapCache.tiles[s].points[off + i].u - g_mapCache.tiles[s].points[off + i - 1].u) > 500 ||
-              abs(g_mapCache.tiles[s].points[off + i].v - g_mapCache.tiles[s].points[off + i - 1].v) > 500) continue;
-          int x0, y0, x1, y1;
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, minorRoadColor, 2);
-        }
-      }
-    }
-  }
-
-  // Pass 4A: Secondary & Major road outer borders (Casings)
-  const uint16_t majorBorder = 0x7BEF; // Slate gray outline (#78909C)
-  const uint16_t majorCorridor = 0xFFFF; // Pure white
-  int navBorderW = (mapZoom >= 3) ? 6 : 4;
-  int navCorridorW = (mapZoom >= 3) ? 3 : 2;
+  // Pass 3: All Road Casings in Grey #D1D3D6 (Seamless intersections)
+  const uint16_t roadCasing = 0xD69A; // #D1D3D6
+  const uint16_t roadFill   = 0xFFFF; // #FFFFFF
+  int navMajorCasingW = (mapZoom >= 4) ? 7 : (mapZoom >= 3) ? 5 : 4;
+  int navMajorFillW   = (mapZoom >= 4) ? 5 : (mapZoom >= 3) ? 3 : 2;
+  int navMinorCasingW = (mapZoom >= 3) ? 3 : 2;
+  int navMinorFillW   = 1;
 
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
@@ -901,44 +878,52 @@ static void drawMapScreen() {
     float baseV = (float)g_mapCache.tiles[s].tileY;
     for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
       uint8_t ft = g_mapCache.tiles[s].features[f].type;
-      if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          int x0, y0, x1, y1;
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, majorBorder, navBorderW);
-        }
+      if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
+          ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+      bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
+      int w = isMajor ? navMajorCasingW : navMinorCasingW;
+      uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
+      uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
+      for (uint8_t i = 1; i < cnt; i++) {
+        if (abs(g_mapCache.tiles[s].points[off + i].u - g_mapCache.tiles[s].points[off + i - 1].u) > 500 ||
+            abs(g_mapCache.tiles[s].points[off + i].v - g_mapCache.tiles[s].points[off + i - 1].v) > 500) continue;
+        int x0, y0, x1, y1;
+        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
+                         baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
+        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
+                         baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
+        clipAndDrawLine(x0, y0, x1, y1, roadCasing, w);
       }
     }
   }
 
-  // Pass 4B: Secondary & Major road inner corridors (Pure White Ribbons - seamless junctions)
+  // Pass 4: All Road Fills in Pure White #FFFFFF (Connects all junctions seamlessly!)
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
     float baseU = (float)g_mapCache.tiles[s].tileX;
     float baseV = (float)g_mapCache.tiles[s].tileY;
     for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
       uint8_t ft = g_mapCache.tiles[s].features[f].type;
-      if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          int x0, y0, x1, y1;
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, majorCorridor, navCorridorW);
-        }
+      if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
+          ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+      bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
+      int w = isMajor ? navMajorFillW : navMinorFillW;
+      uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
+      uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
+      for (uint8_t i = 1; i < cnt; i++) {
+        if (abs(g_mapCache.tiles[s].points[off + i].u - g_mapCache.tiles[s].points[off + i - 1].u) > 500 ||
+            abs(g_mapCache.tiles[s].points[off + i].v - g_mapCache.tiles[s].points[off + i - 1].v) > 500) continue;
+        int x0, y0, x1, y1;
+        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
+                         baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
+        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
+                         baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
+        clipAndDrawLine(x0, y0, x1, y1, roadFill, w);
       }
     }
   }
 
-  // Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
+  // Render Planned GPX Route// Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
   const uint16_t routeOrange = 0xFD00; // #FF7A00
   if (routeLen > 1) {
     for (int i = 1; i < routeLen; i++) {

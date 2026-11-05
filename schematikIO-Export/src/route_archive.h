@@ -404,9 +404,9 @@ static void fillPolygon(const int* polyX, const int* polyY, int n, uint16_t colo
 static void previewDraw(int y, int h) {
   if (y + h <= 28 || y >= 290) return;
   const int cardX = 6, cardW = 228;
-  const uint16_t terrainBg = 0xEF7D; // Soft off-white
+  const uint16_t terrainBg = 0xF79D; // #F2F1EE (Strava light beige-grey base color)
   display.fillRoundRect(cardX, y, cardW, h, 8, terrainBg);
-  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xCE79);
+  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xD69A);
 
   if (previewLen < 2) {
     label(14, y + 6, "ROUTE PREVIEW", 1, 0x4208);
@@ -544,14 +544,13 @@ static void previewDraw(int y, int h) {
     static int s_polyX[256];
     static int s_polyY[256];
 
-    // Colors matching Figma & Strava
+    // Colors matching Strava (#F2F1EE base, #D1D3D6 casings, #FFFFFF fills)
     const uint16_t parkFill = 0xC673;    // Soft pale green (#CBE8BA / #C8E6C9)
     const uint16_t parkBorder = 0xAE30;  // Subtle dark green outline
     const uint16_t waterFill = 0x9E5F;   // Soft sky blue (#90CAF9)
     const uint16_t waterBorder = 0x7CD8; // Subtle deeper blue outline
-    const uint16_t minorRoadColor = 0xA514; // High-contrast visible gray (#A0A0A0, matches Strava)
-    const uint16_t majorBorder = 0x7BEF;    // Slate gray outline (#78909C)
-    const uint16_t majorCorridor = 0xFFFF;  // Crisp pure white ribbon  // Crisp pure white
+    const uint16_t roadCasing = 0xD69A;  // Grey road outlines (#D1D3D6)
+    const uint16_t roadFill   = 0xFFFF;  // Pure white road fill (#FFFFFF)
 
     // -----------------------------------------------------------------
     // PASS 1: FILLED POLYGONS (Parks & Water Bodies)
@@ -617,13 +616,14 @@ static void previewDraw(int y, int h) {
     }
 
     // -----------------------------------------------------------------
-    // PASS 2: ROADS (Minor streets, then Major Casings, then White Corridors)
+    // PASS 2: ROADS (Casings in #D1D3D6 first, then Pure White #FFFFFF fills)
     // -----------------------------------------------------------------
-    int minorW = (previewZoomLevel >= 3) ? 2 : 1;
-    int majorBorderW = (previewZoomLevel == 4) ? 6 : (previewZoomLevel == 3) ? 5 : (previewZoomLevel == 2) ? 4 : 3;
-    int majorCorridorW = (previewZoomLevel >= 3) ? 3 : (previewZoomLevel == 2) ? 2 : 1;
+    int minorCasingW = (previewZoomLevel >= 3) ? 3 : 2;
+    int minorFillW   = 1;
+    int majorCasingW = (previewZoomLevel == 4) ? 7 : (previewZoomLevel == 3) ? 5 : (previewZoomLevel == 2) ? 4 : 3;
+    int majorFillW   = (previewZoomLevel == 4) ? 5 : (previewZoomLevel == 3) ? 3 : (previewZoomLevel == 2) ? 2 : 1;
 
-    // 2A. Minor / Residential Streets
+    // 2A. All Road Casings / Outlines in Grey (#D1D3D6)
     for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
       if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
       int tx = g_mapCache.tiles[s].tileX;
@@ -639,7 +639,8 @@ static void previewDraw(int y, int h) {
 
       for (uint16_t f = 0; f < featCount; f++) {
         uint8_t ft = feats[f].type;
-        if (ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+        if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
+            ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
         uint8_t cnt = feats[f].pointCount;
         uint16_t off = feats[f].pointOffset;
         if (cnt < 2) continue;
@@ -650,6 +651,9 @@ static void previewDraw(int y, int h) {
         int pEndY = tileDeltaY + pts[off + cnt - 1].v;
         if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
             (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+        bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
+        int w = isMajor ? majorCasingW : minorCasingW;
 
         int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
         int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
@@ -663,14 +667,14 @@ static void previewDraw(int y, int h) {
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
           int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, minorW);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, roadCasing, w);
           sx0 = sx1;
           sy0 = sy1;
         }
       }
     }
 
-    // 2B. Major / Primary Road Outer Borders (Casings)
+    // 2B. All Road Inner Fills (Pure White #FFFFFF Corridors - Connects all junctions seamlessly!)
     for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
       if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
       int tx = g_mapCache.tiles[s].tileX;
@@ -686,7 +690,8 @@ static void previewDraw(int y, int h) {
 
       for (uint16_t f = 0; f < featCount; f++) {
         uint8_t ft = feats[f].type;
-        if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY) continue;
+        if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
+            ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
         uint8_t cnt = feats[f].pointCount;
         uint16_t off = feats[f].pointOffset;
         if (cnt < 2) continue;
@@ -697,6 +702,9 @@ static void previewDraw(int y, int h) {
         int pEndY = tileDeltaY + pts[off + cnt - 1].v;
         if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
             (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+        bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
+        int w = isMajor ? majorFillW : minorFillW;
 
         int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
         int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
@@ -710,54 +718,7 @@ static void previewDraw(int y, int h) {
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
           int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, majorBorderW);
-          sx0 = sx1;
-          sy0 = sy1;
-        }
-      }
-    }
-
-    // 2C. Major / Primary Road Inner Corridors (Pure White Ribbons - connects junctions seamlessly!)
-    for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
-      if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-      int tx = g_mapCache.tiles[s].tileX;
-      int ty = g_mapCache.tiles[s].tileY;
-      if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
-
-      int tileDeltaX = (tx - centerTX) * 4096 - centerU;
-      int tileDeltaY = (ty - centerTY) * 4096 - centerV;
-
-      MapFeatureRecord* feats = g_mapCache.tiles[s].features;
-      MapPoint12* pts = g_mapCache.tiles[s].points;
-      uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
-
-      for (uint16_t f = 0; f < featCount; f++) {
-        uint8_t ft = feats[f].type;
-        if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY) continue;
-        uint8_t cnt = feats[f].pointCount;
-        uint16_t off = feats[f].pointOffset;
-        if (cnt < 2) continue;
-
-        int p0X = tileDeltaX + pts[off].u;
-        int p0Y = tileDeltaY + pts[off].v;
-        int pEndX = tileDeltaX + pts[off + cnt - 1].u;
-        int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-        if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-            (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
-
-        int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
-        int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
-        for (uint8_t k = 1; k < cnt; k++) {
-          if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
-            sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
-            sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
-            continue;
-          }
-          int pkX = tileDeltaX + pts[off + k].u;
-          int pkY = tileDeltaY + pts[off + k].v;
-          int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
-          int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, majorCorridorW);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, roadFill, w);
           sx0 = sx1;
           sy0 = sy1;
         }
@@ -765,7 +726,7 @@ static void previewDraw(int y, int h) {
     }
   }
 
-  // --- DRAW GPX ROUTE VECTOR// --- DRAW GPX ROUTE VECTOR (Vibrant Orange, 3px or 4px) ---
+  // --- DRAW GPX ROUTE VECTOR// --- DRAW GPX ROUTE VECTOR// --- DRAW GPX ROUTE VECTOR (Vibrant Orange, 3px or 4px) ---
   const uint16_t routeOrange = 0xFD00; // #FF7A00
   int routeW = (previewZoomLevel >= 2) ? 4 : 3;
   for (int i = 1; i < previewLen; i++) {
@@ -787,7 +748,7 @@ static void previewDraw(int y, int h) {
   }
 
   // Draw clean rounded card border over map layers to frame map neatly
-  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xCE79);
+  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xD69A);
 
   // --- HEADER & HINTS ON CARD ---
   if (previewZoomLevel == 0) {

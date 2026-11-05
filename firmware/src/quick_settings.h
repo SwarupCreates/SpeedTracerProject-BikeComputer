@@ -39,6 +39,34 @@ String fileDetailDate = "";
 bool fileDetailIsFit = false;
 bool fileDetailIsGpx = false;
 bool fileDeleteConfirm = false;
+static void drawLoadingScreen(const char* title = "Loading assets...", const char* subtitle = "Please wait!") {
+  statusBar(true, true);
+  display.fillRect(0, 28, 240, 292, uiBg());
+
+  const int cardX = 20, cardY = 95, cardW = 200, cardH = 130, cardR = 12;
+  display.fillRoundRect(cardX, cardY, cardW, cardH, cardR, uiCard());
+  display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, darkTheme ? 0x2945 : 0xD6BA);
+
+  const int cx = 120, cy = 132, r = 16;
+  display.drawCircle(cx, cy, r, darkTheme ? 0x2945 : 0xCE79);
+  display.drawCircle(cx, cy, r - 1, darkTheme ? 0x2945 : 0xCE79);
+  for (int a = 30; a <= 210; a += 15) {
+    float rad = radians((float)a);
+    int px = cx + (int)lround(cosf(rad) * (float)r);
+    int py = cy + (int)lround(sinf(rad) * (float)r);
+    int px1 = cx + (int)lround(cosf(rad) * (float)(r - 1));
+    int py1 = cy + (int)lround(sinf(rad) * (float)(r - 1));
+    display.drawPixel(px, py, TEAL);
+    display.drawPixel(px1, py1, TEAL);
+  }
+  display.fillCircle(cx, cy, 3, TEAL);
+
+  centeredLabel(cardX, cardY + 68, cardW, title, 1, uiFg());
+  centeredLabel(cardX, cardY + 90, cardW, subtitle, 1, uiMuted());
+
+  display.refresh();
+}
+
 static String storageSize(uint64_t n){
   if(n>=1073741824ULL)return String((double)n/1073741824.0,2)+" GiB";
   if(n>=1048576)return String((double)n/1048576.0,1)+" MiB";
@@ -79,7 +107,7 @@ static void loadBrowser(){
   }
   dir.close();
 }
-static void openBrowser(String path){browserPath=path;browserPage=0;homePage=HOME_FILES;fileDetailOpen=false;fileDeleteConfirm=false;loadBrowser();uiRevision++;}
+static void openBrowser(String path){drawLoadingScreen("Loading files...", "Please wait!");browserPath=path;browserPage=0;homePage=HOME_FILES;fileDetailOpen=false;fileDeleteConfirm=false;loadBrowser();uiRevision++;}
 
 static void openFileDetail(int row){
   if(row<0 || row>=browserCount) return;
@@ -237,7 +265,7 @@ static void loadLibrary(){
   if(homePage==HOME_ROUTES){scan("/routes");if(!libraryMore)scan("/activities");if(!libraryMore)scan("/");}
   else {scan("/activities");if(!libraryMore)scan("/");}
 }
-static void openLibrary(HomePage page){homePage=page;libraryPage=0;loadLibrary();uiRevision++;}
+static void openLibrary(HomePage page){drawLoadingScreen("Loading assets...", "Please wait!");homePage=page;libraryPage=0;loadLibrary();uiRevision++;}
 // Static refresh control only for stored-data apps.
 static bool refreshPending=false;
 static bool showAppRefresh(){
@@ -508,6 +536,7 @@ static void libraryTap(int x,int y){
       if(y >= btnY && y < btnY + 34 && x >= 6 && x <= 234){
         if(rideStarted){libraryMessage="Save current activity first";uiRevision++;return;}
         if(previewLen<2){libraryMessage="GPX missing or invalid";uiRevision++;return;}
+        drawLoadingScreen("Starting Route...", "Please wait!");
         routeLen=previewLen;for(int i=0;i<routeLen;i++)route[i]={float(preview[i].lat),float(preview[i].lon)};
         nav.routeIndex=0;nav.hasDestination=true;nav.destLat=route[routeLen-1].lat;nav.destLon=route[routeLen-1].lon;
         snapActiveRoute();
@@ -519,6 +548,7 @@ static void libraryTap(int x,int y){
   }
   int row=(y-68)/44;
   if(y>=68 && row>=0 && row<libraryCount && y<68+row*44+40){
+    drawLoadingScreen("Loading assets...", "Please wait!");
     librarySelection=libraryPaths[row];
     librarySelectedSize=librarySizes[row];
     libraryMessage="";

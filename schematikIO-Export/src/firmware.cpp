@@ -783,7 +783,7 @@ static void handleStatus() {
 
 static void handleNavSet() {
   if (!server.hasArg("plain")) { server.send(400, "text/plain", "No body"); return; }
-  StaticJsonDocument<64> doc;
+  JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "text/plain", "Bad JSON"); return; }
   if(!doc["lat"].is<double>()||!doc["lon"].is<double>()||fabs(doc["lat"].as<double>())>90||fabs(doc["lon"].as<double>())>180){server.send(400,"text/plain","Latitude -90..90, longitude -180..180 required");return;}
   nav.destLat        = doc["lat"] | 0.0f;
@@ -796,7 +796,7 @@ static void handleNavSet() {
 
 static void handleUploadRoute() {
   if (!server.hasArg("plain")) { server.send(400, "text/plain", "No body"); return; }
-  DynamicJsonDocument doc(16384);
+  JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "text/plain", "Bad JSON"); return; }
   if(!doc.is<JsonArray>()||doc.size()>MAX_ROUTE){server.send(400,"text/plain","Route must be an array with at most 512 points");return;}
   for(JsonObject pt:doc.as<JsonArray>())if(!pt["lat"].is<double>()||!pt["lon"].is<double>()||fabs(pt["lat"].as<double>())>90||fabs(pt["lon"].as<double>())>180){server.send(400,"text/plain","Invalid point");return;}
@@ -820,21 +820,21 @@ static void handleUploadRoute() {
 
 static void handleConfig() {
   if (!server.hasArg("plain")) { server.send(400, "text/plain", "No body"); return; }
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "text/plain", "Bad JSON"); return; }
-  if(doc.containsKey("ageYears"))cfg.ageYears=doc["ageYears"];
-  if(doc.containsKey("restingHR"))cfg.restingHR=doc["restingHR"];
-  if(doc.containsKey("maximumHR"))cfg.maximumHR=doc["maximumHR"];
-  if(doc.containsKey("calorieSex"))cfg.calorieSex=constrain(doc["calorieSex"].as<int>(),0,2);
-  if(doc.containsKey("mass"))cfg.massConfirmed=true;
-  if (doc.containsKey("gearRatio"))       cfg.gearRatio        = doc["gearRatio"];
-  if (doc.containsKey("wheelCircumM"))    cfg.wheelCircumM     = doc["wheelCircumM"];
-  if (doc.containsKey("mass"))            cfg.riderMassKg      = doc["mass"];
-  if (doc.containsKey("maxSpeedKmh"))     cfg.maxSpeedKmh      = doc["maxSpeedKmh"];
-  if (doc.containsKey("maxPowerW"))       cfg.maxPowerW        = doc["maxPowerW"];
-  if (doc.containsKey("maxCadenceRpm"))   cfg.maxCadRpm        = doc["maxCadenceRpm"];
-  if (doc.containsKey("vo2maxManual"))    cfg.vo2maxManual     = doc["vo2maxManual"];
-  if (doc.containsKey("targetDistanceKm")) cfg.targetDistanceKm = doc["targetDistanceKm"];
+  if(!doc["ageYears"].isNull())cfg.ageYears=doc["ageYears"];
+  if(!doc["restingHR"].isNull())cfg.restingHR=doc["restingHR"];
+  if(!doc["maximumHR"].isNull())cfg.maximumHR=doc["maximumHR"];
+  if(!doc["calorieSex"].isNull())cfg.calorieSex=constrain(doc["calorieSex"].as<int>(),0,2);
+  if(!doc["mass"].isNull())cfg.massConfirmed=true;
+  if (!doc["gearRatio"].isNull())       cfg.gearRatio        = doc["gearRatio"];
+  if (!doc["wheelCircumM"].isNull())    cfg.wheelCircumM     = doc["wheelCircumM"];
+  if (!doc["mass"].isNull())            cfg.riderMassKg      = doc["mass"];
+  if (!doc["maxSpeedKmh"].isNull())     cfg.maxSpeedKmh      = doc["maxSpeedKmh"];
+  if (!doc["maxPowerW"].isNull())       cfg.maxPowerW        = doc["maxPowerW"];
+  if (!doc["maxCadenceRpm"].isNull())   cfg.maxCadRpm        = doc["maxCadenceRpm"];
+  if (!doc["vo2maxManual"].isNull())    cfg.vo2maxManual     = doc["vo2maxManual"];
+  if (!doc["targetDistanceKm"].isNull()) cfg.targetDistanceKm = doc["targetDistanceKm"];
   cfg.gearRatio=constrain(cfg.gearRatio,0.1f,10.0f);cfg.wheelCircumM=constrain(cfg.wheelCircumM,0.5f,3.0f);
   cfg.riderMassKg=constrain(cfg.riderMassKg,20.0f,250.0f);cfg.maxSpeedKmh=constrain(cfg.maxSpeedKmh,10.0f,150.0f);cfg.maxPowerW=constrain(cfg.maxPowerW,50.0f,2500.0f);
   prefs.begin("cyclo", false);
@@ -853,12 +853,12 @@ static void handleConfig() {
 
 static void handleSensor() {
   if (!server.hasArg("plain")) { server.send(400, "text/plain", "No body"); return; }
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "text/plain", "Bad JSON"); return; }
-  if (doc.containsKey("cadence"))    sensors.cadencePhysical = doc["cadence"].as<bool>();
-  if (doc.containsKey("speed"))      sensors.speedPhysical   = doc["speed"].as<bool>();
-  if (doc.containsKey("cadenceRpm")) sensors.physCadenceRpm  = doc["cadenceRpm"];
-  if (doc.containsKey("speedKmh"))   sensors.physSpeedKmh    = doc["speedKmh"];
+  if (!doc["cadence"].isNull())    sensors.cadencePhysical = doc["cadence"].as<bool>();
+  if (!doc["speed"].isNull())      sensors.speedPhysical   = doc["speed"].as<bool>();
+  if (!doc["cadenceRpm"].isNull()) sensors.physCadenceRpm  = doc["cadenceRpm"];
+  if (!doc["speedKmh"].isNull())   sensors.physSpeedKmh    = doc["speedKmh"];
   externalSensorMs=millis();
   server.send(200, "text/plain", "External bridge readings updated (not BLE pairing)");
 }
@@ -965,7 +965,7 @@ void setup() {
     if (SD_MMC.exists("/route.json")) {
       File f = SD_MMC.open("/route.json", "r");
       if (f) {
-        DynamicJsonDocument doc(16384);
+        JsonDocument doc;
         if (!deserializeJson(doc, f)) {
           routeLen = 0;
           for (JsonObject pt : doc.as<JsonArray>()) {

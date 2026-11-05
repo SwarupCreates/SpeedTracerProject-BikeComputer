@@ -244,7 +244,6 @@ static void bleBegin(){
      if(pMfr)pMfr->setValue("SpeedTracer");
      auto pModel=pDis->createCharacteristic(NimBLEUUID((uint16_t)0x2A24),NIMBLE_PROPERTY::READ);
      if(pModel)pModel->setValue("V2");
-     pDis->start();
    }
 
    // Current Time Service (0x1805) - Local server for Android / Web writes
@@ -255,7 +254,6 @@ static void bleBegin(){
        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY
      );
      if(pTimeChar)pTimeChar->setCallbacks(&ctsCharCallbacks);
-     pCts->start();
    }
  }
 

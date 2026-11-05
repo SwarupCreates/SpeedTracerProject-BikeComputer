@@ -1,5 +1,6 @@
 #pragma once
-#define LV_COLOR_DEPTH 16
+#define LV_CONF_H 1
+#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_RGB565
 #define LV_MEM_SIZE (64 * 1024U)
 #define LV_USE_OS LV_OS_NONE
 #define LV_USE_LOG 0

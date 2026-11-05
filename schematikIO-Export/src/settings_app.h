@@ -4,6 +4,8 @@
 
 enum SettingsSubpage {
   SET_MAIN,
+  SET_THEME,
+  SET_FONT,
   SET_LANGUAGE,
   SET_TIME_REGION,
   SET_SECURITY,
@@ -46,6 +48,9 @@ static String resetMessage = "";
 // Forward declarations of core quick_settings functions
 static void enterPowerOff();
 static uint16_t blendText(uint16_t fg, uint16_t bg, int a);
+static void setDarkTheme(bool value);
+static void setActiveFont(uint8_t id);
+extern uint8_t activeFontId;
 
 static void initSecuritySettings() {
   static bool loaded = false;
@@ -277,16 +282,16 @@ static void drawLockHeroScreen() {
   // Date subtitle centered at Y = 126
   centeredLabel(0, 126, 240, dateStr.c_str(), 1, fg);
 
-  // Inverted downArrow chevron (up-arrow ^) above lock button at Y = 184
-  drawCustomIconFlippedV(display, 112, 184, muted, CustomIcon::downArrowIcon, 16, 16);
+  // Inverted downArrow chevron (up-arrow ^) above lock button at Y = 186
+  drawCustomIconFlippedV(display, 108, 186, muted, CustomIcon::downArrowIcon);
 
-  // Circular lock button at X = 120, Y = 232, Radius = 24
-  display.fillCircle(120, 232, 24, cardBg);
-  display.drawCircle(120, 232, 24, darkTheme ? 0x2945 : 0xD6BA);
-  drawCustomIcon(display, 112, 224, fg, CustomIcon::lockIcon, 16, 16);
+  // Circular lock button at X = 120, Y = 230, Radius = 24
+  display.fillCircle(120, 230, 24, cardBg);
+  display.drawCircle(120, 230, 24, darkTheme ? 0x2945 : 0xD6BA);
+  drawCustomIcon(display, 112, 222, fg, CustomIcon::lockIcon, 16, 16);
 
-  // Centered label at Y = 276
-  centeredLabel(0, 276, 240, "Swipe up to unlock", 1, fg);
+  // Centered label at Y = 274
+  centeredLabel(0, 274, 240, "Swipe up to unlock", 0, fg);
 }
 
 // Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Circular Keypad, Nav Bar)
@@ -458,14 +463,12 @@ static void tapLockScreen(int x, int y) {
 static void drawSettingsApp() {
   initSecuritySettings();
 
-  // Header Back Button
-  drawCustomIcon(display, 8, 33, uiFg(), CustomIcon::GoBackIcon, 20, 20);
-
   if (settingsPage == SET_MAIN) {
-    label(34, 37, "SETTINGS", 2);
+    drawScreenHeader("SETTINGS", CustomIcon::configureIcon, true);
 
-    const char* titles[] = {"Language", "Set Time and Region", "Security", "Reset", "Power"};
+    const char* titles[] = {"Theme & Font", "Language", "Time & Region", "Security", "Reset", "Power"};
     String subtitles[] = {
+      (darkTheme ? "Dark" : "Light") + String(" • ") + SYSTEM_FONT_NAMES[activeFontId],
       "English (US)",
       "UTC+05:30 (IST)",
       screenLockEnabled ? "Screen Lock: ON" : "Screen Lock: OFF",
@@ -473,6 +476,7 @@ static void drawSettingsApp() {
       "Battery & Power Options"
     };
     CustomIcon icons[] = {
+      CustomIcon::themeSwitcherIcon,
       CustomIcon::languageIcon,
       CustomIcon::historyIcon,
       CustomIcon::lockIcon,
@@ -480,18 +484,75 @@ static void drawSettingsApp() {
       CustomIcon::powerIcon
     };
 
-    for (int i = 0; i < 5; i++) {
-      int y = 68 + i * 43;
-      display.fillRoundRect(6, y, 228, 38, 10, uiCard());
-      display.drawRoundRect(6, y, 228, 38, 10, darkTheme ? 0x2945 : 0xD6BA);
-      drawCustomIcon(display, 16, y + 11, uiFg(), icons[i], 16, 16);
-      label(40, y + 7, titles[i], 1, uiFg());
-      label(40, y + 21, subtitles[i], 1, uiMuted());
-      drawCustomIcon(display, 214, y + 11, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+    for (int i = 0; i < 6; i++) {
+      int y = 64 + i * 41;
+      display.fillRoundRect(6, y, 228, 36, 10, uiCard());
+      display.drawRoundRect(6, y, 228, 36, 10, darkTheme ? 0x2945 : 0xD6BA);
+      drawCustomIcon(display, 16, y + 10, uiFg(), icons[i], 16, 16);
+      label(40, y + 6, titles[i], 1, uiFg());
+      label(40, y + 20, subtitles[i], 0, uiMuted());
+      drawCustomIcon(display, 214, y + 10, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+    }
+  }
+  else if (settingsPage == SET_THEME) {
+    drawScreenHeader("THEME", CustomIcon::themeSwitcherIcon, true);
+
+    // 1. Dark Mode Toggle Card (y = 66, h = 48)
+    display.fillRoundRect(6, 66, 228, 48, 10, uiCard());
+    display.drawRoundRect(6, 66, 228, 48, 10, darkTheme ? 0x2945 : 0xD6BA);
+    drawCustomIcon(display, 16, 82, uiFg(), CustomIcon::themeSwitcherIcon, 16, 16);
+    label(40, 74, "Dark Mode", 1, uiFg());
+    label(40, 90, darkTheme ? "AMOLED black background" : "Clean light background", 0, uiMuted());
+
+    // Toggle pill
+    int tx = 166, ty = 77, tw = 56, th = 26;
+    uint16_t toggleBg = darkTheme ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
+    display.fillRoundRect(tx, ty, tw, th, 13, toggleBg);
+    int circleX = darkTheme ? (tx + tw - 13) : (tx + 13);
+    display.fillCircle(circleX, ty + 13, 10, 0xFFFF);
+    label(darkTheme ? (tx + 7) : (tx + 27), ty + 8, darkTheme ? "ON" : "OFF", 0, 0xFFFF);
+
+    // 2. System Font Card (y = 120, h = 48)
+    display.fillRoundRect(6, 120, 228, 48, 10, uiCard());
+    display.drawRoundRect(6, 120, 228, 48, 10, darkTheme ? 0x2945 : 0xD6BA);
+    drawCustomIcon(display, 16, 136, uiFg(), CustomIcon::fontIcon, 16, 16);
+    label(40, 128, "System Font", 1, uiFg());
+    label(40, 144, SYSTEM_FONT_NAMES[activeFontId], 0, 0x34C2);
+    drawCustomIcon(display, 214, 136, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+
+    // 3. Info Note Card (y = 174, h = 64)
+    display.fillRoundRect(6, 174, 228, 64, 10, uiCard());
+    display.drawRoundRect(6, 174, 228, 64, 10, darkTheme ? 0x2945 : 0xD6BA);
+    label(16, 186, "Dynamic Font Engine", 1, uiFg());
+    label(16, 202, "Typography updates across all", 0, uiMuted());
+    label(16, 216, "dashboards, maps, and menus.", 0, uiMuted());
+  }
+  else if (settingsPage == SET_FONT) {
+    drawScreenHeader("SYSTEM FONT", CustomIcon::fontIcon, true);
+
+    const char* fontDescs[] = {
+      "Modern Geometric Sans",
+      "Clean Balanced Sans",
+      "Tech Racing Display",
+      "Modern Monospace Style"
+    };
+
+    for (int i = 0; i < 4; i++) {
+      int y = 66 + i * 48;
+      bool sel = (activeFontId == i);
+      display.fillRoundRect(6, y, 228, 42, 10, uiCard());
+      display.drawRoundRect(6, y, 228, 42, 10, sel ? 0x34C2 : (darkTheme ? 0x2945 : 0xD6BA));
+
+      // Radio circle
+      display.drawCircle(24, y + 21, 8, sel ? 0x34C2 : uiMuted());
+      if (sel) display.fillCircle(24, y + 21, 4, 0x34C2);
+
+      label(42, y + 8, SYSTEM_FONT_NAMES[i], 1, sel ? 0x34C2 : uiFg());
+      label(42, y + 23, fontDescs[i], 0, uiMuted());
     }
   }
   else if (settingsPage == SET_LANGUAGE) {
-    label(34, 37, "LANGUAGE", 2);
+    drawScreenHeader("LANGUAGE", CustomIcon::languageIcon, true);
 
     display.fillRoundRect(6, 72, 228, 52, 10, uiCard());
     display.drawRoundRect(6, 72, 228, 52, 10, darkTheme ? 0x2945 : 0xD6BA);
@@ -510,7 +571,7 @@ static void drawSettingsApp() {
     label(16, 178, "language supported by firmware.", 1, uiMuted());
   }
   else if (settingsPage == SET_TIME_REGION) {
-    label(34, 37, "TIME & REGION", 2);
+    drawScreenHeader("TIME & REGION", CustomIcon::historyIcon, true);
 
     // Live Clock Hero Card
     display.fillRoundRect(6, 68, 228, 64, 10, uiCard());
@@ -542,7 +603,7 @@ static void drawSettingsApp() {
     label(16, 252, "BLE phone link or GPS satellite.", 1, uiMuted());
   }
   else if (settingsPage == SET_SECURITY) {
-    label(34, 37, "SECURITY", 2);
+    drawScreenHeader("SECURITY", CustomIcon::lockIcon, true);
 
     if (settingChangePin) {
       display.fillRoundRect(6, 68, 228, 66, 10, uiCard());
@@ -614,7 +675,7 @@ static void drawSettingsApp() {
     }
   }
   else if (settingsPage == SET_RESET) {
-    label(34, 37, "RESET", 2);
+    drawScreenHeader("RESET", CustomIcon::refreshIcon, true);
 
     if (settingFormatConfirm) {
       display.fillRoundRect(6, 72, 228, 178, 12, uiCard());
@@ -658,7 +719,7 @@ static void drawSettingsApp() {
     }
   }
   else if (settingsPage == SET_POWER) {
-    label(34, 37, "POWER", 2);
+    drawScreenHeader("POWER", CustomIcon::powerIcon, true);
 
     // Battery / Hardware Details Card
     display.fillRoundRect(6, 68, 228, 88, 10, uiCard());
@@ -690,6 +751,8 @@ static void tapSettings(int x, int y) {
     if (settingsPage != SET_MAIN) {
       if (settingChangePin) { settingChangePin = false; pinInput = ""; }
       else if (settingFormatConfirm) { settingFormatConfirm = false; }
+      else if (settingsPage == SET_FONT) { settingsPage = SET_THEME; }
+      else if (settingsPage == SET_THEME) { settingsPage = SET_MAIN; }
       else settingsPage = SET_MAIN;
     } else {
       homePage = HOME_APPS;
@@ -701,15 +764,37 @@ static void tapSettings(int x, int y) {
   if (settingsPage == SET_MAIN) {
     if (x >= 6 && x < 234) {
       int item = -1;
-      for (int i = 0; i < 5; i++) {
-        int iy = 68 + i * 43;
-        if (y >= iy && y < iy + 38) { item = i; break; }
+      for (int i = 0; i < 6; i++) {
+        int iy = 64 + i * 41;
+        if (y >= iy && y < iy + 36) { item = i; break; }
       }
-      if (item == 0) { settingsPage = SET_LANGUAGE; uiRevision++; }
-      else if (item == 1) { settingsPage = SET_TIME_REGION; uiRevision++; }
-      else if (item == 2) { settingsPage = SET_SECURITY; secMessage = ""; uiRevision++; }
-      else if (item == 3) { settingsPage = SET_RESET; resetMessage = ""; settingFormatConfirm = false; uiRevision++; }
-      else if (item == 4) { settingsPage = SET_POWER; uiRevision++; }
+      if (item == 0) { settingsPage = SET_THEME; uiRevision++; }
+      else if (item == 1) { settingsPage = SET_LANGUAGE; uiRevision++; }
+      else if (item == 2) { settingsPage = SET_TIME_REGION; uiRevision++; }
+      else if (item == 3) { settingsPage = SET_SECURITY; secMessage = ""; uiRevision++; }
+      else if (item == 4) { settingsPage = SET_RESET; resetMessage = ""; settingFormatConfirm = false; uiRevision++; }
+      else if (item == 5) { settingsPage = SET_POWER; uiRevision++; }
+    }
+  }
+  else if (settingsPage == SET_THEME) {
+    if (x >= 6 && x < 234 && y >= 66 && y < 114) {
+      setDarkTheme(!darkTheme);
+      uiRevision++;
+    } else if (x >= 6 && x < 234 && y >= 120 && y < 168) {
+      settingsPage = SET_FONT;
+      uiRevision++;
+    }
+  }
+  else if (settingsPage == SET_FONT) {
+    if (x >= 6 && x < 234) {
+      for (int i = 0; i < 4; i++) {
+        int iy = 66 + i * 48;
+        if (y >= iy && y < iy + 42) {
+          setActiveFont(i);
+          uiRevision++;
+          break;
+        }
+      }
     }
   }
   else if (settingsPage == SET_SECURITY) {

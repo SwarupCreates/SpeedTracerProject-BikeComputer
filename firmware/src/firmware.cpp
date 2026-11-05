@@ -295,6 +295,19 @@ static void setDarkTheme(bool value){
     themePrefs.end();
   }else Serial.println("Theme storage unavailable");
 }
+
+uint8_t activeFontId = FONT_METROPOLIS;
+static void setActiveFont(uint8_t id) {
+  if (id > FONT_SPACE_GROTESK) id = FONT_METROPOLIS;
+  if (activeFontId == id) return;
+  activeFontId = id;
+  Preferences fontPrefs;
+  if (fontPrefs.begin("cyclo", false)) {
+    fontPrefs.putUChar("fontId", id);
+    fontPrefs.end();
+  }
+  uiRevision++;
+}
 // Built-in socket uses the native one-bit SDMMC host, not SPI.
 
 RideData    ride;
@@ -452,7 +465,19 @@ static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60, RED = 0xF800;
 
 // Native-resolution, 4-bit coverage glyphs, blended over the actual card background.
 // Use one shared baseline and measured advances; no enlarged 5x7 bitmap text.
-static const SmoothFont& textFont(int size){return size==0?smoothFont12:size<=1?smoothFont10:size==2?smoothFont18:smoothFont28;}
+static const SmoothFont& textFont(int size) {
+  switch (activeFontId) {
+    case FONT_GOOGLE_SANS:
+      return size == 0 ? smoothFont_GoogleSans_12 : size <= 1 ? smoothFont_GoogleSans_10 : size == 2 ? smoothFont_GoogleSans_18 : smoothFont_GoogleSans_28;
+    case FONT_MICHROMA:
+      return size == 0 ? smoothFont_Michroma_12 : size <= 1 ? smoothFont_Michroma_10 : size == 2 ? smoothFont_Michroma_18 : smoothFont_Michroma_28;
+    case FONT_SPACE_GROTESK:
+      return size == 0 ? smoothFont_SpaceGrotesk_12 : size <= 1 ? smoothFont_SpaceGrotesk_10 : size == 2 ? smoothFont_SpaceGrotesk_18 : smoothFont_SpaceGrotesk_28;
+    case FONT_METROPOLIS:
+    default:
+      return size == 0 ? smoothFont_Metro_12 : size <= 1 ? smoothFont_Metro_10 : size == 2 ? smoothFont_Metro_18 : smoothFont_Metro_28;
+  }
+}
 static int textWidth(const String& v,int size){const auto& f=textFont(size);int w=0;for(unsigned char c:v){if(c<32||c>126)c='?';w+=f.glyphs[c-32].advance;}return (w+8)/16;}
 static uint16_t blendText(uint16_t fg,uint16_t bg,int a){
  int r=((fg>>11)*a+(bg>>11)*(15-a)+7)/15;
@@ -504,8 +529,11 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
     clock = t;
     meridiem = local.tm_hour < 12 ? "AM" : "PM";
   }
-  String clockText = meridiem.length() ? (clock + " " + meridiem) : clock;
-  label(12, 10, clockText, 0, uiFg());
+  label(12, 10, clock, 0, uiFg());
+  if (meridiem.length()) {
+    int clockW = textWidth(clock, 0);
+    label(12 + clockW + 2, 10, meridiem, 0, uiFg());
+  }
 
   // Quick Settings uses a chevron instead of the four centre indicators.
   if (showStatusIcons) {
@@ -1203,6 +1231,8 @@ void setup() {
 
   if(prefs.begin("cyclo", true)){
     darkTheme = prefs.getBool("darkTheme", false);
+    activeFontId = prefs.getUChar("fontId", FONT_METROPOLIS);
+    if (activeFontId > FONT_SPACE_GROTESK) activeFontId = FONT_METROPOLIS;
     prefs.end();
   }
 
@@ -1350,12 +1380,29 @@ static File uploadFile;
 
 static void handleSerialTransfer() {
   if (!Serial.available()) return;
-  if (Serial.peek() != 'C') {
-    while (Serial.available() && Serial.peek() != 'C') Serial.read();
+  if (Serial.peek() != 'C' && Serial.peek() != 'S') {
+    while (Serial.available() && Serial.peek() != 'C' && Serial.peek() != 'S') Serial.read();
     if (!Serial.available()) return;
   }
   String line = Serial.readStringUntil('\n');
   line.trim();
+  if (line.startsWith("CMD:SYNC_TIME ") || line.startsWith("SYNC_TIME:")) {
+    int idx = line.indexOf(' ');
+    if (idx < 0) idx = line.indexOf(':');
+    time_t epoch = (time_t)line.substring(idx + 1).toInt();
+    if (epoch > 1704067200) {
+      struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
+      settimeofday(&tv, nullptr);
+      struct tm local;
+      localtime_r(&epoch, &local);
+      Serial.printf("OK:TIME_SYNC %ld %02d:%02d:%02d\n",
+                    (long)epoch, local.tm_hour, local.tm_min, local.tm_sec);
+      uiRevision++;
+    } else {
+      Serial.println("ERR:INVALID_EPOCH");
+    }
+    return;
+  }
   if (line == "CMD:PING") {
     Serial.println("PONG");
     return;

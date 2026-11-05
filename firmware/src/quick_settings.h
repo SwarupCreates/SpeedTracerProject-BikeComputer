@@ -66,6 +66,21 @@ static void drawLoadingScreen(const char* title = "Loading assets...", const cha
 
   display.refresh();
 }
+static void drawScreenHeader(const char* title, CustomIcon icon, bool showBack = true) {
+  if (showBack) {
+    drawCustomIcon(display, 8, 33, uiFg(), CustomIcon::GoBackIcon, 20, 20);
+  }
+  int titleW = textWidth(title, 0);
+  int iconW = 16;
+  int gap = 6;
+  int totalW = iconW + gap + titleW;
+  int startX = (DISP_W - totalW) / 2;
+  int iconY = 35;
+  int textY = 37;
+  drawCustomIcon(display, startX, iconY, uiFg(), icon, 16, 16);
+  label(startX + iconW + gap, textY, title, 0, uiFg());
+}
+
 #include "settings_app.h"
 
 static String storageSize(uint64_t n){
@@ -165,8 +180,7 @@ static void openFileDetail(int row){
 }
 
 static void drawFileDetail(){
-  drawCustomIcon(display,8,33,uiFg(),CustomIcon::GoBackIcon,20,20);
-  label(34,37,"FILE DETAILS",2);
+  drawScreenHeader("FILE DETAILS", fileDetailIsFit ? CustomIcon::runIcon : (fileDetailIsGpx ? CustomIcon::routeMapIcon : CustomIcon::sdCardIcon), true);
   display.drawFastHLine(6,58,228,uiCard());
 
   // Icon & Type Header
@@ -448,8 +462,7 @@ static void drawLibrary(){
     return;
   }
 
-  drawCustomIcon(display,8,33,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon,20,20);
-  label(34,37,routes?"SAVED ROUTES":homePage==HOME_RIDES?"RIDE HISTORY":"PAST ACTIVITY",2);
+  drawScreenHeader(routes ? "SAVED ROUTES" : (homePage == HOME_RIDES ? "RIDE HISTORY" : "PAST ACTIVITY"), routes ? CustomIcon::routeMapIcon : CustomIcon::historyIcon, true);
 
   if(!libraryCount){
     card(6,76,228,150,uiCard());
@@ -682,8 +695,7 @@ static void drawHomeSubpage(){
   statusBar();
   if(isLibrary()){drawLibrary();return;}
   if(homePage==HOME_APPS){
-    drawCustomIcon(display,8,33,uiFg(),CustomIcon::allAppsIcon,20,20);
-    label(34,37,"ALL APPS",2);
+    drawScreenHeader("ALL APPS", CustomIcon::allAppsIcon, false);
     const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","MAP"};
     CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
     const int btnW = 108, btnH = 64;
@@ -703,10 +715,9 @@ static void drawHomeSubpage(){
       drawFileDetail();
       return;
     }
-    drawCustomIcon(display,8,33,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon,20,20);
     String folderName = (browserPath == "/") ? "MY FILES" : browserPath;
     if (folderName.length() > 1 && folderName.startsWith("/")) folderName = folderName.substring(1);
-    label(34, 37, truncateHeading(folderName, 16), 2);
+    drawScreenHeader(truncateHeading(folderName, 16).c_str(), CustomIcon::folderIcon, browserPath != "/");
 
 
 

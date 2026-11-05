@@ -305,9 +305,15 @@ static void globalNext(){
   else {browserPage++;loadBrowser();}
   uiRevision++;
 }
+static bool globalHasBack(){
+  if(shutdownDialog || gpsWaiting || countdownStart || quickOpen) return true;
+  if(!welcomeOpen) return true;
+  if(homePage != HOME_MAIN) return true;
+  return false;
+}
 static void drawGlobalNav(){
   display.fillRect(0,290,240,30,uiBg());
-  drawCustomIcon(display,42,297,uiFg(),CustomIcon::GoBackIcon);
+  if(globalHasBack())drawCustomIcon(display,42,297,uiFg(),CustomIcon::GoBackIcon);
   drawCustomIcon(display,112,297,uiFg(),CustomIcon::HomeIcon);
   if(globalHasNext())drawCustomIcon(display,182,297,uiFg(),CustomIcon::goNextIcon);
 }
@@ -559,7 +565,7 @@ static void quickTap(int x, int y) {
     return;
   }
   if(y>=290){
-    if(x>=26 && x<78)globalBack();
+    if(x>=26 && x<78){if(globalHasBack())globalBack();}
     else if(x>=94 && x<146)globalHome();
     else if(x>=164 && x<216)globalNext();
     return;

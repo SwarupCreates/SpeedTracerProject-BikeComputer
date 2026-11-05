@@ -938,7 +938,7 @@ static void drawMapScreen() {
     }
   }
 
-  // Render Planned GPX Route// Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
+  // Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
   const uint16_t routeOrange = 0xFD00; // #FF7A00
   if (routeLen > 1) {
     for (int i = 1; i < routeLen; i++) {
@@ -950,6 +950,20 @@ static void drawMapScreen() {
       projectTilePoint((float)tx0 + fx0, (float)ty0 + fy0, x0, y0);
       projectTilePoint((float)tx1 + fx1, (float)ty1 + fy1, x1, y1);
       clipAndDrawLine(x0, y0, x1, y1, routeOrange, 3);
+    }
+    // Start (Green) & Finish (Checkered) Markers
+    int sx, sy, ex, ey;
+    int stx, sty, etx, ety;
+    float sfx, sfy, efx, efy;
+    MapTileCache::latLonToTile(route[0].lat, route[0].lon, stx, sty, sfx, sfy);
+    MapTileCache::latLonToTile(route[routeLen - 1].lat, route[routeLen - 1].lon, etx, ety, efx, efy);
+    projectTilePoint((float)stx + sfx, (float)sty + sfy, sx, sy);
+    projectTilePoint((float)etx + efx, (float)ety + efy, ex, ey);
+    if (sx >= -6 && sx <= 246 && sy >= -6 && sy <= 226) {
+      drawStartNodeIcon(display, sx - 6, sy - 6);
+    }
+    if (ex >= -6 && ex <= 246 && ey >= -6 && ey <= 226) {
+      drawFinishNodeIcon(display, ex - 6, ey - 6);
     }
   }
 

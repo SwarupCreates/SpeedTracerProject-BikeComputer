@@ -481,11 +481,24 @@ static void libraryTap(int x,int y){
         return;
       }
 
-      // 3. Reset to Ride Start Button Tap (when zoomed in)
-      if (previewZoomLevel > 0 && x >= 194 && x <= 234 && y >= mapY + 60 && y < mapY + 92) {
+      // 3. Snap to Ride Start Button Tap
+      if (x >= 194 && x <= 234 && y >= mapY + 60 && y < mapY + 88) {
         if (previewLen > 0) {
+          if (previewZoomLevel == 0) previewZoomLevel = 3;
           previewPanLat = preview[0].lat;
           previewPanLon = preview[0].lon;
+          g_mapCache.updatePosition(previewPanLat, previewPanLon);
+          uiRevision++;
+        }
+        return;
+      }
+
+      // 4. Snap to Ride End Button Tap
+      if (x >= 194 && x <= 234 && y >= mapY + 88 && y < mapY + 116) {
+        if (previewLen > 0) {
+          if (previewZoomLevel == 0) previewZoomLevel = 3;
+          previewPanLat = preview[previewLen - 1].lat;
+          previewPanLon = preview[previewLen - 1].lon;
           g_mapCache.updatePosition(previewPanLat, previewPanLon);
           uiRevision++;
         }

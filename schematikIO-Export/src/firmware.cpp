@@ -417,7 +417,7 @@ static uint16_t uiBg()   { return darkTheme ? 0x0000 : 0xFFFF; }
 static uint16_t uiCard() { return darkTheme ? 0x18C3 : 0xDEFB; }
 static uint16_t uiFg()   { return darkTheme ? 0xFFFF : 0x18C3; }
 static uint16_t uiMuted(){ return 0x8410; }
-static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60;
+static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60, RED = 0xF800;
 
 // Native-resolution, 4-bit coverage glyphs, blended over the actual card background.
 // Use one shared baseline and measured advances; no enlarged 5x7 bitmap text.
@@ -484,7 +484,7 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
   const int count = recording ? 4 : 3;
   int x = (DISP_W - (count * iconSize + (count - 1) * gap)) / 2;
   const bool blinkOn = (millis() / 500) % 2;
-  const uint16_t unavailable = blinkOn ? 0xF800 : uiBg();
+  const uint16_t unavailable = blinkOn ? RED : uiBg();
   // Only a deliberately disabled radio is grey. Missing hardware, no fix,
   // or no sensor connection must not look like a manually disabled feature.
   const wifi_mode_t mode = WiFi.getMode();
@@ -493,7 +493,7 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
                        uint32_t(WiFi.softAPIP()) != 0;
   const bool wifiAvailable = WiFi.status() == WL_CONNECTED || apReady;
   if (recording) {
-    drawBikeIcon(display, x, 5, blinkOn ? 0xF800 : uiBg());
+    drawBikeIcon(display, x, 5, blinkOn ? RED : uiBg());
     x += iconSize + gap;
   }
   drawSatelliteIcon(display, x, 5, ride.gpsFixed ? uiFg() : unavailable);
@@ -938,7 +938,7 @@ static void drawMapScreen() {
     }
   }
 
-  // Render Planned GPX Route// Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
+  // Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
   const uint16_t routeOrange = 0xFD00; // #FF7A00
   if (routeLen > 1) {
     for (int i = 1; i < routeLen; i++) {
@@ -950,6 +950,20 @@ static void drawMapScreen() {
       projectTilePoint((float)tx0 + fx0, (float)ty0 + fy0, x0, y0);
       projectTilePoint((float)tx1 + fx1, (float)ty1 + fy1, x1, y1);
       clipAndDrawLine(x0, y0, x1, y1, routeOrange, 3);
+    }
+    // Start (Green) & Finish (Checkered) Markers
+    int sx, sy, ex, ey;
+    int stx, sty, etx, ety;
+    float sfx, sfy, efx, efy;
+    MapTileCache::latLonToTile(route[0].lat, route[0].lon, stx, sty, sfx, sfy);
+    MapTileCache::latLonToTile(route[routeLen - 1].lat, route[routeLen - 1].lon, etx, ety, efx, efy);
+    projectTilePoint((float)stx + sfx, (float)sty + sfy, sx, sy);
+    projectTilePoint((float)etx + efx, (float)ety + efy, ex, ey);
+    if (sx >= -6 && sx <= 246 && sy >= -6 && sy <= 226) {
+      drawStartNodeIcon(display, sx - 6, sy - 6);
+    }
+    if (ex >= -6 && ex <= 246 && ey >= -6 && ey <= 226) {
+      drawFinishNodeIcon(display, ex - 6, ey - 6);
     }
   }
 
@@ -1141,87 +1155,85 @@ static void handleExportGPX() {
 //  setup()
 // ═══════════════════════════════════════════════════════════════════════════════
 void setup() {
-  // USB cannot be electrically switched off. A held key wakes USB deep sleep.
-  // Ignore short presses, and require release before arming shutdown again.
-  pinMode(6, INPUT);
-  if(esp_sleep_get_wakeup_cause()==ESP_SLEEP_WAKEUP_EXT0) {
-    uint32_t t=millis();
-    while(digitalRead(6)==LOW && millis()-t<1500) delay(10);
-    if(digitalRead(6)!=LOW) {
-      esp_sleep_enable_ext0_wakeup(GPIO_NUM_6,0);
+  pinMode(6, INPUT_PULLUP);
+  if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
+    uint32_t t = millis();
+    while(digitalRead(6) == LOW && millis() - t < 1500) delay(10);
+    if(digitalRead(6) != LOW) {
+      esp_sleep_enable_ext0_wakeup(GPIO_NUM_6, 0);
       esp_deep_sleep_start();
     }
   }
-  setenv("TZ", "IST-5:30", 1); // POSIX sign is reversed: Kolkata is east of UTC.
+  setenv("TZ", "IST-5:30", 1);
   tzset();
   Serial.begin(115200);
-  // Allow native USB to reconnect so startup storage errors remain visible.
-  uint32_t usbWait = millis();
-  while (!Serial && millis()-usbWait < 1500) delay(10);
-  if(prefs.begin("cyclo",true)){
-    darkTheme=prefs.getBool("darkTheme",false);
+
+  // 1. Maintain battery power latch & display backlight pin
+  pinMode(7, OUTPUT); digitalWrite(7, HIGH);
+  pinMode(6, INPUT_PULLUP);
+  pinMode(5, OUTPUT); digitalWrite(5, LOW);
+
+  // 2. Initialize PSRAM FIRST so 8MB external RAM is active for framebuffer
+  psramInit();
+
+  if(prefs.begin("cyclo", true)){
+    darkTheme = prefs.getBool("darkTheme", false);
     prefs.end();
   }
 
-  // SYS_EN active high maintains battery power, before peripheral startup.
-  pinMode(7, OUTPUT); digitalWrite(7,HIGH);
-  pinMode(6, INPUT);
-  pinMode(5, OUTPUT);digitalWrite(5,LOW);
-  // Reserve controller and radio task memory before optional display allocations.
-  bleBegin();
-  if(!WiFi.softAP("CycloComp", "cycling1234"))Serial.println("Wi-Fi unavailable: AP initialization failed");
-  psramInit();
-  lcdSPI.begin(40,-1,45,42);
-  display.init(240,320); display.setRotation(0);display.invertDisplay(true);
-  digitalWrite(5,HIGH);drawSplash();display.refresh();
+  // 3. Initialize Display & Turn ON Backlight IMMEDIATELY
+  lcdSPI.begin(40, -1, 45, 42);
+  display.init(240, 320);
+  display.setRotation(0);
+  display.invertDisplay(true);
+  digitalWrite(5, HIGH); // Screen turns ON here!
+  drawSplash();
+  display.refresh();
+
+  // 4. Sensors & I/O
   initQuickTouch();
-  externalBusReady=Wire.begin(COMPASS_SDA,COMPASS_SCL);
+  externalBusReady = Wire.begin(COMPASS_SDA, COMPASS_SCL);
   Wire.setTimeOut(30);
-  buttonsOk=externalPresent(0x20) && buttons.begin_I2C(0x20,&Wire);
-  if(buttonsOk)for(int i=0;i<4;i++)buttons.pinMode(i,INPUT_PULLUP);
-  bmpOk=beginBarometer();
-  if(externalPresent(0x0D))compass.begin();
+  buttonsOk = externalPresent(0x20) && buttons.begin_I2C(0x20, &Wire);
+  if(buttonsOk) for(int i = 0; i < 4; i++) buttons.pinMode(i, INPUT_PULLUP);
+  bmpOk = beginBarometer();
+  if(externalPresent(0x0D)) compass.begin();
   gpsSerial.setRxBufferSize(2048);
-  gpsSerial.begin(115200,SERIAL_8N1,GPS_RX_PIN,GPS_TX_PIN);
+  gpsSerial.begin(115200, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+
   server.on("/compass", HTTP_POST, [](){
-    JsonDocument d; if(deserializeJson(d,server.arg("plain"))){server.send(400,"text/plain","Invalid JSON");return;}
-    String action=d["action"] | "";
-    if(action=="start")compass.start();
-    else if(action=="finish"){if(!compass.finish()){server.send(400,"text/plain","Insufficient rotation: rotate entire device level through full circles");return;}}
-    else if(action=="alignment"){float y=d["yawOffset"] | 0.f, dec=d["declination"] | 0.f;if(!isfinite(y)||!isfinite(dec)||fabs(y)>360||fabs(dec)>90){server.send(400,"text/plain","Invalid angle");return;}compass.yawOffset=y;compass.declination=dec;compass.save();}
-    else {server.send(400,"text/plain","Use action start, finish or alignment");return;}
-    server.send(200,"text/plain","OK");
+    JsonDocument d; if(deserializeJson(d, server.arg("plain"))){ server.send(400, "text/plain", "Invalid JSON"); return; }
+    String action = d["action"] | "";
+    if(action == "start") compass.start();
+    else if(action == "finish"){ if(!compass.finish()){ server.send(400, "text/plain", "Insufficient rotation: rotate entire device level through full circles"); return; } }
+    else if(action == "alignment"){ float y = d["yawOffset"] | 0.f, dec = d["declination"] | 0.f; if(!isfinite(y)||!isfinite(dec)||fabs(y)>360||fabs(dec)>90){ server.send(400, "text/plain", "Invalid angle"); return; } compass.yawOffset = y; compass.declination = dec; compass.save(); }
+    else { server.send(400, "text/plain", "Use action start, finish or alignment"); return; }
+    server.send(200, "text/plain", "OK");
   });
 
-  // Native SDMMC 1-bit: CLK14, CMD17, D0=16. D3=21 stays high.
-  // Never format on mount failure: preserve the user's existing files.
+  // 5. Safe MicroSD Initialization (never call end() if begin() failed)
   pinMode(SD_CS_PIN, OUTPUT);
   digitalWrite(SD_CS_PIN, HIGH);
-  delay(100);
+  delay(50);
   const uint32_t sdClocksKHz[] = {20000, 4000, 400};
   if (SD_MMC.setPins(SD_SCK_PIN, SD_MOSI_PIN, SD_MISO_PIN)) {
     for (uint32_t khz : sdClocksKHz) {
       Serial.printf("SDMMC: mounting 1-bit at %lu kHz\n", (unsigned long)khz);
-      if (SD_MMC.begin("/sd", false, false, khz, 5)) {
+      if (SD_MMC.begin("/sd", true, false, khz, 5)) {
         if (SD_MMC.cardType() != CARD_NONE) {
           sdOk = true;
           break;
         }
-        SD_MMC.end(); // Safe: only called if begin() succeeded
+        SD_MMC.end();
       }
       sdOk = false;
-      delay(100);
+      delay(50);
     }
   }
   if (sdOk) {
     sdStatus = "Mounted: " + String((unsigned long)(SD_MMC.cardSize() / (1024 * 1024))) + " MiB";
     Serial.printf("SDMMC: filesystem %llu MiB, used %llu MiB\n",
       SD_MMC.totalBytes() / (1024 * 1024), SD_MMC.usedBytes() / (1024 * 1024));
-  } else {
-    sdStatus = "Mount failed: check seating / FAT32";
-  }
-  Serial.printf("SDMMC: %s\n", sdStatus.c_str());
-  if (sdOk) {
     SD_MMC.mkdir("/maps");
     g_mapCache.begin();
     if (SD_MMC.exists("/route.json")) {
@@ -1244,43 +1256,49 @@ void setup() {
         f.close();
       }
     }
+  } else {
+    sdStatus = "Mount failed: check seating / FAT32";
   }
+  Serial.printf("SDMMC: %s\n", sdStatus.c_str());
 
-  // Load config from NVS
+  // 6. Load config from NVS
   prefs.begin("cyclo", false);
-  cfg.ageYears=prefs.getFloat("age",0);cfg.restingHR=prefs.getFloat("restHR",0);cfg.maximumHR=prefs.getFloat("maxHR",0);cfg.calorieSex=prefs.getInt("calSex",0);cfg.massConfirmed=prefs.getBool("massSet",false);
-  cfg.gearRatio         = prefs.getFloat("gearRatio",  cfg.gearRatio);
-  cfg.wheelCircumM      = prefs.getFloat("wheelCircum", cfg.wheelCircumM);
-  cfg.riderMassKg       = prefs.getFloat("riderMass",  cfg.riderMassKg);
-  cfg.maxSpeedKmh       = prefs.getFloat("maxSpeed",   cfg.maxSpeedKmh);
-  cfg.maxPowerW         = prefs.getFloat("maxPower",   cfg.maxPowerW);
-  cfg.maxCadRpm         = prefs.getFloat("maxCad",     cfg.maxCadRpm);
-  cfg.vo2maxManual      = prefs.getFloat("vo2max",     cfg.vo2maxManual);
-  cfg.targetDistanceKm  = prefs.getFloat("targetDist", cfg.targetDistanceKm);
+  cfg.ageYears         = prefs.getFloat("age", 0);
+  cfg.restingHR        = prefs.getFloat("restHR", 0);
+  cfg.maximumHR        = prefs.getFloat("maxHR", 0);
+  cfg.calorieSex       = prefs.getInt("calSex", 0);
+  cfg.massConfirmed    = prefs.getBool("massSet", false);
+  cfg.gearRatio        = prefs.getFloat("gearRatio", cfg.gearRatio);
+  cfg.wheelCircumM     = prefs.getFloat("wheelCircum", cfg.wheelCircumM);
+  cfg.riderMassKg      = prefs.getFloat("riderMass", cfg.riderMassKg);
+  cfg.maxSpeedKmh      = prefs.getFloat("maxSpeed", cfg.maxSpeedKmh);
+  cfg.maxPowerW        = prefs.getFloat("maxPower", cfg.maxPowerW);
+  cfg.maxCadRpm        = prefs.getFloat("maxCad", cfg.maxCadRpm);
+  cfg.vo2maxManual     = prefs.getFloat("vo2max", cfg.vo2maxManual);
+  cfg.targetDistanceKm = prefs.getFloat("targetDist", cfg.targetDistanceKm);
   prefs.end();
 
-  // WiFi AP + web server
+  // 7. Start Wi-Fi AP & Web Server
+  WiFi.mode(WIFI_AP);
+  if(!WiFi.softAP("CycloComp", "cycling1234")) Serial.println("Wi-Fi unavailable: AP initialization failed");
+
   server.on("/",       HTTP_GET,  handleRoot);
-  // A phone/computer supplies its real UTC epoch; never use build time as a clock.
-  server.on("/time", HTTP_POST, [](){
+  server.on("/time",   HTTP_POST, [](){
     JsonDocument d;
-    if(deserializeJson(d,server.arg("plain")) || !d["epoch"].is<int64_t>()){
-      server.send(400,"text/plain","Invalid time");return;
+    if(deserializeJson(d, server.arg("plain")) || !d["epoch"].is<int64_t>()){ server.send(400, "text/plain", "Invalid time"); return; }
+    int64_t epoch = d["epoch"].as<int64_t>();
+    if(epoch < 1704067200LL || epoch > 4102444799LL){ server.send(400, "text/plain", "Time out of range"); return; }
+    if(!(gps.date.isValid() && gps.time.isValid() && gps.date.age() < 3000 && gps.time.age() < 3000)){
+      timeval tv = {}; tv.tv_sec = (time_t)epoch; settimeofday(&tv, nullptr);
     }
-    int64_t epoch=d["epoch"].as<int64_t>();
-    if(epoch<1704067200LL || epoch>4102444799LL){server.send(400,"text/plain","Time out of range");return;}
-    // Prefer fresh GPS UTC over a companion device's potentially incorrect clock.
-    if(!(gps.date.isValid() && gps.time.isValid() && gps.date.age()<3000 && gps.time.age()<3000)){
-      timeval tv={};tv.tv_sec=(time_t)epoch;settimeofday(&tv,nullptr);
-    }
-    uiRevision++;server.send(200,"text/plain","Clock synced: Kolkata IST (UTC+05:30)");
+    uiRevision++; server.send(200, "text/plain", "Clock synced: Kolkata IST (UTC+05:30)");
   });
-  server.on("/ui",HTTP_POST,[](){
-    JsonDocument d;if(deserializeJson(d,server.arg("plain"))){server.send(400,"text/plain","Invalid JSON");return;}
-    if(d["screen"].is<int>()){int n=d["screen"];if(n<0||n>=SCR_COUNT){server.send(400,"text/plain","Invalid screen");return;}currentScreen=(Screen)n;}
-    if(d["quick"].is<bool>()){quickOpen=d["quick"];quickDetail=0;}
-    if(d["dark"].is<bool>())setDarkTheme(d["dark"].as<bool>());
-    uiRevision++;server.send(200,"text/plain","Display updated");
+  server.on("/ui",     HTTP_POST, [](){
+    JsonDocument d; if(deserializeJson(d, server.arg("plain"))){ server.send(400, "text/plain", "Invalid JSON"); return; }
+    if(d["screen"].is<int>()){ int n = d["screen"]; if(n >= 0 && n < SCR_COUNT) currentScreen = (Screen)n; }
+    if(d["quick"].is<bool>()){ quickOpen = d["quick"]; quickDetail = 0; }
+    if(d["dark"].is<bool>()) setDarkTheme(d["dark"].as<bool>());
+    uiRevision++; server.send(200, "text/plain", "Display updated");
   });
   server.on("/status", HTTP_GET,  handleStatus);
   server.on("/nav",    HTTP_POST, handleNavSet);
@@ -1288,19 +1306,20 @@ void setup() {
   server.on("/config", HTTP_POST, handleConfig);
   server.on("/sensor", HTTP_POST, handleSensor);
   server.on("/export", HTTP_GET,  handleExportGPX);
-  server.on("/log",HTTP_GET,[](){
-    File f=SD_MMC.open("/ride.csv","r"); if(!f){server.send(404,"text/plain","No SD log");return;}
-    server.sendHeader("Content-Disposition","attachment; filename=ride.csv");server.streamFile(f,"text/csv");f.close();
+  server.on("/log",    HTTP_GET,  [](){
+    File f = SD_MMC.open("/ride.csv", "r"); if(!f){ server.send(404, "text/plain", "No SD log"); return; }
+    server.sendHeader("Content-Disposition", "attachment; filename=ride.csv"); server.streamFile(f, "text/csv"); f.close();
   });
-  bleHttp();
   server.begin();
+
+  // 8. Start Bluetooth LE AFTER Wi-Fi & Display are up and running!
+  bleBegin();
+  bleHttp();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-//  loop()
-// ═══════════════════════════════════════════════════════════════════════════════
 static uint32_t lastDispMs  = 0;
 static uint32_t lastTrackMs = 0;
+
 
 static File uploadFile;
 

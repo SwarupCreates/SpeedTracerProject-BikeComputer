@@ -67,3 +67,59 @@ static inline void drawCompassCoin(Adafruit_GFX &gfx,int cx,int cy,float heading
 static inline void drawBluetoothStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected){drawCustomIcon(g,x,y,c,connected?CustomIcon::bluetoothConnectedIcon:CustomIcon::bluetoothDisconnectedIcon);}
 static inline void drawWifiStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected){drawCustomIcon(g,x,y,c,connected?CustomIcon::wifiConnectedIcon:CustomIcon::wifiDisconnectedIcon);}
 static inline void drawHistoryIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color){drawCustomIcon(gfx,x,y,color,CustomIcon::historyIcon);}
+
+// Start Node Icon 12x12: Green ring (#34C200) with white interior and green play/start marker (|>)
+static const uint8_t s_startIcon12[144] = {
+  0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,2,2,2,2,0,0,0,0,
+  0,0,0,2,2,2,2,2,2,0,0,0,
+  0,0,2,1,1,1,1,1,1,2,0,0,
+  0,2,2,1,2,1,2,1,1,2,2,0,
+  0,2,1,1,2,1,2,2,1,1,2,0,
+  0,2,1,1,2,1,2,2,2,1,2,0,
+  0,2,1,1,2,1,2,2,1,1,2,0,
+  0,2,2,1,2,1,2,1,1,2,2,0,
+  0,0,2,1,1,1,1,1,1,2,0,0,
+  0,0,0,2,2,2,2,2,2,0,0,0,
+  0,0,0,0,2,2,2,2,0,0,0,0,
+};
+
+static inline void drawStartNodeIcon(Adafruit_GFX &gfx, int x, int y) {
+  const uint16_t greenCol = 0x3600; // #34C200
+  const uint16_t whiteCol = 0xFFFF; // #FFFFFF
+  for (int r = 0; r < 12; r++) {
+    for (int c = 0; c < 12; c++) {
+      uint8_t v = s_startIcon12[r * 12 + c];
+      if (v == 1) gfx.drawPixel(x + c, y + r, whiteCol);
+      else if (v == 2) gfx.drawPixel(x + c, y + r, greenCol);
+    }
+  }
+}
+
+// Finish Node Icon 12x12: Circular racing checkered finish flag (#000000 & #FFFFFF)
+static const uint8_t s_finishIcon12[144] = {
+  0,0,0,0,2,2,2,2,0,0,0,0,
+  0,0,2,2,2,1,1,2,2,2,0,0,
+  0,2,2,2,2,1,1,2,2,2,2,0,
+  0,2,2,2,2,1,1,2,2,2,2,0,
+  2,2,2,2,2,1,1,2,2,2,2,2,
+  2,1,1,1,1,2,2,1,1,1,1,2,
+  2,1,1,1,1,2,2,1,1,1,1,2,
+  2,2,2,2,2,1,1,2,2,2,2,2,
+  0,2,2,2,2,1,1,2,2,2,2,0,
+  0,2,2,2,2,1,1,2,2,2,2,0,
+  0,0,2,2,2,1,1,2,2,2,0,0,
+  0,0,0,0,2,2,2,2,0,0,0,0,
+};
+
+static inline void drawFinishNodeIcon(Adafruit_GFX &gfx, int x, int y) {
+  const uint16_t blackCol = 0x0000; // #000000
+  const uint16_t whiteCol = 0xFFFF; // #FFFFFF
+  for (int r = 0; r < 12; r++) {
+    for (int c = 0; c < 12; c++) {
+      uint8_t v = s_finishIcon12[r * 12 + c];
+      if (v == 1) gfx.drawPixel(x + c, y + r, whiteCol);
+      else if (v == 2) gfx.drawPixel(x + c, y + r, blackCol);
+    }
+  }
+}

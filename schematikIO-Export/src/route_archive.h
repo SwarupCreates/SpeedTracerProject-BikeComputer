@@ -775,19 +775,15 @@ static void previewDraw(int y, int h) {
     clipAndDrawLine(sx0, sy0, sx1, sy1, routeOrange, routeW);
   }
 
-  // Start (Green) & End (Red) Badges
+  // Start (Green SVG Marker) & End (Checkered Finish Marker) Badges
   int sx, sy, ex, ey;
   projectCoord(preview[0].lat, preview[0].lon, sx, sy);
   projectCoord(preview[previewLen - 1].lat, preview[previewLen - 1].lon, ex, ey);
-  if (sy >= clipY1 && sy <= clipY2 && sx >= clipX1 && sx <= clipX2) {
-    display.fillCircle(sx, sy, 5, 0x07E0);
-    display.drawCircle(sx, sy, 5, 0xFFFF);
-    display.drawCircle(sx, sy, 6, 0x0000);
+  if (sy >= clipY1 - 6 && sy <= clipY2 + 6 && sx >= clipX1 - 6 && sx <= clipX2 + 6) {
+    drawStartNodeIcon(display, sx - 6, sy - 6);
   }
-  if (ey >= clipY1 && ey <= clipY2 && ex >= clipX1 && ex <= clipX2) {
-    display.fillCircle(ex, ey, 5, 0xF800);
-    display.drawCircle(ex, ey, 5, 0xFFFF);
-    display.drawCircle(ex, ey, 6, 0x0000);
+  if (ey >= clipY1 - 6 && ey <= clipY2 + 6 && ex >= clipX1 - 6 && ex <= clipX2 + 6) {
+    drawFinishNodeIcon(display, ex - 6, ey - 6);
   }
 
   // Draw clean rounded card border over map layers to frame map neatly
@@ -807,7 +803,7 @@ static void previewDraw(int y, int h) {
     label(14, y + h - 14, "Drag to pan along route", 1, uiMuted());
   }
 
-  // --- ZOOM BUTTONS (+ / - / Reset) at top-right corner ---
+  // --- ZOOM & NAVIGATION BUTTONS (+ / - / Start / End) at top-right corner ---
   int btnX = cardX + cardW - 32; // 202
   int btnW = 26, btnH = 24;
 
@@ -829,14 +825,17 @@ static void previewDraw(int y, int h) {
   display.drawFastHLine(btnX + 7, btnMinusY + 11, 12, minusCol);
   display.drawFastHLine(btnX + 7, btnMinusY + 12, 12, minusCol);
 
-  // 3. Reset to Start Button (only shown when zoomed in)
-  if (previewZoomLevel > 0) {
-    int btnResetY = btnMinusY + 28;
-    display.fillRoundRect(btnX, btnResetY, btnW, btnH, 4, 0xFFFF);
-    display.drawRoundRect(btnX, btnResetY, btnW, btnH, 4, 0xCE79);
-    display.fillCircle(btnX + 13, btnResetY + 12, 4, 0x07E0);
-    display.drawCircle(btnX + 13, btnResetY + 12, 4, 0x0000);
-  }
+  // 3. Snap to Start Point Button
+  int btnStartY = btnMinusY + 28;
+  display.fillRoundRect(btnX, btnStartY, btnW, btnH, 4, 0xFFFF);
+  display.drawRoundRect(btnX, btnStartY, btnW, btnH, 4, 0xCE79);
+  drawStartNodeIcon(display, btnX + 7, btnStartY + 6);
+
+  // 4. Snap to End Point Button
+  int btnEndY = btnStartY + 28;
+  display.fillRoundRect(btnX, btnEndY, btnW, btnH, 4, 0xFFFF);
+  display.drawRoundRect(btnX, btnEndY, btnW, btnH, 4, 0xCE79);
+  drawFinishNodeIcon(display, btnX + 7, btnEndY + 6);
 }
 
 static void archiveGraph(String path,int y,int col,const char* title,const char* subtitle=nullptr){

@@ -469,102 +469,87 @@ static void previewDraw(int y, int h) {
     }
   };
 
-  // --- DRAW BASEMAP ONLY WHEN ZOOMED IN (Zero overhead in overview!) ---
+  // --- DRAW BASEMAP ONLY WHEN ZOOMED IN (Ultra-Fast Slippy Integer Projection, Zero atan/sinh) ---
   if (previewZoomLevel > 0) {
     const uint16_t waterColor = 0x9E5F; // #90CAF9
     const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
     const uint16_t majorBorder = 0xCE79;
     const uint16_t majorCorridor = 0xFFFF;
-    const double n = 16384.0;
 
     int centerTX, centerTY;
     float cfx, cfy;
     MapTileCache::latLonToTile(centerLat, centerLon, centerTX, centerTY, cfx, cfy);
+    int centerU = (int)lround(cfx * 4096.0f);
+    int centerV = (int)lround(cfy * 4096.0f);
 
-    // Only render tiles from the 9-tile PSRAM sliding window that touch our view
+    double latRad = centerLat * (PI / 180.0);
+    float metersPerUnit = (float)((40075016.686 * cos(latRad) / 16384.0) / 4096.0);
+    float pxPerUnit = metersPerUnit * (float)scale;
+
+    // View boundaries in tile units (card is 228x180 px)
+    int maxDxU = (int)(120.0f / pxPerUnit) + 120;
+    int maxDyU = (int)(100.0f / pxPerUnit) + 120;
+
+    // Single fast pass over neighboring tiles in PSRAM
     for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
       if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
       int tx = g_mapCache.tiles[s].tileX;
       int ty = g_mapCache.tiles[s].tileY;
-      // Only process immediate neighboring tiles (1-2 tiles max)
       if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+      int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+      int tileDeltaY = (ty - centerTY) * 4096 - centerV;
 
       MapFeatureRecord* feats = g_mapCache.tiles[s].features;
       MapPoint12* pts = g_mapCache.tiles[s].points;
       uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
 
-      // Pass A: Water bodies
-      for (uint16_t f = 0; f < featCount; f++) {
-        if (feats[f].type == FEAT_WATER) {
-          uint8_t cnt = feats[f].pointCount;
-          uint16_t off = feats[f].pointOffset;
-          for (uint8_t k = 1; k < cnt; k++) {
-            double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
-            double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
-            double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
-            double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
-
-            double lon0 = (x0T / n) * 360.0 - 180.0;
-            double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
-            double lon1 = (x1T / n) * 360.0 - 180.0;
-            double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
-
-            int sx0, sy0, sx1, sy1;
-            projectCoord(lat0, lon0, sx0, sy0);
-            projectCoord(lat1, lon1, sx1, sy1);
-            clipAndDrawLine(sx0, sy0, sx1, sy1, waterColor, 3);
-          }
-        }
-      }
-
-      // Pass B: Residential / minor roads
       for (uint16_t f = 0; f < featCount; f++) {
         uint8_t ft = feats[f].type;
-        if (ft == FEAT_RESIDENTIAL || ft == FEAT_CYCLEWAY) {
-          uint8_t cnt = feats[f].pointCount;
-          uint16_t off = feats[f].pointOffset;
-          for (uint8_t k = 1; k < cnt; k++) {
-            double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
-            double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
-            double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
-            double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
+        if (ft != FEAT_WATER && ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY &&
+            ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY) continue;
 
-            double lon0 = (x0T / n) * 360.0 - 180.0;
-            double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
-            double lon1 = (x1T / n) * 360.0 - 180.0;
-            double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
+        uint8_t cnt = feats[f].pointCount;
+        uint16_t off = feats[f].pointOffset;
+        if (cnt < 2) continue;
 
-            int sx0, sy0, sx1, sy1;
-            projectCoord(lat0, lon0, sx0, sy0);
-            projectCoord(lat1, lon1, sx1, sy1);
-            clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 2);
-          }
+        // Ultra-fast AABB rejection in integer tile units:
+        int p0X = tileDeltaX + pts[off].u;
+        int p0Y = tileDeltaY + pts[off].v;
+        int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+        int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+
+        // Skip if entirely outside screen bounds
+        if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+            (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) {
+          continue;
         }
-      }
 
-      // Pass C: Major / Primary corridors (white with gray border)
-      for (uint16_t f = 0; f < featCount; f++) {
-        uint8_t ft = feats[f].type;
-        if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
-          uint8_t cnt = feats[f].pointCount;
-          uint16_t off = feats[f].pointOffset;
-          for (uint8_t k = 1; k < cnt; k++) {
-            double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
-            double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
-            double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
-            double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
+        uint16_t col = minorRoadColor;
+        int w = 2;
+        bool isMajor = false;
+        if (ft == FEAT_WATER) { col = waterColor; w = 3; }
+        else if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
+          isMajor = true;
+        }
 
-            double lon0 = (x0T / n) * 360.0 - 180.0;
-            double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
-            double lon1 = (x1T / n) * 360.0 - 180.0;
-            double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
+        int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
+        int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
 
-            int sx0, sy0, sx1, sy1;
-            projectCoord(lat0, lon0, sx0, sy0);
-            projectCoord(lat1, lon1, sx1, sy1);
+        for (uint8_t k = 1; k < cnt; k++) {
+          int pkX = tileDeltaX + pts[off + k].u;
+          int pkY = tileDeltaY + pts[off + k].v;
+          int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
+          int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+
+          if (isMajor) {
             clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 4);
             clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 2);
+          } else {
+            clipAndDrawLine(sx0, sy0, sx1, sy1, col, w);
           }
+          sx0 = sx1;
+          sy0 = sy1;
         }
       }
     }

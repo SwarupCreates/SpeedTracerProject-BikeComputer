@@ -11,8 +11,8 @@ static inline void drawBikeIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color) {
 static inline void drawHeartIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color,bool pulseLine=true) {
   drawCustomIcon(gfx,x,y,color,CustomIcon::heartRateIcon);
 }
-static inline void drawSatelliteIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color) {
-  drawCustomIcon(gfx,x,y,color,CustomIcon::satelliteIcon);
+static inline void drawSatelliteIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color, int targetW = 0, int targetH = 0) {
+  drawCustomIcon(gfx,x,y,color,CustomIcon::satelliteIcon, targetW, targetH);
 }
 static inline void drawBatteryIcon(Adafruit_GFX &gfx,int x,int y,int pct,uint16_t fgColor) {
   gfx.drawRoundRect(x,y,22,11,2,fgColor); gfx.fillRect(x+22,y+3,2,5,fgColor);
@@ -64,7 +64,7 @@ static inline void drawCompassCoin(Adafruit_GFX &gfx,int cx,int cy,float heading
   gfx.fillTriangle(ntx,nty,bx1,by1,bx2,by2,0xF9A7); gfx.fillTriangle(stx,sty,bx1,by1,bx2,by2,0xCE79); gfx.fillCircle(cx,cy,2,0x3186);
 }
 
-static inline void drawBluetoothStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected){drawCustomIcon(g,x,y,c,connected?CustomIcon::bluetoothConnectedIcon:CustomIcon::bluetoothDisconnectedIcon);}
+static inline void drawBluetoothStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected, int targetW = 0, int targetH = 0){drawCustomIcon(g,x,y,c,connected?CustomIcon::bluetoothConnectedIcon:CustomIcon::bluetoothDisconnectedIcon, targetW, targetH);}
 static inline void drawWifiStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected){drawCustomIcon(g,x,y,c,connected?CustomIcon::wifiConnectedIcon:CustomIcon::wifiDisconnectedIcon);}
 static inline void drawHistoryIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color){drawCustomIcon(gfx,x,y,color,CustomIcon::historyIcon);}
 

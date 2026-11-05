@@ -9,7 +9,7 @@ int quickDetail = 0;
 int quickScroll=0;
 int brightnessPercent=100;
 static void setBrightnessFromTouch(int x){
-  brightnessPercent=constrain(5+(x-52)*95/166,5,100);
+  brightnessPercent=constrain(5+(x-46)*95/160,5,100);
   // GPIO5 is the board's active-high backlight; PWM keeps power controls untouched.
   analogWrite(5,(brightnessPercent*255+50)/100);
   uiRevision++;
@@ -1195,9 +1195,9 @@ static void quickTap(int x, int y) {
     return;
   }
   y+=quickScroll;
-  if(y>=106 && y<156 && x>=20 && x<234){setBrightnessFromTouch(x);return;}
+  if(y>=107 && y<155 && x>=20 && x<234){setBrightnessFromTouch(x);return;}
   if (x>=6 && x<234 && y>=32 && y<101) {
-    if (x >= 185) {
+    if (x >= 174) {
       if(!rideStarted) requestRideStart();
       else toggleRide();
       uiRevision++;
@@ -1218,8 +1218,8 @@ static void quickTap(int x, int y) {
   }
   // Hit-test the actual card rectangles; gutters do not activate neighbours.
   int col = x>=123 && x<234 ? 1 : (x>=6 && x<117 ? 0 : -1);
-  int row = y>=162 && y<224 ? 0 : (y>=228 && y<290 ? 1 :
-            (y>=294 && y<356 ? 2 : (y>=360 && y<422 ? 3 : -1)));
+  int row = y>=161 && y<223 ? 0 : (y>=229 && y<291 ? 1 :
+            (y>=297 && y<359 ? 2 : (y>=365 && y<427 ? 3 : -1)));
   if(col<0 || row<0)return;
   int tile=row*2+col;
   if (tile == 3) {
@@ -1378,7 +1378,7 @@ static void pollQuickTouch() {
       sliderGesture = false;
     } else if(quickOpen && !quickDetail && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=quickScroll;
-      sliderGesture=y+quickScroll>=106 && y+quickScroll<156 && x>=40 && x<228;
+      sliderGesture=y+quickScroll>=107 && y+quickScroll<155 && x>=36 && x<225;
       if(sliderGesture)setBrightnessFromTouch(x);
     } else if((gpsWaiting || gpsRadarInspector) && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=gpsScroll;
@@ -1470,97 +1470,98 @@ static void drawQuickSettings() {
   const int offset=quickScroll;
   // Activity mode follows the shared home-page selection.
   card(6, 32-offset, 228, 69, 0xF800); // Vibrant Coral Red
-  drawCustomIcon(display,18,44-offset,0xFFFF,runningMode?CustomIcon::runIcon:CustomIcon::bikeIcon);
-  label(42,44-offset,runningMode?"OUTDOOR RUNNING":"OUTDOOR CYCLING",1,0xFFFF);
-  label(16,68-offset,durationText(),3,0xFFFF);
+  drawCustomIcon(display, 16, 40-offset, 0xFFFF, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 20, 20);
+  label(42, 46-offset, runningMode ? "OUTDOOR RUNNING" : "OUTDOOR CYCLING", 1, 0xFFFF);
+  label(16, 68-offset, durationText(), 3, 0xFFFF);
 
-  // Big White Pause/Play Button on right of banner
-  display.fillCircle(206, 66-offset, 18, 0xFFFF);
+  // Big White Pause/Play Button on right of banner (shifted inward towards left)
+  display.fillCircle(196, 66-offset, 18, 0xFFFF);
   if (rideStarted && !ridePaused) {
-    display.fillRect(201, 58-offset, 4, 16, 0xF800);
-    display.fillRect(208, 58-offset, 4, 16, 0xF800);
+    display.fillRect(191, 58-offset, 4, 16, 0xF800);
+    display.fillRect(198, 58-offset, 4, 16, 0xF800);
   } else {
-    display.fillTriangle(202, 58-offset, 202, 74-offset, 215, 66-offset, 0xF800);
+    display.fillTriangle(192, 58-offset, 192, 74-offset, 205, 66-offset, 0xF800);
   }
 
-  card(6,106-offset,228,50,uiCard());
-  drawCustomIcon(display,22,123-offset,uiFg(),CustomIcon::brightnessIcon);
-  display.fillRoundRect(52,128-offset,166,6,3,uiMuted());
-  int thumb=52+(brightnessPercent-5)*166/95;
-  display.fillRoundRect(52,128-offset,max(4,thumb-52),6,3,TEAL);
-  display.fillCircle(thumb,131-offset,7,uiFg());
+  // Brightness slider: shifted towards brightness icon to left, larger right gutter for visual centering
+  card(6, 107-offset, 228, 48, uiCard());
+  drawCustomIcon(display, 18, 122-offset, uiFg(), CustomIcon::brightnessIcon, 18, 18);
+  display.fillRoundRect(46, 128-offset, 160, 6, 3, uiMuted());
+  int thumb = 46 + (brightnessPercent - 5) * 160 / 95;
+  display.fillRoundRect(46, 128-offset, max(4, thumb - 46), 6, 3, TEAL);
+  display.fillCircle(thumb, 131-offset, 7, uiFg());
 
-  // 2x4 Grid of Tiles
+  // 2x4 Grid of Tiles with consistent 6px horizontal & vertical gutters
   // Tile 0: Wi-Fi
   {
-    int x = 6, y = 162-offset;
+    int x = 6, y = 161-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 48, y + 12, uiFg(), CustomIcon::hotSpotIcon);
+    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::hotSpotIcon, 20, 20);
     bool wifiOn = (WiFi.getMode() != WIFI_OFF);
-    centeredLabel(x, y + 42, 111, wifiOn ? "HOTSPOT ACTIVE" : "NOT CONNECTED", 1, wifiOn ? 0x2564 : 0xFA08);
+    centeredLabel(x, y + 38, 111, wifiOn ? "HOTSPOT ACTIVE" : "NOT CONNECTED", 1, wifiOn ? 0x2564 : 0xFA08);
   }
 
   // Tile 1: Bluetooth
   {
-    int x = 123, y = 162-offset;
+    int x = 123, y = 161-offset;
     int bCount = bleCount() + (blePhoneConnected() ? 1 : 0);
     bool active = (bCount > 0);
     card(x, y, 111, 62, active ? (darkTheme ? 0x0940 : 0xD753) : uiCard());
     uint16_t fg = active ? (darkTheme ? 0x7FE0 : 0x2400) : uiFg();
-    drawBluetoothStateIcon(display, x + 38, y + 12, fg, active);
-    label(x + 58, y + 12, String(bCount), 2, fg);
-    centeredLabel(x, y + 42, 111, String(bCount) + " CONNECTED", 1, fg);
+    drawBluetoothStateIcon(display, x + 36, y + 10, fg, active, 20, 20);
+    label(x + 62, y + 12, String(bCount), 2, fg);
+    centeredLabel(x, y + 38, 111, String(bCount) + " CONNECTED", 1, fg);
   }
 
   // Tile 2: GPS
   {
-    int x = 6, y = 228-offset;
+    int x = 6, y = 229-offset;
     bool locked = ride.gpsFixed;
     card(x, y, 111, 62, locked ? (darkTheme ? 0x0940 : 0xD753) : uiCard());
     uint16_t fg = locked ? (darkTheme ? 0x7FE0 : 0x2400) : uiFg();
-    drawSatelliteIcon(display, x + 36, y + 12, fg);
-    label(x + 58, y + 12, gps.satellites.isValid() && gps.satellites.age()<3000 ? String(gps.satellites.value()) : "0", 2, fg);
-    centeredLabel(x, y + 42, 111, locked ? "SAT LOCKED" : "SEARCHING", 1, fg);
+    drawSatelliteIcon(display, x + 36, y + 10, fg, 20, 20);
+    label(x + 62, y + 12, gps.satellites.isValid() && gps.satellites.age()<3000 ? String(gps.satellites.value()) : "0", 2, fg);
+    centeredLabel(x, y + 38, 111, locked ? "SAT LOCKED" : "SEARCHING", 1, fg);
   }
 
   // Tile 3: Theme Toggle
   {
-    int x = 123, y = 228-offset;
+    int x = 123, y = 229-offset;
     card(x, y, 111, 62, uiCard());
-    drawThemeIcon(display, x + 48, y + 12, uiFg());
-    centeredLabel(x, y + 42, 111, darkTheme ? "DARK MODE" : "LIGHT MODE", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::themeSwitcherIcon, 20, 20);
+    centeredLabel(x, y + 38, 111, darkTheme ? "DARK MODE" : "LIGHT MODE", 1, uiFg());
   }
 
   // Tile 4: System Diagnostics
   {
-    int x = 6, y = 294-offset;
+    int x = 6, y = 297-offset;
     card(x, y, 111, 62, uiCard());
-    drawGearIcon(display, x + 48, y + 12, uiFg());
-    centeredLabel(x, y + 42, 111, "SYSTEM", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::systemIcon, 20, 20);
+    centeredLabel(x, y + 38, 111, "SYSTEM", 1, uiFg());
   }
 
   // Tile 5: Configuration
   {
-    int x = 123, y = 294-offset;
+    int x = 123, y = 297-offset;
     card(x, y, 111, 62, uiCard());
-    drawWrenchIcon(display, x + 48, y + 12, uiFg());
-    centeredLabel(x, y + 42, 111, "CONFIGURE", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::configureIcon, 20, 20);
+    centeredLabel(x, y + 38, 111, "CONFIGURE", 1, uiFg());
   }
 
   // Tile 6: Lock Screen
   {
-    int x = 6, y = 360-offset;
+    int x = 6, y = 365-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 48, y + 12, uiFg(), CustomIcon::lockIcon);
-    centeredLabel(x, y + 42, 111, "LOCK SCREEN", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::lockIcon, 20, 20);
+    centeredLabel(x, y + 38, 111, "LOCK SCREEN", 1, uiFg());
   }
 
   // Tile 7: Power Off
   {
-    int x = 123, y = 360-offset;
+    int x = 123, y = 365-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 48, y + 12, 0xF800, CustomIcon::powerIcon);
-    centeredLabel(x, y + 42, 111, "POWER OFF", 1, 0xF800);
+    drawCustomIcon(display, x + 45, y + 10, 0xF800, CustomIcon::powerIcon, 20, 20);
+    centeredLabel(x, y + 38, 111, "POWER OFF", 1, 0xF800);
   }
   // Scrolled content can overlap the header. Repaint only its strip,
   // not the whole page: a full clear here erases every settings tile.

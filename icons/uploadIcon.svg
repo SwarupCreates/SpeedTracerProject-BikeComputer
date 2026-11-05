@@ -1,0 +1,10 @@
+<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="uploadIcon">
+<mask id="mask0_58_320" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="12" height="12">
+<rect id="Bounding box" width="12" height="12" fill="#868686"/>
+</mask>
+<g mask="url(#mask0_58_320)">
+<path id="shift_lock" d="M4 9V6.5H1.5L6 1L10.5 6.5H8V9H4ZM2 11V10H10V11H2Z" fill="#FFFFFF"/>
+</g>
+</g>
+</svg>

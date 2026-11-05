@@ -5,7 +5,7 @@
 // High-definition alpha mask renderer with edge-contrast sharpening.
 // Samples directly from customMasks with centered subpixel interpolation,
 // eliminating blur and dark halos.
-static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, CustomIcon icon, int targetW = 0, int targetH = 0) {
+static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, CustomIcon icon, int targetW = 0, int targetH = 0, bool flipV = false) {
   const int iconIdx = (int)icon;
   if (iconIdx < 0 || iconIdx >= (int)(sizeof(customMasks) / sizeof(customMasks[0]))) return;
   const uint8_t *mask = customMasks[iconIdx];
@@ -19,7 +19,8 @@ static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, Cust
 
   if (targetW > 0 && targetH > 0 && (targetW != w || targetH != h)) {
     for (int r = 0; r < targetH; r++) {
-      int v_fp = ((r * 2 + 1) * h * 128) / targetH - 128;
+      int effective_r = flipV ? (targetH - 1 - r) : r;
+      int v_fp = ((effective_r * 2 + 1) * h * 128) / targetH - 128;
       if (v_fp < 0) v_fp = 0;
       int max_v = (h - 1) << 8;
       if (v_fp > max_v) v_fp = max_v;
@@ -69,8 +70,9 @@ static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, Cust
 
   // Native 1:1 crisp rendering
   for (int r = 0; r < h; r++) {
+    int src_r = flipV ? (h - 1 - r) : r;
     for (int c = 0; c < w; c++) {
-      int a = mask[r * w + c];
+      int a = mask[src_r * w + c];
       if (a < 24) continue;
       if (a > 192) a = 255;
       else a = (a - 24) * 255 / (192 - 24);
@@ -89,4 +91,8 @@ static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, Cust
       }
     }
   }
+}
+
+static inline void drawCustomIconFlippedV(Adafruit_GFX &gfx, int x, int y, uint16_t color, CustomIcon icon, int targetW = 0, int targetH = 0) {
+  drawCustomIcon(gfx, x, y, color, icon, targetW, targetH, true);
 }

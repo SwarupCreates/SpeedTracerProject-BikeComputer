@@ -1616,6 +1616,19 @@ void loop() {
 
   updateBtn(rmtUp);  updateBtn(rmtDn);  updateBtn(rmtLt);  updateBtn(rmtRt);
 
+  if (rmtLt.pressed || rmtRt.pressed || rmtUp.pressed || rmtDn.pressed) {
+    lastTouchActivityMs = millis();
+    if (screenBlanked) {
+      screenBlanked = false;
+      analogWrite(5, (brightnessPercent * 255 + 50) / 100);
+      screenLocked = true;
+      lockScreenMode = LOCK_HERO;
+      uiRevision++;
+      rmtLt.pressed = rmtRt.pressed = rmtUp.pressed = rmtDn.pressed = false;
+      return;
+    }
+  }
+
   // SEL (body) → switch screen
 
   // Remote LEFT → dash, Remote RIGHT → map

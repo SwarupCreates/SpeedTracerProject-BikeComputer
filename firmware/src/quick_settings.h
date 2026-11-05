@@ -622,6 +622,7 @@ static bool globalHasBack(){
   return false;
 }
 static void drawGlobalNav(){
+  if(screenLocked) return;
   display.fillRect(0,290,240,30,uiBg());
   if(globalHasBack())drawCustomIcon(display,42,297,uiFg(),CustomIcon::GoBackIcon);
   drawCustomIcon(display,112,297,uiFg(),CustomIcon::HomeIcon);
@@ -984,7 +985,7 @@ static void drawGpsRadarScreen() {
  static bool drawLifecycleScreen() {
   static String previous;
   String state;
-  if(screenLocked) state="locked:"+pinInput+":"+String(pinError)+":"+String(millis()/500);
+  if(screenLocked) state="locked:"+String((int)lockScreenMode)+":"+pinInput+":"+String(pinError)+":"+String(millis()/500);
 
   else if(shutdownDialog) state=shutdownPending?"release":"shutdown";
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
@@ -1201,13 +1202,27 @@ static void quickTap(int x, int y) {
   // Hit-test the actual card rectangles; gutters do not activate neighbours.
   int col = x>=123 && x<234 ? 1 : (x>=6 && x<117 ? 0 : -1);
   int row = y>=162 && y<224 ? 0 : (y>=228 && y<290 ? 1 :
-            (y>=294 && y<356 ? 2 : -1));
+            (y>=294 && y<356 ? 2 : (y>=360 && y<422 ? 3 : -1)));
   if(col<0 || row<0)return;
   int tile=row*2+col;
   if (tile == 3) {
     setDarkTheme(!darkTheme);
   } else if (tile == 2) {
     openGpsInspector();
+  } else if (tile == 6) {
+    quickOpen = false;
+    quickDetail = 0;
+    screenLocked = true;
+    lockScreenMode = LOCK_HERO;
+    uiRevision++;
+    return;
+  } else if (tile == 7) {
+    quickOpen = false;
+    quickDetail = 0;
+    shutdownDialog = true;
+    shutdownPending = false;
+    uiRevision++;
+    return;
   } else {
     quickDetail = tile + 1;
   }
@@ -1222,11 +1237,39 @@ static void pollQuickTouch() {
   static bool rootGesture=false, sliderGesture=false, moved=false;
   static int startX=0,startY=0,startScroll=0,endX=0,endY=0;
   auto release=[&](){
+    if (screenLocked && lockScreenMode == LOCK_HERO) {
+      if (moved && (startY - endY >= 20)) {
+        if (screenLockEnabled) {
+          lockScreenMode = LOCK_KEYPAD;
+          pinInput = "";
+          pinError = false;
+        } else {
+          screenLocked = false;
+        }
+        uiRevision++;
+      } else if (!moved) {
+        quickTap(endX, endY);
+      }
+      rootGesture=false; sliderGesture=false; mapPanGesture=false; held=false; candidateX=-1;
+      return;
+    }
     if(rootGesture && !sliderGesture && !moved)quickTap(endX,endY);
     rootGesture=false;sliderGesture=false;mapPanGesture=false;held=false;candidateX=-1;
   };
   if (!touchReady || millis() - poll < 25) return;
   poll = millis();
+
+  // Auto Screen Timeout (inhibited when an activity is actively ongoing)
+  if (screenTimeoutSec > 0 && !rideStarted && !screenBlanked) {
+    if (lastTouchActivityMs == 0) lastTouchActivityMs = millis();
+    if (millis() - lastTouchActivityMs >= (uint32_t)screenTimeoutSec * 1000UL) {
+      screenBlanked = true;
+      analogWrite(5, 0); // Turn off LCD backlight
+      screenLocked = true;
+      lockScreenMode = LOCK_HERO;
+      uiRevision++;
+    }
+  }
   // Poll the manufacturer data register even between interrupt pulses.
   // Only an explicit release may re-arm a tap; IRQ gaps are not releases.
   uint8_t b[32] = {0};
@@ -1264,6 +1307,15 @@ static void pollQuickTouch() {
   x=DISP_W-1-x;
   y=DISP_H-1-y;
   lastContact = millis();
+  lastTouchActivityMs = millis();
+  if (screenBlanked) {
+    screenBlanked = false;
+    analogWrite(5, (brightnessPercent * 255 + 50) / 100);
+    screenLocked = true;
+    lockScreenMode = LOCK_HERO;
+    uiRevision++;
+    return;
+  }
   if(rootGesture){
     endX=x;endY=y;
     if(abs(y-startY)>7 || abs(x-startX)>7)moved=true;
@@ -1287,7 +1339,7 @@ static void pollQuickTouch() {
           if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
         }
       } else {
-        int offset=constrain(startScroll+startY-y,0,72);
+        int offset=constrain(startScroll+startY-y,0,140);
         if(offset!=quickScroll){quickScroll=offset;uiRevision++;}
       }
     }
@@ -1301,7 +1353,13 @@ static void pollQuickTouch() {
     }
     if(millis()-candidateMs<25)return;
     held = true;candidateX=-1;
-    if(quickOpen && !quickDetail && y>=29 && y<290){
+    if (screenLocked && lockScreenMode == LOCK_HERO) {
+      rootGesture = true;
+      moved = false;
+      startX = endX = x;
+      startY = endY = y;
+      sliderGesture = false;
+    } else if(quickOpen && !quickDetail && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=quickScroll;
       sliderGesture=y+quickScroll>=106 && y+quickScroll<156 && x>=40 && x<228;
       if(sliderGesture)setBrightnessFromTouch(x);
@@ -1415,12 +1473,12 @@ static void drawQuickSettings() {
   display.fillRoundRect(52,128-offset,max(4,thumb-52),6,3,TEAL);
   display.fillCircle(thumb,131-offset,7,uiFg());
 
-  // 2x3 Grid of Tiles
+  // 2x4 Grid of Tiles
   // Tile 0: Wi-Fi
   {
     int x = 6, y = 162-offset;
     card(x, y, 111, 62, uiCard());
-    drawWifiStateIcon(display, x + 48, y + 12, uiFg(), WiFi.status()==WL_CONNECTED);
+    drawCustomIcon(display, x + 48, y + 12, uiFg(), CustomIcon::hotSpotIcon);
     bool wifiOn = (WiFi.getMode() != WIFI_OFF);
     centeredLabel(x, y + 42, 111, wifiOn ? "HOTSPOT ACTIVE" : "NOT CONNECTED", 1, wifiOn ? 0x2564 : 0xFA08);
   }
@@ -1471,11 +1529,27 @@ static void drawQuickSettings() {
     drawWrenchIcon(display, x + 48, y + 12, uiFg());
     centeredLabel(x, y + 42, 111, "CONFIGURE", 1, uiFg());
   }
+
+  // Tile 6: Lock Screen
+  {
+    int x = 6, y = 360-offset;
+    card(x, y, 111, 62, uiCard());
+    drawCustomIcon(display, x + 48, y + 12, uiFg(), CustomIcon::lockIcon);
+    centeredLabel(x, y + 42, 111, "LOCK SCREEN", 1, uiFg());
+  }
+
+  // Tile 7: Power Off
+  {
+    int x = 123, y = 360-offset;
+    card(x, y, 111, 62, uiCard());
+    drawCustomIcon(display, x + 48, y + 12, 0xF800, CustomIcon::powerIcon);
+    centeredLabel(x, y + 42, 111, "POWER OFF", 1, 0xF800);
+  }
   // Scrolled content can overlap the header. Repaint only its strip,
   // not the whole page: a full clear here erases every settings tile.
   statusBar(false, false);
   drawCustomIcon(display,108,12,0x8430,CustomIcon::downArrowIcon);
   // Small position indicator; all settings remain reachable above the fixed tray.
-  display.fillRoundRect(236,32+quickScroll*174/72,3,80,1,uiMuted());
+  display.fillRoundRect(236,32+quickScroll*174/140,3,40,1,uiMuted());
 
 }

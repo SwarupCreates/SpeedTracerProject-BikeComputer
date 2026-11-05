@@ -1,5 +1,6 @@
 #pragma once
 #include <Preferences.h>
+#include "smooth_digits48.h"
 
 enum SettingsSubpage {
   SET_MAIN,
@@ -12,6 +13,13 @@ enum SettingsSubpage {
 
 static SettingsSubpage settingsPage = SET_MAIN;
 
+enum LockScreenMode {
+  LOCK_HERO,
+  LOCK_KEYPAD
+};
+
+static LockScreenMode lockScreenMode = LOCK_HERO;
+
 // Security / Screen Lock State
 static bool screenLockEnabled = false;
 static String screenLockPin = "1234";
@@ -22,12 +30,22 @@ static uint32_t pinErrorMs = 0;
 static bool settingChangePin = false;
 static String secMessage = "";
 
+// Timeout & Dark mode
+static int screenTimeoutSec = 60; // Default 1 min
+static const int TIMEOUT_PRESETS[] = {10, 30, 60, 180, 300, 0};
+static const char* TIMEOUT_LABELS[] = {"10 sec", "30 sec", "1 min", "3 min", "5 min", "Never"};
+static const int NUM_TIMEOUT_PRESETS = 6;
+static bool lockscreenDarkOnly = true;
+static bool screenBlanked = false;
+static uint32_t lastTouchActivityMs = 0;
+
 // Reset State
 static bool settingFormatConfirm = false;
 static String resetMessage = "";
 
 // Forward declarations of core quick_settings functions
 static void enterPowerOff();
+static uint16_t blendText(uint16_t fg, uint16_t bg, int a);
 
 static void initSecuritySettings() {
   static bool loaded = false;
@@ -36,10 +54,15 @@ static void initSecuritySettings() {
     if (p.begin("security", true)) {
       screenLockEnabled = p.getBool("lock_en", false);
       screenLockPin = p.getString("lock_pin", "1234");
+      screenTimeoutSec = p.getInt("timeout_s", 60);
+      lockscreenDarkOnly = p.getBool("lock_dark", true);
       p.end();
     }
     if (screenLockPin.length() != 4) screenLockPin = "1234";
-    if (screenLockEnabled) screenLocked = true;
+    if (screenLockEnabled) {
+      screenLocked = true;
+      lockScreenMode = LOCK_HERO;
+    }
     loaded = true;
   }
 }
@@ -49,6 +72,8 @@ static void saveSecuritySettings() {
   if (p.begin("security", false)) {
     p.putBool("lock_en", screenLockEnabled);
     p.putString("lock_pin", screenLockPin);
+    p.putInt("timeout_s", screenTimeoutSec);
+    p.putBool("lock_dark", lockscreenDarkOnly);
     p.end();
   }
 }
@@ -171,34 +196,263 @@ static void tapKeypad(int x, int y, int startY, bool isSettingNewPin) {
   }
 }
 
-static void drawLockScreen() {
-  display.fillScreen(uiBg());
-  statusBar(false, false);
+static void drawSmoothClock48(int startY, int h12, int min, uint16_t fg) {
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%02d:%02d", h12, min);
 
-  if (pinError && millis() - pinErrorMs > 2500) {
-    pinError = false;
-  }
-
-  drawCustomIcon(display, 110, 48, uiFg(), CustomIcon::configureIcon, 20, 20);
-  centeredLabel(0, 74, 240, "DEVICE LOCKED", 2, uiFg());
-  centeredLabel(0, 96, 240, pinError ? "Incorrect PIN! Try again." : "Enter 4-digit PIN to unlock", 1, pinError ? 0xF800 : uiMuted());
-
-  // 4 PIN Dots
-  int dotStartX = 87;
-  for (int i = 0; i < 4; i++) {
-    int dx = dotStartX + i * 22;
-    if (i < (int)pinInput.length()) {
-      display.fillCircle(dx, 122, 5, uiFg());
-    } else {
-      display.drawCircle(dx, 122, 5, uiMuted());
+  const int colonAdvance = 14 * 16;
+  int totalAdvance = 0;
+  for (int i = 0; i < 5; i++) {
+    char c = buf[i];
+    if (c >= '0' && c <= '9') {
+      totalAdvance += smoothDigitGlyphs48[c - '0'].advance;
+    } else if (c == ':') {
+      totalAdvance += colonAdvance;
     }
   }
 
-  drawKeypad(146);
+  int pen = (120 * 16) - (totalAdvance / 2);
+  for (int i = 0; i < 5; i++) {
+    char c = buf[i];
+    if (c >= '0' && c <= '9') {
+      const auto& g = smoothDigitGlyphs48[c - '0'];
+      int gx = (pen + 8) / 16 + g.x;
+      int gy = startY + g.y;
+      for (int row = 0; row < g.h; row++) {
+        for (int col = 0; col < g.w; col++) {
+          int idx = row * g.w + col;
+          uint8_t bits = pgm_read_byte(&smoothDigitBits48[g.offset + idx / 2]);
+          int a = (bits >> ((idx & 1) ? 0 : 4)) & 15;
+          if (a) {
+            uint16_t bg = display.backgroundPixel(gx + col, gy + row);
+            display.drawPixel(gx + col, gy + row, blendText(fg, bg, a));
+          }
+        }
+      }
+      pen += g.advance;
+    } else if (c == ':') {
+      int cx = (pen + 8) / 16 + 7;
+      display.fillCircle(cx, startY + 10, 3, fg);
+      display.fillCircle(cx, startY + 24, 3, fg);
+      pen += colonAdvance;
+    }
+  }
+}
+
+// Frame 14: Lock Screen Hero (Clock, Date, Up Chevron, Lock Button, "Swipe up to unlock")
+static void drawLockHeroScreen() {
+  uint16_t bg = uiBg();
+  uint16_t fg = uiFg();
+  uint16_t muted = uiMuted();
+  uint16_t cardBg = uiCard();
+
+  display.fillScreen(bg);
+  statusBar(true, false);
+
+  time_t now = time(nullptr);
+  struct tm local;
+  bool timeValid = (now >= 1704067200);
+  if (timeValid) {
+    localtime_r(&now, &local);
+  } else {
+    memset(&local, 0, sizeof(local));
+    local.tm_hour = 5;
+    local.tm_min = 15;
+    local.tm_wday = 5; // Friday
+    local.tm_mday = 6;
+    local.tm_mon = 10; // November
+    local.tm_year = 126; // 2026
+  }
+
+  const char* const days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+  const char* const months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  int h12 = local.tm_hour % 12;
+  if (h12 == 0) h12 = 12;
+
+  String dateStr = String(days[local.tm_wday]) + " " + String(local.tm_mday) + " " + String(months[local.tm_mon]) + ", " + String(1900 + local.tm_year);
+
+  // Big digital clock centered at Y = 74
+  drawSmoothClock48(74, h12, local.tm_min, fg);
+
+  // Date subtitle centered at Y = 126
+  centeredLabel(0, 126, 240, dateStr.c_str(), 1, fg);
+
+  // Inverted downArrow chevron (up-arrow ^) above lock button at Y = 184
+  drawCustomIconFlippedV(display, 112, 184, muted, CustomIcon::downArrowIcon, 16, 16);
+
+  // Circular lock button at X = 120, Y = 232, Radius = 24
+  display.fillCircle(120, 232, 24, cardBg);
+  display.drawCircle(120, 232, 24, darkTheme ? 0x2945 : 0xD6BA);
+  drawCustomIcon(display, 112, 224, fg, CustomIcon::lockIcon, 16, 16);
+
+  // Centered label at Y = 276
+  centeredLabel(0, 276, 240, "Swipe up to unlock", 1, fg);
+}
+
+// Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Circular Keypad, Nav Bar)
+static void drawLockKeypadScreen() {
+  uint16_t bg = uiBg();
+  uint16_t fg = uiFg();
+  uint16_t muted = uiMuted();
+  uint16_t cardBg = uiCard();
+
+  display.fillScreen(bg);
+  statusBar(true, false);
+
+  if (pinError && millis() - pinErrorMs > 2000) {
+    pinError = false;
+  }
+
+  // 4 PIN Dots at Y = 56
+  for (int i = 0; i < 4; i++) {
+    int dx = 87 + i * 22;
+    if (pinError) {
+      display.fillCircle(dx, 56, 5, 0xF800);
+    } else if (i < (int)pinInput.length()) {
+      display.fillCircle(dx, 56, 5, fg);
+    } else {
+      display.fillCircle(dx, 56, 5, cardBg);
+      display.drawCircle(dx, 56, 5, muted);
+    }
+  }
+
+  // 3x4 Keypad buttons
+  const char* digits[3][3] = {
+    {"1", "2", "3"},
+    {"4", "5", "6"},
+    {"7", "8", "9"}
+  };
+  const int rowY[3] = {104, 152, 200};
+  const int colX[3] = {60, 120, 180};
+  for (int r = 0; r < 3; r++) {
+    for (int c = 0; c < 3; c++) {
+      int cx = colX[c];
+      int cy = rowY[r];
+      display.fillCircle(cx, cy, 22, cardBg);
+      display.drawCircle(cx, cy, 22, darkTheme ? 0x2945 : 0xD6BA);
+      centeredLabel(cx - 22, cy - 7, 44, digits[r][c], 2, fg);
+    }
+  }
+
+  // Row 3: Backspace Capsule (Cols 0 & 1: x = 38 to 142, y = 226, w = 104, h = 44, r = 22)
+  display.fillRoundRect(38, 226, 104, 44, 22, cardBg);
+  display.drawRoundRect(38, 226, 104, 44, 22, darkTheme ? 0x2945 : 0xD6BA);
+  // Crisp Backspace Arrow in center (cx = 90, cy = 248)
+  display.fillRect(80, 247, 20, 2, fg);
+  display.drawLine(80, 248, 87, 241, fg);
+  display.drawLine(80, 249, 87, 242, fg);
+  display.drawLine(80, 248, 87, 255, fg);
+  display.drawLine(80, 247, 87, 254, fg);
+
+  // '0' circular button at (180, 248)
+  display.fillCircle(180, 248, 22, cardBg);
+  display.drawCircle(180, 248, 22, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(180 - 22, 248 - 7, 44, "0", 2, fg);
+
+  // Bottom Navigation Bar at Y = 298
+  // Back arrow on left (cx = 60)
+  drawCustomIcon(display, 60 - 8, 298 - 8, fg, CustomIcon::GoBackIcon, 16, 16);
+  // Home circle in center (cx = 120)
+  display.drawCircle(120, 298, 8, fg);
+  display.drawCircle(120, 298, 7, fg);
+}
+
+static void drawLockScreen() {
+  bool prevDark = darkTheme;
+  if (lockscreenDarkOnly) darkTheme = true;
+
+  if (lockScreenMode == LOCK_HERO) {
+    drawLockHeroScreen();
+  } else {
+    drawLockKeypadScreen();
+  }
+
+  darkTheme = prevDark;
 }
 
 static void tapLockScreen(int x, int y) {
-  tapKeypad(x, y, 146, false);
+  if (lockScreenMode == LOCK_HERO) {
+    int dx = x - 120, dy = y - 232;
+    bool lockBtnTapped = (dx * dx + dy * dy <= 30 * 30);
+    bool unlockAreaTapped = (y >= 170 && y < 300);
+
+    if (lockBtnTapped || unlockAreaTapped) {
+      if (screenLockEnabled) {
+        lockScreenMode = LOCK_KEYPAD;
+        pinInput = "";
+        pinError = false;
+      } else {
+        screenLocked = false;
+      }
+      uiRevision++;
+    }
+    return;
+  }
+
+  // LOCK_KEYPAD mode
+  // Bottom navigation bar tap
+  if (y >= 280) {
+    lockScreenMode = LOCK_HERO;
+    pinInput = "";
+    pinError = false;
+    uiRevision++;
+    return;
+  }
+
+  // Keypad row 0: 1, 2, 3 (y: 82 to 126)
+  // Keypad row 1: 4, 5, 6 (y: 130 to 174)
+  // Keypad row 2: 7, 8, 9 (y: 178 to 222)
+  if (y >= 82 && y < 222) {
+    int r = (y - 82) / 48;
+    if (r >= 0 && r < 3) {
+      int c = -1;
+      if (x >= 38 && x < 82) c = 0;
+      else if (x >= 98 && x < 142) c = 1;
+      else if (x >= 158 && x < 202) c = 2;
+
+      if (c >= 0) {
+        char digit = '1' + (r * 3 + c);
+        if (pinInput.length() < 4) {
+          pinInput += digit;
+          pinError = false;
+          uiRevision++;
+        }
+      }
+    }
+  } else if (y >= 226 && y < 270) {
+    // Backspace capsule: x = 38 to 142
+    if (x >= 38 && x < 142) {
+      if (pinInput.length() > 0) {
+        pinInput.remove(pinInput.length() - 1);
+        pinError = false;
+        uiRevision++;
+        return;
+      }
+    }
+    // '0': x = 158 to 202
+    else if (x >= 158 && x < 202) {
+      if (pinInput.length() < 4) {
+        pinInput += '0';
+        pinError = false;
+        uiRevision++;
+      }
+    }
+  }
+
+  if (pinInput.length() == 4) {
+    if (pinInput == screenLockPin) {
+      screenLocked = false;
+      lockScreenMode = LOCK_HERO;
+      pinInput = "";
+      pinError = false;
+      uiRevision++;
+    } else {
+      pinError = true;
+      pinErrorMs = millis();
+      pinInput = "";
+      uiRevision++;
+    }
+  }
 }
 
 static void drawSettingsApp() {
@@ -219,9 +473,9 @@ static void drawSettingsApp() {
       "Battery & Power Options"
     };
     CustomIcon icons[] = {
-      CustomIcon::systemIcon,
+      CustomIcon::languageIcon,
       CustomIcon::historyIcon,
-      CustomIcon::configureIcon,
+      CustomIcon::lockIcon,
       CustomIcon::refreshIcon,
       CustomIcon::powerIcon
     };
@@ -304,35 +558,59 @@ static void drawSettingsApp() {
       }
       drawKeypad(146);
     } else {
-      // 1. Screen Lock Toggle Card
-      display.fillRoundRect(6, 68, 228, 52, 10, uiCard());
-      display.drawRoundRect(6, 68, 228, 52, 10, darkTheme ? 0x2945 : 0xD6BA);
-      label(16, 78, "Screen Lock", 2, uiFg());
-      label(16, 98, screenLockEnabled ? "Requires PIN on wake" : "No lock (direct access)", 1, uiMuted());
-
+      // 1. Screen Lock Toggle Card (y = 66, h = 38)
+      display.fillRoundRect(6, 66, 228, 38, 10, uiCard());
+      display.drawRoundRect(6, 66, 228, 38, 10, darkTheme ? 0x2945 : 0xD6BA);
+      label(16, 73, "Screen Lock", 1, uiFg());
+      label(16, 88, screenLockEnabled ? "PIN required on wake" : "Direct access (no PIN)", 1, uiMuted());
       // Toggle Pill
-      int tx = 162, ty = 78, tw = 58, th = 30;
+      int tx = 168, ty = 71, tw = 54, th = 26;
       uint16_t toggleBg = screenLockEnabled ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
-      display.fillRoundRect(tx, ty, tw, th, 15, toggleBg);
-      int circleX = screenLockEnabled ? (tx + tw - 15) : (tx + 15);
-      display.fillCircle(circleX, ty + 15, 11, 0xFFFF);
-      label(screenLockEnabled ? (tx + 8) : (tx + 30), ty + 10, screenLockEnabled ? "ON" : "OFF", 1, 0xFFFF);
+      display.fillRoundRect(tx, ty, tw, th, 13, toggleBg);
+      int circleX = screenLockEnabled ? (tx + tw - 13) : (tx + 13);
+      display.fillCircle(circleX, ty + 13, 10, 0xFFFF);
+      label(screenLockEnabled ? (tx + 7) : (tx + 27), ty + 8, screenLockEnabled ? "ON" : "OFF", 1, 0xFFFF);
 
-      // 2. Change PIN Card
-      display.fillRoundRect(6, 126, 228, 46, 10, uiCard());
-      display.drawRoundRect(6, 126, 228, 46, 10, darkTheme ? 0x2945 : 0xD6BA);
-      label(16, 136, "Change Password / PIN", 1, uiFg());
-      label(16, 152, String("Current PIN: ") + (screenLockPin.length() ? "****" : "None"), 1, uiMuted());
-      drawCustomIcon(display, 214, 141, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+      // 2. Change PIN Card (y = 108, h = 38)
+      display.fillRoundRect(6, 108, 228, 38, 10, uiCard());
+      display.drawRoundRect(6, 108, 228, 38, 10, darkTheme ? 0x2945 : 0xD6BA);
+      label(16, 115, "Change Password / PIN", 1, uiFg());
+      label(16, 130, String("Current PIN: ") + (screenLockPin.length() ? "****" : "None"), 1, uiMuted());
+      drawCustomIcon(display, 214, 119, uiMuted(), CustomIcon::goNextIcon, 16, 16);
 
-      // 3. Lock Device Now Button
-      display.fillRoundRect(6, 178, 228, 44, 10, uiCard());
-      display.drawRoundRect(6, 178, 228, 44, 10, screenLockEnabled ? (darkTheme ? 0x07FF : 0x0419) : (darkTheme ? 0x2945 : 0xD6BA));
-      label(16, 192, screenLockEnabled ? "Lock Screen Now" : "Enable lock above to set PIN", 1, screenLockEnabled ? uiFg() : uiMuted());
-      if (screenLockEnabled) drawCustomIcon(display, 214, 192, uiFg(), CustomIcon::goNextIcon, 16, 16);
+      // 3. Screen Timeout Card (y = 150, h = 38)
+      display.fillRoundRect(6, 150, 228, 38, 10, uiCard());
+      display.drawRoundRect(6, 150, 228, 38, 10, darkTheme ? 0x2945 : 0xD6BA);
+      label(16, 157, "Screen Timeout", 1, uiFg());
+      const char* tLabel = "1 min";
+      for (int i = 0; i < NUM_TIMEOUT_PRESETS; i++) {
+        if (TIMEOUT_PRESETS[i] == screenTimeoutSec) { tLabel = TIMEOUT_LABELS[i]; break; }
+      }
+      label(16, 172, String("Auto-off: ") + tLabel + " (tap to cycle)", 1, uiMuted());
+      label(170, 164, tLabel, 1, 0x34C2);
+
+      // 4. Lockscreen Dark Mode Toggle (y = 192, h = 38)
+      display.fillRoundRect(6, 192, 228, 38, 10, uiCard());
+      display.drawRoundRect(6, 192, 228, 38, 10, darkTheme ? 0x2945 : 0xD6BA);
+      label(16, 199, "Lockscreen Dark Mode", 1, uiFg());
+      label(16, 214, lockscreenDarkOnly ? "Always AMOLED black" : "Follows active theme", 1, uiMuted());
+      // Toggle Pill
+      int tx2 = 168, ty2 = 197, tw2 = 54, th2 = 26;
+      uint16_t toggleBg2 = lockscreenDarkOnly ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
+      display.fillRoundRect(tx2, ty2, tw2, th2, 13, toggleBg2);
+      int circleX2 = lockscreenDarkOnly ? (tx2 + tw2 - 13) : (tx2 + 13);
+      display.fillCircle(circleX2, ty2 + 13, 10, 0xFFFF);
+      label(lockscreenDarkOnly ? (tx2 + 7) : (tx2 + 27), ty2 + 8, lockscreenDarkOnly ? "ON" : "OFF", 1, 0xFFFF);
+
+      // 5. Lock Device Now Button (y = 234, h = 36)
+      display.fillRoundRect(6, 234, 228, 36, 10, uiCard());
+      display.drawRoundRect(6, 234, 228, 36, 10, darkTheme ? 0x07FF : 0x0419);
+      drawCustomIcon(display, 16, 244, uiFg(), CustomIcon::lockIcon, 16, 16);
+      label(40, 246, "Lock Device Now", 1, uiFg());
+      drawCustomIcon(display, 214, 244, uiFg(), CustomIcon::goNextIcon, 16, 16);
 
       // Status Note
-      label(12, 234, secMessage.length() ? secMessage : "Protects settings & ride history with 4-digit PIN.", 1, uiMuted());
+      label(12, 276, secMessage.length() ? secMessage : "Protects settings & device with PIN lock.", 1, uiMuted());
     }
   }
   else if (settingsPage == SET_RESET) {
@@ -342,19 +620,20 @@ static void drawSettingsApp() {
       display.fillRoundRect(6, 72, 228, 178, 12, uiCard());
       display.drawRoundRect(6, 72, 228, 178, 12, 0xF800);
 
-      centeredLabel(6, 88, 228, "FORMAT SD CARD?", 2, 0xF800);
-      label(18, 118, "All saved GPX routes, FIT", 1, uiFg());
-      label(18, 134, "activities, and offline map tiles", 1, uiFg());
-      label(18, 150, "will be permanently erased!", 1, 0xF800);
+      drawCustomIcon(display, 110, 80, 0xF800, CustomIcon::warningIcon, 20, 20);
+      centeredLabel(6, 104, 228, "FORMAT SD CARD?", 2, 0xF800);
+      label(18, 128, "All saved GPX routes, FIT", 1, uiFg());
+      label(18, 144, "activities, and offline map tiles", 1, uiFg());
+      label(18, 160, "will be permanently erased!", 1, 0xF800);
 
       // Cancel button
-      display.fillRoundRect(16, 182, 96, 42, 21, uiCard());
-      display.drawRoundRect(16, 182, 96, 42, 21, darkTheme ? 0x2945 : 0xD6BA);
-      centeredLabel(16, 198, 96, "CANCEL", 1, uiFg());
+      display.fillRoundRect(16, 186, 96, 42, 21, uiCard());
+      display.drawRoundRect(16, 186, 96, 42, 21, darkTheme ? 0x2945 : 0xD6BA);
+      centeredLabel(16, 202, 96, "CANCEL", 1, uiFg());
 
       // Confirm button
-      display.fillRoundRect(124, 182, 96, 42, 21, 0xF800);
-      centeredLabel(124, 198, 96, "WIPE SD", 1, 0xFFFF);
+      display.fillRoundRect(124, 186, 96, 42, 21, 0xF800);
+      centeredLabel(124, 202, 96, "WIPE SD", 1, 0xFFFF);
     } else {
       // 1. Soft Reset Card
       display.fillRoundRect(6, 68, 228, 76, 10, uiCard());
@@ -437,34 +716,52 @@ static void tapSettings(int x, int y) {
     if (settingChangePin) {
       tapKeypad(x, y, 146, true);
     } else {
-      // Toggle Screen Lock
-      if (x >= 150 && x < 230 && y >= 68 && y < 120) {
+      // 1. Toggle Screen Lock (y: 66 to 104)
+      if (x >= 6 && x < 234 && y >= 66 && y < 104) {
         screenLockEnabled = !screenLockEnabled;
         saveSecuritySettings();
         secMessage = screenLockEnabled ? "Screen Lock enabled!" : "Screen Lock disabled.";
         uiRevision++;
       }
-      // Change PIN
-      else if (x >= 6 && x < 234 && y >= 126 && y < 172) {
+      // 2. Change PIN (y: 108 to 146)
+      else if (x >= 6 && x < 234 && y >= 108 && y < 146) {
         settingChangePin = true;
         pinInput = "";
         secMessage = "";
         uiRevision++;
       }
-      // Lock Now
-      else if (x >= 6 && x < 234 && y >= 178 && y < 222) {
-        if (screenLockEnabled) {
-          screenLocked = true;
-          pinInput = "";
-          pinError = false;
-          uiRevision++;
+      // 3. Screen Timeout cycle (y: 150 to 188)
+      else if (x >= 6 && x < 234 && y >= 150 && y < 188) {
+        int curIdx = 2;
+        for (int i = 0; i < NUM_TIMEOUT_PRESETS; i++) {
+          if (TIMEOUT_PRESETS[i] == screenTimeoutSec) { curIdx = i; break; }
         }
+        curIdx = (curIdx + 1) % NUM_TIMEOUT_PRESETS;
+        screenTimeoutSec = TIMEOUT_PRESETS[curIdx];
+        saveSecuritySettings();
+        secMessage = String("Timeout set: ") + TIMEOUT_LABELS[curIdx];
+        uiRevision++;
+      }
+      // 4. Lockscreen Dark Mode toggle (y: 192 to 230)
+      else if (x >= 6 && x < 234 && y >= 192 && y < 230) {
+        lockscreenDarkOnly = !lockscreenDarkOnly;
+        saveSecuritySettings();
+        secMessage = lockscreenDarkOnly ? "Lockscreen: Dark Mode ON" : "Lockscreen: Follows theme";
+        uiRevision++;
+      }
+      // 5. Lock Now (y: 234 to 272)
+      else if (x >= 6 && x < 234 && y >= 234 && y < 272) {
+        screenLocked = true;
+        lockScreenMode = LOCK_HERO;
+        pinInput = "";
+        pinError = false;
+        uiRevision++;
       }
     }
   }
   else if (settingsPage == SET_RESET) {
     if (settingFormatConfirm) {
-      if (y >= 182 && y < 224) {
+      if (y >= 186 && y < 228) {
         if (x >= 16 && x < 112) { // Cancel
           settingFormatConfirm = false;
           uiRevision++;

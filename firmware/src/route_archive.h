@@ -344,25 +344,212 @@ static void loadArchive(String path){
   }
 }
 
-static void previewDraw(int y,int h){
-  if(y+h<=28 || y>=290) return;
-  card(6,y,228,h,uiCard());
-  label(14,y+6,"ROUTE PREVIEW",1,uiFg());
-  if(previewLen<2){centeredLabel(6,y+h/2,228,"GPX route unavailable",1,uiMuted());return;}
-  double minA=preview[0].lat,maxA=minA,minB=preview[0].lon,maxB=minB;
-  for(int i=1;i<previewLen;i++){minA=min(minA,preview[i].lat);maxA=max(maxA,preview[i].lat);minB=min(minB,preview[i].lon);maxB=max(maxB,preview[i].lon);}
-  double co=cos(radians((minA+maxA)/2));double scale=min(204.0/max(0.000001,(maxB-minB)*co),(h-24.0)/max(0.000001,maxA-minA));
-  auto x=[&](int i){return 120+int((preview[i].lon-(minB+maxB)/2)*co*scale);};auto z=[&](int i){return y+8+h/2-int((preview[i].lat-(minA+maxA)/2)*scale);};
-  for(int i=1;i<previewLen;i++){
-    int yA=z(i-1), yB=z(i);
-    if(yA>=29 && yA<290 && yB>=29 && yB<290){
-      display.drawLine(x(i-1),yA,x(i),yB,TEAL);
+static void previewDraw(int y, int h) {
+  if (y + h <= 28 || y >= 290) return;
+  const int cardX = 6, cardW = 228;
+  const uint16_t terrainBg = 0xEF7D; // Soft off-white
+  display.fillRoundRect(cardX, y, cardW, h, 8, terrainBg);
+  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xCE79);
+
+  label(14, y + 6, "ROUTE PREVIEW", 1, 0x4208);
+
+  if (previewLen < 2) {
+    centeredLabel(cardX, y + h / 2, cardW, "GPX route unavailable", 1, uiMuted());
+    return;
+  }
+
+  double minA = preview[0].lat, maxA = minA, minB = preview[0].lon, maxB = minB;
+  for (int i = 1; i < previewLen; i++) {
+    minA = min(minA, preview[i].lat);
+    maxA = max(maxA, preview[i].lat);
+    minB = min(minB, preview[i].lon);
+    maxB = max(maxB, preview[i].lon);
+  }
+
+  double centerLat = (minA + maxA) / 2.0;
+  double centerLon = (minB + maxB) / 2.0;
+
+  g_mapCache.updatePosition(centerLat, centerLon);
+
+  double co = cos(radians(centerLat));
+  double spanLonM = max(0.000001, (maxB - minB) * co * 111320.0);
+  double spanLatM = max(0.000001, (maxA - minA) * 111320.0);
+  double scale = min((cardW - 24.0) / spanLonM, (h - 24.0) / spanLatM);
+
+  const int clipX1 = cardX + 2;
+  const int clipY1 = y + 2;
+  const int clipX2 = cardX + cardW - 3;
+  const int clipY2 = y + h - 3;
+
+  auto projectCoord = [&](double pLat, double pLon, int &outX, int &outY) {
+    double dxM = (pLon - centerLon) * co * 111320.0;
+    double dyM = (pLat - centerLat) * 111320.0;
+    outX = 120 + (int)(dxM * scale);
+    outY = (y + h / 2) - (int)(dyM * scale);
+  };
+
+  auto clipAndDrawLine = [&](int x0, int y0, int x1, int y1, uint16_t color, int width) {
+    if ((x0 < clipX1 && x1 < clipX1) || (x0 > clipX2 && x1 > clipX2) ||
+        (y0 < clipY1 && y1 < clipY1) || (y0 > clipY2 && y1 > clipY2)) return;
+
+    auto getCode = [&](int x, int y) -> uint8_t {
+      uint8_t code = 0;
+      if (x < clipX1) code |= 1;
+      else if (x > clipX2) code |= 2;
+      if (y < clipY1) code |= 4;
+      else if (y > clipY2) code |= 8;
+      return code;
+    };
+    uint8_t c0 = getCode(x0, y0), c1 = getCode(x1, y1);
+    while (true) {
+      if (!(c0 | c1)) {
+        if (width <= 1) {
+          display.drawLine(x0, y0, x1, y1, color);
+        } else if (width == 2) {
+          display.drawLine(x0, y0, x1, y1, color);
+          display.drawLine(x0 + 1, y0, x1 + 1, y1, color);
+        } else {
+          for (int w = -(width / 2); w <= width / 2; w++) {
+            display.drawLine(x0 + w, y0, x1 + w, y1, color);
+            display.drawLine(x0, y0 + w, x1, y1 + w, color);
+          }
+        }
+        return;
+      } else if (c0 & c1) {
+        return;
+      } else {
+        int x, y;
+        uint8_t cOut = c0 ? c0 : c1;
+        if (cOut & 8) {
+          x = x0 + (int)((int64_t)(x1 - x0) * (clipY2 - y0) / (y1 - y0));
+          y = clipY2;
+        } else if (cOut & 4) {
+          x = x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0));
+          y = clipY1;
+        } else if (cOut & 2) {
+          x = y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0));
+          x = clipX2;
+        } else {
+          y = y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0));
+          x = clipX1;
+        }
+        if (cOut == c0) { x0 = x; y0 = y; c0 = getCode(x0, y0); }
+        else { x1 = x; y1 = y; c1 = getCode(x1, y1); }
+      }
+    }
+  };
+
+  // 1. Draw Basemap Underlay from Cached Tiles
+  const uint16_t waterColor = 0x9E5F; // #90CAF9
+  double n = 16384.0;
+  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
+      if (g_mapCache.tiles[s].features[f].type == FEAT_WATER) {
+        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
+        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
+        for (uint8_t i = 1; i < cnt; i++) {
+          double lat0, lon0, lat1, lon1;
+          double x0Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0;
+          double y0Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0;
+          lon0 = (x0Tile / n) * 360.0 - 180.0;
+          lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0Tile / n)))) * (180.0 / PI);
+
+          double x1Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i].u / 4096.0;
+          double y1Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i].v / 4096.0;
+          lon1 = (x1Tile / n) * 360.0 - 180.0;
+          lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1Tile / n)))) * (180.0 / PI);
+
+          int sx0, sy0, sx1, sy1;
+          projectCoord(lat0, lon0, sx0, sy0);
+          projectCoord(lat1, lon1, sx1, sy1);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, waterColor, 2);
+        }
+      }
     }
   }
-  int sx=x(0), sy=z(0);
-  int ex=x(previewLen-1), ey=z(previewLen-1);
-  if(sy>=29 && sy<290) display.fillCircle(sx,sy,3,0x07E0);
-  if(ey>=29 && ey<290) display.fillCircle(ex,ey,3,0xF800);
+
+  const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
+  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
+      uint8_t ft = g_mapCache.tiles[s].features[f].type;
+      if (ft == FEAT_RESIDENTIAL || ft == FEAT_CYCLEWAY) {
+        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
+        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
+        for (uint8_t i = 1; i < cnt; i++) {
+          double lat0, lon0, lat1, lon1;
+          double x0Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0;
+          double y0Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0;
+          lon0 = (x0Tile / n) * 360.0 - 180.0;
+          lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0Tile / n)))) * (180.0 / PI);
+
+          double x1Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i].u / 4096.0;
+          double y1Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i].v / 4096.0;
+          lon1 = (x1Tile / n) * 360.0 - 180.0;
+          lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1Tile / n)))) * (180.0 / PI);
+
+          int sx0, sy0, sx1, sy1;
+          projectCoord(lat0, lon0, sx0, sy0);
+          projectCoord(lat1, lon1, sx1, sy1);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 1);
+        }
+      }
+    }
+  }
+
+  const uint16_t majorBorder = 0xCE79;
+  const uint16_t majorCorridor = 0xFFFF;
+  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
+      uint8_t ft = g_mapCache.tiles[s].features[f].type;
+      if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
+        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
+        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
+        for (uint8_t i = 1; i < cnt; i++) {
+          double lat0, lon0, lat1, lon1;
+          double x0Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0;
+          double y0Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0;
+          lon0 = (x0Tile / n) * 360.0 - 180.0;
+          lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0Tile / n)))) * (180.0 / PI);
+
+          double x1Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i].u / 4096.0;
+          double y1Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i].v / 4096.0;
+          lon1 = (x1Tile / n) * 360.0 - 180.0;
+          lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1Tile / n)))) * (180.0 / PI);
+
+          int sx0, sy0, sx1, sy1;
+          projectCoord(lat0, lon0, sx0, sy0);
+          projectCoord(lat1, lon1, sx1, sy1);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 3);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 1);
+        }
+      }
+    }
+  }
+
+  // 2. Draw GPX Route on Top in Vibrant Orange (3px)
+  const uint16_t routeOrange = 0xFD00; // #FF7A00
+  for (int i = 1; i < previewLen; i++) {
+    int sx0, sy0, sx1, sy1;
+    projectCoord(preview[i - 1].lat, preview[i - 1].lon, sx0, sy0);
+    projectCoord(preview[i].lat, preview[i].lon, sx1, sy1);
+    clipAndDrawLine(sx0, sy0, sx1, sy1, routeOrange, 3);
+  }
+
+  // Start (Green) & End (Red) Badges
+  int sx, sy, ex, ey;
+  projectCoord(preview[0].lat, preview[0].lon, sx, sy);
+  projectCoord(preview[previewLen - 1].lat, preview[previewLen - 1].lon, ex, ey);
+  if (sy >= clipY1 && sy <= clipY2 && sx >= clipX1 && sx <= clipX2) {
+    display.fillCircle(sx, sy, 4, 0x07E0);
+    display.drawCircle(sx, sy, 4, 0xFFFF);
+  }
+  if (ey >= clipY1 && ey <= clipY2 && ex >= clipX1 && ex <= clipX2) {
+    display.fillCircle(ex, ey, 4, 0xF800);
+    display.drawCircle(ex, ey, 4, 0xFFFF);
+  }
 }
 
 static void archiveGraph(String path,int y,int col,const char* title,const char* subtitle=nullptr){

@@ -18,7 +18,8 @@ scratch/
 *.osm.pbf
 maps/tiles/
 maps/*.pbf
-maps/kolkata_z14.pak
+maps/*.pak
+
 
 
 

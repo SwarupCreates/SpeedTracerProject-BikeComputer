@@ -230,8 +230,8 @@ static bool showAppRefresh(){
 }
 static void drawAppRefresh(){
   if(!showAppRefresh())return;
-  display.fillCircle(216,48,17,0x2A5F);
-  drawCustomIcon(display,208,40,0xE71C,CustomIcon::refreshIcon);
+  display.fillCircle(222,45,11,0x2A5F);
+  drawCustomIcon(display,214,37,0xE71C,CustomIcon::refreshIcon);
 }
 static void serviceAppRefresh(){
   if(!refreshPending)return;
@@ -243,8 +243,8 @@ static void serviceAppRefresh(){
 }
 static void drawLibrary(){
   bool routes=homePage==HOME_ROUTES;
-  drawCustomIcon(display,10,39,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::folderIcon:CustomIcon::runIcon);
-  label(34,38,routes?"SAVED ROUTES":homePage==HOME_RIDES?"RIDE HISTORY":"PAST ACTIVITY",1);
+  drawCustomIcon(display,10,37,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
+  label(34,36,routes?"SAVED ROUTES":homePage==HOME_RIDES?"RIDE HISTORY":"PAST ACTIVITY",2);
   
   if(librarySelection.length()){
     label(10,65,fitBrowserText(librarySelection,215),1);
@@ -262,16 +262,16 @@ static void drawLibrary(){
     label(10,244,fitBrowserText(libraryMessage,218),1,uiMuted());return;
   }
 
-  label(10,65,routes?"Your route library":"Completed recordings",1,uiMuted());
+
   if(!libraryCount){
-    card(6,100,228,142,uiCard());
-    drawCustomIcon(display,108,119,uiMuted(),routes?CustomIcon::routeMapIcon:CustomIcon::runIcon);
-    centeredLabel(6,160,228,libraryMessage.length()?libraryMessage:routes?"No saved routes":"No saved activities",1,uiMuted());
-    centeredLabel(6,190,228,routes?"Add routes to SD /routes":"Finish and save an activity",1,uiMuted());
+    card(6,76,228,150,uiCard());
+    drawCustomIcon(display,108,105,uiMuted(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
+    centeredLabel(6,140,228,libraryMessage.length()?libraryMessage:routes?"No saved routes":"No saved activities",1,uiMuted());
+    centeredLabel(6,168,228,routes?"Add routes to SD /routes":"Finish and save an activity",1,uiMuted());
   }
   for(int i=0;i<libraryCount;i++){
-    int y=89+i*44;card(6,y,228,40,uiCard());
-    drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:CustomIcon::runIcon);
+    int y=68+i*44;card(6,y,228,40,uiCard());
+    drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
     String title=libraryNames[i];title.replace(".fit","");title.replace(".json","");title.replace(".gpx","");
     label(38,y+5,fitBrowserText(title,184),1);
     label(38,y+23,routes?"Route - tap to view":libraryNames[i].startsWith("run-")?"Run - tap to view":"Ride - tap to view",1,uiMuted());
@@ -290,8 +290,8 @@ static void libraryTap(int x,int y){
     }
     return;
   }
-  int row=(y-89)/44;
-  if(y>=89 && row>=0 && row<libraryCount && y<89+row*44+40){librarySelection=libraryPaths[row];librarySelectedSize=librarySizes[row];libraryMessage="";archiveDetailPage=0;loadArchive(librarySelection);uiRevision++;}
+  int row=(y-68)/44;
+  if(y>=68 && row>=0 && row<libraryCount && y<68+row*44+40){librarySelection=libraryPaths[row];librarySelectedSize=librarySizes[row];libraryMessage="";archiveDetailPage=0;loadArchive(librarySelection);uiRevision++;}
 }
 // Shared tray reserves y=290..319 on every interactive page.
 static bool globalHasNext(){
@@ -347,7 +347,7 @@ static void drawHomeSubpage(){
     drawCustomIcon(display,10,41,uiFg(),CustomIcon::allAppsIcon);
     label(34,40,"ALL APPS",2);
     const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","MAP"};
-    CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
+    CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
     for(int i=0;i<6;i++){int x=6+(i%2)*117,y=72+(i/2)*70;
       card(x,y,111,62,uiCard());drawCustomIcon(display,x+47,y+10,uiFg(),icons[i]);
       centeredLabel(x,y+40,111,names[i],1);
@@ -359,15 +359,15 @@ static void drawHomeSubpage(){
     }
     drawCustomIcon(display,10,37,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon);
     label(34,36,browserPath=="/"?"MY FILES":fitBrowserText(browserPath,160),2);
-    label(10,61,browserTotal?storageSize(browserUsed)+" / "+storageSize(browserTotal)+" used":"Storage unavailable",1,uiMuted());
-    display.fillRoundRect(10,77,220,7,3,uiCard());
-    if(browserTotal){int filled=(int)(220.0*(double)browserUsed/(double)browserTotal);filled=constrain(filled,0,220);if(filled)display.fillRoundRect(10,77,filled,7,3,TEAL);}
-    label(10,94,fitBrowserText(browserPath,218),1,uiMuted());
-    if(!sdOk)label(10,128,"SD card unavailable",1,0xFA08);
-    else if(browserError.length())label(10,128,browserError,1,0xFA08);
-    else if(!browserCount)label(10,128,"This folder is empty",1,uiMuted());
-    for(int i=0;i<browserCount;i++){int y=112+i*38;
-      card(6,y,228,34,uiCard());
+
+
+
+
+    if(!sdOk)label(10,100,"SD card unavailable",1,0xFA08);
+    else if(browserError.length())label(10,100,browserError,1,0xFA08);
+    else if(!browserCount)label(10,100,"This folder is empty",1,uiMuted());
+    for(int i=0;i<browserCount;i++){int y=68+i*44;
+      card(6,y,228,40,uiCard());
       String low=browserNames[i];low.toLowerCase();
       CustomIcon icon = browserDirs[i] ? CustomIcon::folderIcon :
                         low.endsWith(".fit") ? CustomIcon::runIcon :
@@ -376,9 +376,9 @@ static void drawHomeSubpage(){
       uint16_t iconColor = browserDirs[i] ? uiFg() :
                            low.endsWith(".fit") ? TEAL :
                            low.endsWith(".gpx") ? 0x3DF7 : uiFg();
-      drawCustomIcon(display,12,y+9,iconColor,icon);
-      label(36,y+4,fitBrowserText(browserNames[i],188));
-      label(36,y+19,browserDirs[i]?"Folder - tap to open":storageSize(browserSizes[i])+" - tap to view",1,uiMuted());
+      drawCustomIcon(display,14,y+12,iconColor,icon);
+      label(38,y+5,fitBrowserText(browserNames[i],184));
+      label(38,y+23,browserDirs[i]?"Folder - tap to open":storageSize(browserSizes[i])+" - tap to view",1,uiMuted());
     }
     if(selectedFile.length())label(8,275,fitBrowserText(selectedFile,224),1,uiMuted());
   }
@@ -554,7 +554,7 @@ static bool drawLifecycleScreen() {
 }
 
 static void quickTap(int x, int y) {
-  if(showAppRefresh() && x>=196 && y>=29 && y<68){
+  if(showAppRefresh() && x>=196 && y>=28 && y<62){
     refreshPending=true;
     return;
   }
@@ -613,8 +613,8 @@ static void quickTap(int x, int y) {
         uiRevision++;
         return;
       }
-      int row=(y-112)/38;
-      if(y>=112 && row>=0 && row<browserCount && y<112+row*38+34){
+      int row=(y-68)/44;
+      if(y>=68 && row>=0 && row<browserCount && y<68+row*44+40){
         if(browserDirs[row])openBrowser((browserPath=="/"?String(""):browserPath)+"/"+browserNames[row]);
         else openFileDetail(row);
       }

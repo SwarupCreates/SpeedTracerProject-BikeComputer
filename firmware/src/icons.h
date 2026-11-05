@@ -66,3 +66,4 @@ static inline void drawCompassCoin(Adafruit_GFX &gfx,int cx,int cy,float heading
 
 static inline void drawBluetoothStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected){drawCustomIcon(g,x,y,c,connected?CustomIcon::bluetoothConnectedIcon:CustomIcon::bluetoothDisconnectedIcon);}
 static inline void drawWifiStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected){drawCustomIcon(g,x,y,c,connected?CustomIcon::wifiConnectedIcon:CustomIcon::wifiDisconnectedIcon);}
+static inline void drawHistoryIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color){drawCustomIcon(gfx,x,y,color,CustomIcon::historyIcon);}

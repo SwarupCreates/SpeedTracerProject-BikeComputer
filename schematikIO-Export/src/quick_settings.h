@@ -302,7 +302,13 @@ static void drawLibrary(){
 
       // Header
       if (topY + 18 >= 28 && topY < 290) label(10, topY, headTitle, 2, uiFg());
-      if (topY + 36 >= 28 && topY < 290) label(10, topY + 19, "Track guidance  *  No street names", 1, uiMuted());
+      if (topY + 36 >= 28 && topY < 290) {
+        const char* zoomSub = (previewZoomLevel == 0) ? "Overview" :
+                              (previewZoomLevel == 1) ? "1x District (~1.4km)" :
+                              (previewZoomLevel == 2) ? "2x Area (~800m)" :
+                              (previewZoomLevel == 3) ? "3x Neighborhood (~450m)" : "4x Street Detail (Max)";
+        label(10, topY + 19, zoomSub, 1, previewZoomLevel == 0 ? uiMuted() : TEAL);
+      }
 
       // 1. Prominent Large Route Map Preview Card (180px tall!)
       int mapY = topY + 34;

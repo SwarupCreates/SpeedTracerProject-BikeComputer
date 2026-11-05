@@ -1,5 +1,4 @@
 import os
-import subprocess
 import re
 
 FONTS = [
@@ -34,7 +33,7 @@ header_code = '''#pragma once
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SPEEDTRACER MULTI-FONT SYSTEM (4 ANTI-ALIASED FONTS x 4 SIZES)
-//  Auto-generated 4-BPP font tables for live theme switching
+//  Auto-generated 4-BPP raw uncompressed font tables for live theme switching
 // ═══════════════════════════════════════════════════════════════════════════════
 
 enum SystemFontId {
@@ -53,26 +52,19 @@ static const char* const SYSTEM_FONT_NAMES[] = {
 
 '''
 
-os.makedirs("scratch/fonts_gen", exist_ok=True)
+total_bytes = 0
 
 for prefix, font_path, name in FONTS:
-    print(f"Processing font: {name} ({font_path})...")
     header_code += f"// ═══════════════════════════════════════════════════════════════════════════════\n"
     header_code += f"//  {name}\n"
     header_code += f"// ═══════════════════════════════════════════════════════════════════════════════\n\n"
     
     for sz, cap in SIZES_CAPS:
-        out_c = f"scratch/fonts_gen/{prefix.lower()}_{sz}.c"
-        if not os.path.exists(out_c):
-            cmd = f'npx lv_font_conv --font "{font_path}" --range 0x20-0x7E --size {sz} --bpp 4 --format lvgl -o "{out_c}"'
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            if res.returncode != 0:
-                print(f"Error converting {font_path} size {sz}: {res.stderr}")
-                exit(1)
-        
+        out_c = f"scratch/fonts_uncompressed/{prefix.lower()}_{sz}.c"
         tokens, glyphs = parse_font_c(out_c)
+        total_bytes += len(tokens)
         
-        header_code += f'// --- {name} {sz}px (Cap: {cap}px) ---\n'
+        header_code += f'// --- {name} {sz}px (Cap: {cap}px, {len(tokens)} bytes) ---\n'
         header_code += f'static const uint8_t smoothBits_{prefix}_{sz}[] PROGMEM = {{\n'
         for i in range(0, len(tokens), 16):
             row = ','.join(tokens[i:i+16])
@@ -92,7 +84,12 @@ for sz in [10, 12, 18, 28]:
     header_code += f'static const SmoothFont& smoothFont{sz} = smoothFont_Metro_{sz};\n'
 header_code += '\n'
 
-with open('scratch/system_fonts.h', 'w', encoding='utf-8') as f:
+print(f"Total bitmap bytes across all 16 fonts: {total_bytes} bytes (~{total_bytes // 1024} KB)")
+
+with open('firmware/src/system_fonts.h', 'w', encoding='utf-8') as f:
     f.write(header_code)
 
-print("Generated scratch/system_fonts.h successfully!")
+with open('schematikIO-Export/src/system_fonts.h', 'w', encoding='utf-8') as f:
+    f.write(header_code)
+
+print("Generated firmware/src/system_fonts.h and schematikIO-Export/src/system_fonts.h successfully!")

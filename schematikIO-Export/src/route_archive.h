@@ -777,16 +777,10 @@ static void previewDraw(int y, int h, bool showControls = true) {
   }
 
   // --- HEADER & HINTS ON CARD ---
+  // Top-left route text removed to keep map canvas clean; zoom level is shown above map
   if (previewZoomLevel == 0) {
-    label(14, y + 6, "ROUTE PREVIEW", 1, 0x4208);
-    label(14, y + 18, "Overview", 1, uiMuted());
     label(14, y + h - 14, "Tap + to inspect turns", 1, uiMuted());
   } else {
-    label(14, y + 6, "STREET DETAIL", 1, 0x4208);
-    const char* sub = (previewZoomLevel == 1) ? "1x District (~1.4km)" :
-                      (previewZoomLevel == 2) ? "2x Area (~800m)" :
-                      (previewZoomLevel == 3) ? "3x Neighborhood (~450m)" : "4x Street Detail (Max)";
-    label(14, y + 18, sub, 1, 0x02E0);
     label(14, y + h - 14, "Drag to pan along route", 1, uiMuted());
   }
 

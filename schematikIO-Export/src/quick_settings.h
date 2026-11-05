@@ -950,11 +950,11 @@ static void drawGpsRadarScreen() {
   // Center White Satellite Icon (native 32x32 high resolution)
   drawCustomIcon(display, cx - 16, cy - 16, 0xFFFF, CustomIcon::satelliteIconLarge);
 
-  // Content Below Radar: Increased space gap between sat count and progress bar
-  int textY = 216 - gpsScroll;
+  // Content Below Radar: Increased space gap between sat count and progress bar, and between lines
+  int textY = 210 - gpsScroll;
   label(20, textY, "LOCKED", 2, uiFg());
-  label(20, textY + 16, "SATELLITES", 2, uiFg());
-  drawBigNumber(220, textY - 2, sats, uiFg());
+  label(20, textY + 23, "SATELLITES", 2, uiFg());
+  drawBigNumber(220, textY + 1, sats, uiFg());
 
   // Satellite Connection Quality Progress Bar (max 6 sats for stable connection)
   int barY = 270 - gpsScroll;

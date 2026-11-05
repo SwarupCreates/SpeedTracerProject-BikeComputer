@@ -681,9 +681,15 @@ static void drawHomeSubpage(){
     label(34,37,"ALL APPS",2);
     const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","MAP"};
     CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
-    for(int i=0;i<6;i++){int x=6+(i%2)*117,y=72+(i/2)*70;
-      card(x,y,111,62,uiCard());drawCustomIcon(display,x+47,y+10,uiFg(),icons[i]);
-      centeredLabel(x,y+40,111,names[i],1);
+    const int btnW = 108, btnH = 64;
+    for(int i = 0; i < 6; i++){
+      int col = i % 2, row = i / 2;
+      int x = 8 + col * (btnW + 8);
+      int y = 70 + row * (btnH + 8);
+      display.fillRoundRect(x, y, btnW, btnH, 31, uiCard());
+      display.drawRoundRect(x, y, btnW, btnH, 31, darkTheme ? 0x2945 : 0xD6BA);
+      drawCustomIcon(display, x + (btnW - 22) / 2, y + 12, uiFg(), icons[i], 22, 22);
+      centeredLabel(x, y + 41, btnW, names[i], 1);
     }
   }else{
     if(fileDetailOpen){
@@ -1085,10 +1091,13 @@ static void quickTap(int x, int y) {
       return;
     }
     if(homePage==HOME_APPS){
-      int col=x>=123&&x<234?1:x>=6&&x<117?0:-1;
-      int row=(y-72)/70;
-      if(y<72 || row>2 || col<0 || y>=72+row*70+62)return;
-      int tile=row*2+col;
+      int col = (x >= 120 && x < 236) ? 1 : (x >= 4 && x < 120) ? 0 : -1;
+      int row = -1;
+      if (y >= 66 && y < 138) row = 0;
+      else if (y >= 138 && y < 210) row = 1;
+      else if (y >= 210 && y < 282) row = 2;
+      if (col < 0 || row < 0) return;
+      int tile = row * 2 + col;
       if(tile==0)openLibrary(HOME_ACTIVITY);
       else if(tile==1)openLibrary(HOME_RIDES);
       else if(tile==2)openLibrary(HOME_ROUTES);

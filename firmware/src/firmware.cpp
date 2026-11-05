@@ -1336,7 +1336,7 @@ void loop() {
   // Check changed content at up to 40 Hz; static content is not transferred.
   if (millis() - lastDispMs >= 25) {
     lastDispMs = millis();
-    String state=String(gpsWaiting?millis()/200:0)+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(darkTheme)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.getMode())+":"+String(WiFi.status())+":"+String(currentScreen)+":"+String(mapZoom)+":"+String(ride.speedKmh,1)+":"+String(ride.distanceKm,2)+":"+String(ride.elapsedSec/60)+":"+String(ride.lat,5)+":"+String(ride.lon,5)+":"+String(ride.altM,1)+":"+String(ride.cadenceRpm)+":"+String(ride.powerW)+":"+String(ride.gpsFixed)+":"+String(routeLen)+":"+String(trackLen)+":"+String(nav.destLat,5)+":"+String(nav.destLon,5)+":"+String(cfg.vo2maxManual)+":"+String(cfg.targetDistanceKm);
+    String state=String((gpsWaiting||gpsRadarInspector)?(millis()/40):0)+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(darkTheme)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.getMode())+":"+String(WiFi.status())+":"+String(currentScreen)+":"+String(mapZoom)+":"+String(ride.speedKmh,1)+":"+String(ride.distanceKm,2)+":"+String(ride.elapsedSec/60)+":"+String(ride.lat,5)+":"+String(ride.lon,5)+":"+String(ride.altM,1)+":"+String(ride.cadenceRpm)+":"+String(ride.powerW)+":"+String(ride.gpsFixed)+":"+String(routeLen)+":"+String(trackLen)+":"+String(nav.destLat,5)+":"+String(nav.destLon,5)+":"+String(cfg.vo2maxManual)+":"+String(cfg.targetDistanceKm);
     static String previous; if(state==previous)return;previous=state;
     if(drawLifecycleScreen()){drawGlobalNav();drawAppRefresh();display.refresh();return;}
     if(quickOpen){drawQuickSettings();drawGlobalNav();drawAppRefresh();display.refresh();return;}

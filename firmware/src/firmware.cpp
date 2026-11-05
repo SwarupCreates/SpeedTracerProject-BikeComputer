@@ -185,6 +185,18 @@ public:
  void drawBrandLogo(int x,int y,bool light=false){
    logoLight=light;
    logoX=x;logoY=y;logoOverlay=true;
+   const uint16_t* data=light?HOME_LOGO_LIGHT_DATA:BOOT_LOGO_DATA;
+   if(buffer){
+     for(int r=0;r<BOOT_LOGO_HEIGHT;r++){
+       int py=y+r;
+       if(py<0 || py>=DISP_H)continue;
+       for(int c=0;c<BOOT_LOGO_WIDTH;c++){
+         int px=x+c;
+         if(px<0 || px>=DISP_W)continue;
+         buffer[py*DISP_W+px]=pgm_read_word(&data[r*BOOT_LOGO_WIDTH+c]);
+       }
+     }
+   }
  }
  void showBrandLogo(){
    fillScreen(0x0000);

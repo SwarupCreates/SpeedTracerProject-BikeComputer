@@ -805,8 +805,8 @@ static void drawQuickSettings() {
     if (quickDetail == 2) {
       label(16, 80, bleReady ? "Bluetooth LE: Ready" : "Hardware not ready");
       label(16, 101, String(bleCount()) + " sensors connected");
-      label(16, 126, "Pair via web interface");
-      label(16, 146, "192.168.4.1 > Bluetooth");
+      label(16, 126, blePhoneConnected() ? (bleCtsSynced() ? "Phone: Connected (Synced)" : "Phone: Connected") : "Phone: Disconnected");
+      label(16, 146, blePhoneConnected() ? "Clock auto-synced via BLE" : "Pair: Settings > Bluetooth");
       label(16, 176, bleHRReady ? "Heart rate: Ready" : "HR: searching...");
       label(16, 196, bleCadReady ? "Cadence: Ready" : "Cadence: searching...");
       label(16, 216, blePowerReady ? "Power: Ready" : "Power: searching...");
@@ -879,7 +879,7 @@ static void drawQuickSettings() {
   // Tile 1: Bluetooth
   {
     int x = 123, y = 162-offset;
-    int bCount = bleCount();
+    int bCount = bleCount() + (blePhoneConnected() ? 1 : 0);
     bool active = (bCount > 0);
     card(x, y, 111, 62, active ? (darkTheme ? 0x0940 : 0xD753) : uiCard());
     uint16_t fg = active ? (darkTheme ? 0x7FE0 : 0x2400) : uiFg();

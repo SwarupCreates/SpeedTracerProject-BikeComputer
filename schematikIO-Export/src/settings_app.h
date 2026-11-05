@@ -379,7 +379,7 @@ static void drawLockHeroScreen() {
   centeredLabel(0, 262, 240, "Swipe up to unlock", 1, fg);
 }
 
-// Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Circular Keypad, Universal Nav Bar)
+// Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Keypad, Universal Nav Bar)
 static void drawLockKeypadScreen() {
   uint16_t bg = uiBg();
   uint16_t fg = uiFg();
@@ -388,54 +388,59 @@ static void drawLockKeypadScreen() {
 
   statusBar(true, false);
 
-  // 4 PIN Dots at Y = 54
+  // 4 PIN Dots at Y = 48
   for (int i = 0; i < 4; i++) {
     int dx = 87 + i * 22;
     if (pinError) {
-      display.fillCircle(dx, 54, 5, 0xF800);
+      display.fillCircle(dx, 48, 5, 0xF800);
     } else if (i < (int)pinInput.length()) {
-      display.fillCircle(dx, 54, 5, fg);
+      display.fillCircle(dx, 48, 5, fg);
     } else {
-      display.fillCircle(dx, 54, 5, cardBg);
-      display.drawCircle(dx, 54, 5, muted);
+      display.fillCircle(dx, 48, 5, cardBg);
+      display.drawCircle(dx, 48, 5, muted);
     }
   }
 
-  // 3x3 Keypad buttons
+  // 3x3 Keypad buttons (radius = 25, diameter = 50, gap = 10)
   const char* digits[3][3] = {
     {"1", "2", "3"},
     {"4", "5", "6"},
     {"7", "8", "9"}
   };
-  const int rowY[3] = {96, 144, 192};
+  const int rowY[4] = {89, 144, 199, 254};
   const int colX[3] = {60, 120, 180};
+  const int btnRadius = 25;
+  const int btnDiameter = 50;
+  const int btnGap = 10;
+
   for (int r = 0; r < 3; r++) {
     for (int c = 0; c < 3; c++) {
       int cx = colX[c];
       int cy = rowY[r];
-      display.fillCircle(cx, cy, 21, cardBg);
-      display.drawCircle(cx, cy, 21, darkTheme ? 0x2945 : 0xD6BA);
-      centeredLabel(cx - 21, cy - 7, 42, digits[r][c], 2, fg);
+      display.fillCircle(cx, cy, btnRadius, cardBg);
+      display.drawCircle(cx, cy, btnRadius, darkTheme ? 0x2945 : 0xD6BA);
+      centeredLabel(cx - btnRadius, cy - 7, btnDiameter, digits[r][c], 2, fg);
     }
   }
 
-  // Row 3: Backspace Capsule (Cols 0 & 1: x = 38 to 142, y = 218, w = 104, h = 42, r = 21)
-  display.fillRoundRect(38, 218, 104, 42, 21, cardBg);
-  display.drawRoundRect(38, 218, 104, 42, 21, darkTheme ? 0x2945 : 0xD6BA);
-  // Crisp Backspace Arrow in center (cx = 90, cy = 239)
-  display.fillRect(80, 238, 20, 2, fg);
-  display.drawLine(80, 239, 87, 232, fg);
-  display.drawLine(80, 240, 87, 233, fg);
-  display.drawLine(80, 239, 87, 246, fg);
-  display.drawLine(80, 238, 87, 245, fg);
+  // Row 3: Backspace Capsule (width = btnDiameter * 2 + btnGap = 110, height = 50, radius = 25)
+  // Spans precisely from left of Col 0 (35) to right of Col 1 (145)
+  int capsuleX = colX[0] - btnRadius; // 35
+  int capsuleY = rowY[3] - btnRadius; // 229
+  int capsuleW = btnDiameter * 2 + btnGap; // 110
+  int capsuleH = btnDiameter; // 50
+  display.fillRoundRect(capsuleX, capsuleY, capsuleW, capsuleH, btnRadius, cardBg);
+  display.drawRoundRect(capsuleX, capsuleY, capsuleW, capsuleH, btnRadius, darkTheme ? 0x2945 : 0xD6BA);
+  // Center our back icon (CustomIcon::GoBackIcon) inside the backspace capsule
+  drawCustomIcon(display, 90 - 8, rowY[3] - 8, fg, CustomIcon::GoBackIcon);
 
-  // '0' circular button at (180, 239), radius 21
-  display.fillCircle(180, 239, 21, cardBg);
-  display.drawCircle(180, 239, 21, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(180 - 21, 239 - 7, 42, "0", 2, fg);
+  // '0' circular button at (180, 254), radius 25
+  display.fillCircle(colX[2], rowY[3], btnRadius, cardBg);
+  display.drawCircle(colX[2], rowY[3], btnRadius, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(colX[2] - btnRadius, rowY[3] - 7, btnDiameter, "0", 2, fg);
 
-  // Universal Bottom Navigation Bar (y = 290..319)
-  display.fillRect(0, 290, 240, 30, uiBg());
+  // Universal Bottom Navigation Bar (y = 286..319)
+  display.fillRect(0, 286, 240, 34, uiBg());
   drawCustomIcon(display, 42, 297, fg, CustomIcon::GoBackIcon);
   drawCustomIcon(display, 112, 297, fg, CustomIcon::HomeIcon);
 }
@@ -455,8 +460,8 @@ static void drawLockScreen() {
 }
 
 static void tapLockScreen(int x, int y) {
-  // Universal Navigation Bar tap: y >= 270 (Back / Home returns to hero lock screen)
-  if (y >= 270) {
+  // Universal Navigation Bar tap: y >= 282 (Back / Home returns to hero lock screen)
+  if (y >= 282) {
     if (lockScreenMode == LOCK_KEYPAD) {
       lockScreenMode = LOCK_HERO;
       pinInput = "";
@@ -483,9 +488,9 @@ static void tapLockScreen(int x, int y) {
   }
 
   // LOCK_KEYPAD mode
-  // Rows 0, 1, 2: digits '1' through '9' (y: 70 to 216)
-  if (y >= 70 && y < 216) {
-    int r = (y < 120) ? 0 : (y < 168 ? 1 : 2);
+  // Rows 0, 1, 2: digits '1' through '9' (y: 60 to 227)
+  if (y >= 60 && y < 227) {
+    int r = (y < 117) ? 0 : (y < 172 ? 1 : 2);
     int c = (x < 90) ? 0 : (x < 150 ? 1 : 2);
     char digit = '1' + (r * 3 + c);
     if (pinInput.length() < 4) {
@@ -494,8 +499,8 @@ static void tapLockScreen(int x, int y) {
       uiRevision++;
     }
   }
-  // Row 3: Backspace capsule (x < 150) and '0' circle (x >= 150) (y: 216 to 270)
-  else if (y >= 216 && y < 270) {
+  // Row 3: Backspace capsule (x < 150) and '0' circle (x >= 150) (y: 227 to 282)
+  else if (y >= 227 && y < 282) {
     if (x < 150) {
       // Backspace
       if (pinInput.length() > 0) {

@@ -1390,13 +1390,14 @@ static void handleSerialTransfer() {
   }
   String line = Serial.readStringUntil('\n');
   line.trim();
-  if (line.startsWith("CMD:SYNC_TIME ") || line.startsWith("SYNC_TIME:")) {
+  if (line.startsWith("CMD:SYNC_TIME ") || line.startsWith("SYNC_TIME:") || line.startsWith("TIME:")) {
     int idx = line.indexOf(' ');
     if (idx < 0) idx = line.indexOf(':');
-    time_t epoch = (time_t)line.substring(idx + 1).toInt();
+    time_t epoch = (time_t)strtoul(line.substring(idx + 1).c_str(), nullptr, 10);
     if (epoch > 1704067200) {
       struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
       settimeofday(&tv, nullptr);
+      persistSystemTime(); // Instantly persist to RTC fast memory & NVS preferences
       struct tm local;
       localtime_r(&epoch, &local);
       Serial.printf("OK:TIME_SYNC %ld %02d:%02d:%02d\n",
@@ -1536,6 +1537,13 @@ void loop() {
   }
 
   handleSerialTransfer();
+  static uint32_t s_lastTimeReq = 0;
+  if (time(nullptr) < 1704067200 && millis() - s_lastTimeReq >= 2000UL) {
+    s_lastTimeReq = millis();
+    if (Serial) {
+      Serial.println("REQ:TIME_SYNC");
+    }
+  }
   delay(1); // Yield between UI/input passes; never wait a frame in touch polling.
   bleReadings();
   pollPowerUi();

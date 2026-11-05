@@ -14,11 +14,17 @@ def sync_time(port=None):
         ser.write(f"CMD:SYNC_TIME {epoch}\n".encode())
         ser.flush()
         print(f"Sent: CMD:SYNC_TIME {epoch} ({time.ctime(epoch)})")
-        time.sleep(0.15)
-        resp = ser.read_all().decode(errors="ignore")
-        if resp:
-            print(f"Device response: {resp.strip()}")
+        t0 = time.time()
+        resp = ""
+        while time.time() - t0 < 1.0:
+            if ser.in_waiting:
+                line = ser.readline().decode(errors="ignore").strip()
+                if line:
+                    resp = line
+                    break
         ser.close()
+        if resp:
+            print(f"Device response: {resp}")
         print("Time sync complete!")
     except Exception as e:
         print(f"Error syncing time: {e}")

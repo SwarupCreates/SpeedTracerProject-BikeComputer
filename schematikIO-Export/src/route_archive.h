@@ -448,7 +448,15 @@ static void previewDraw(int y, int h) {
     }
     centerLat = previewPanLat;
     centerLon = previewPanLon;
-    scale = (previewZoomLevel == 1) ? 0.85 : 1.6; // 0.85 px/m (~260m across) or 1.6 px/m (~140m across)
+    // 4 Basemap Zoom Presets:
+    // Level 1: Wide District (~1.4 km across card)
+    // Level 2: District View (~800 m across card)
+    // Level 3: Neighborhood View (~450 m across card)
+    // Level 4: Street Detail Max Zoom (~250 m across card)
+    if (previewZoomLevel == 1)      scale = 0.15;
+    else if (previewZoomLevel == 2) scale = 0.27;
+    else if (previewZoomLevel == 3) scale = 0.48;
+    else                            scale = 0.85; // Max zoom
     previewScale = scale;
 
     // Align PSRAM sliding window around current pan position
@@ -601,8 +609,13 @@ static void previewDraw(int y, int h) {
     }
 
     // -----------------------------------------------------------------
-    // PASS 2: ROADS (Minor streets first, then Major Corridors on top)
+    // PASS 2: ROADS (Minor streets, then Major Casings, then White Corridors)
     // -----------------------------------------------------------------
+    int minorW = (previewZoomLevel >= 3) ? 2 : 1;
+    int majorBorderW = (previewZoomLevel == 4) ? 6 : (previewZoomLevel == 3) ? 5 : (previewZoomLevel == 2) ? 4 : 3;
+    int majorCorridorW = (previewZoomLevel >= 3) ? 3 : (previewZoomLevel == 2) ? 2 : 1;
+
+    // 2A. Minor / Residential Streets
     for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
       if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
       int tx = g_mapCache.tiles[s].tileX;
@@ -616,7 +629,6 @@ static void previewDraw(int y, int h) {
       MapPoint12* pts = g_mapCache.tiles[s].points;
       uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
 
-      // 2A. Minor / Residential Streets
       for (uint16_t f = 0; f < featCount; f++) {
         uint8_t ft = feats[f].type;
         if (ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
@@ -638,13 +650,27 @@ static void previewDraw(int y, int h) {
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
           int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 2);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, minorW);
           sx0 = sx1;
           sy0 = sy1;
         }
       }
+    }
 
-      // 2B. Major / Primary Corridors (Wide white highway with soft gray outline, matching Strava)
+    // 2B. Major / Primary Road Outer Borders (Casings)
+    for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+      if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+      int tx = g_mapCache.tiles[s].tileX;
+      int ty = g_mapCache.tiles[s].tileY;
+      if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+      int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+      int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+      MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+      MapPoint12* pts = g_mapCache.tiles[s].points;
+      uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
       for (uint16_t f = 0; f < featCount; f++) {
         uint8_t ft = feats[f].type;
         if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY) continue;
@@ -666,8 +692,49 @@ static void previewDraw(int y, int h) {
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
           int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 6);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 3);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, majorBorderW);
+          sx0 = sx1;
+          sy0 = sy1;
+        }
+      }
+    }
+
+    // 2C. Major / Primary Road Inner Corridors (Pure White Ribbons - connects junctions seamlessly!)
+    for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+      if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+      int tx = g_mapCache.tiles[s].tileX;
+      int ty = g_mapCache.tiles[s].tileY;
+      if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+      int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+      int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+      MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+      MapPoint12* pts = g_mapCache.tiles[s].points;
+      uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+      for (uint16_t f = 0; f < featCount; f++) {
+        uint8_t ft = feats[f].type;
+        if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY) continue;
+        uint8_t cnt = feats[f].pointCount;
+        uint16_t off = feats[f].pointOffset;
+        if (cnt < 2) continue;
+
+        int p0X = tileDeltaX + pts[off].u;
+        int p0Y = tileDeltaY + pts[off].v;
+        int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+        int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+        if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+            (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+        int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
+        int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+        for (uint8_t k = 1; k < cnt; k++) {
+          int pkX = tileDeltaX + pts[off + k].u;
+          int pkY = tileDeltaY + pts[off + k].v;
+          int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
+          int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, majorCorridorW);
           sx0 = sx1;
           sy0 = sy1;
         }
@@ -675,9 +742,9 @@ static void previewDraw(int y, int h) {
     }
   }
 
-  // --- DRAW GPX ROUTE VECTOR (Vibrant Orange, 3px or 4px) ---
+  // --- DRAW GPX ROUTE VECTOR// --- DRAW GPX ROUTE VECTOR (Vibrant Orange, 3px or 4px) ---
   const uint16_t routeOrange = 0xFD00; // #FF7A00
-  int routeW = (previewZoomLevel > 0) ? 4 : 3;
+  int routeW = (previewZoomLevel >= 2) ? 4 : 3;
   for (int i = 1; i < previewLen; i++) {
     int sx0, sy0, sx1, sy1;
     projectCoord(preview[i - 1].lat, preview[i - 1].lon, sx0, sy0);
@@ -707,7 +774,10 @@ static void previewDraw(int y, int h) {
     label(14, y + h - 14, "Tap + to inspect turns", 1, uiMuted());
   } else {
     label(14, y + 6, "STREET DETAIL", 1, 0x4208);
-    label(14, y + 18, (previewZoomLevel == 1 ? "1x Turn View" : "2x Close View"), 1, 0x02E0);
+    const char* sub = (previewZoomLevel == 1) ? "1x District (~1.4km)" :
+                      (previewZoomLevel == 2) ? "2x Area (~800m)" :
+                      (previewZoomLevel == 3) ? "3x Neighborhood (~450m)" : "4x Street Detail (Max)";
+    label(14, y + 18, sub, 1, 0x02E0);
     label(14, y + h - 14, "Drag to pan along route", 1, uiMuted());
   }
 
@@ -717,9 +787,9 @@ static void previewDraw(int y, int h) {
 
   // 1. Plus Button (+)
   int btnPlusY = y + 6;
-  display.fillRoundRect(btnX, btnPlusY, btnW, btnH, 4, (previewZoomLevel < 2) ? 0xFFFF : 0xE71C);
+  display.fillRoundRect(btnX, btnPlusY, btnW, btnH, 4, (previewZoomLevel < 4) ? 0xFFFF : 0xE71C);
   display.drawRoundRect(btnX, btnPlusY, btnW, btnH, 4, 0xCE79);
-  uint16_t plusCol = (previewZoomLevel < 2) ? 0x0000 : 0x8410;
+  uint16_t plusCol = (previewZoomLevel < 4) ? 0x0000 : 0x8410;
   display.drawFastHLine(btnX + 7, btnPlusY + 11, 12, plusCol);
   display.drawFastHLine(btnX + 7, btnPlusY + 12, 12, plusCol);
   display.drawFastVLine(btnX + 12, btnPlusY + 6, 12, plusCol);

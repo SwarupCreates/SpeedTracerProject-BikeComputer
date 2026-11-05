@@ -49,6 +49,17 @@ static String fitBrowserText(String text,int width){
   while(text.length() && textWidth(text,1)>width)text.remove(text.length()-1);
   return text;
 }
+static String truncateHeading(String text, int maxChars = 16) {
+  if (text.length() > maxChars) {
+    if (maxChars > 3) {
+      String sub = text.substring(0, maxChars - 3);
+      sub.trim();
+      return sub + "...";
+    }
+    return text.substring(0, maxChars);
+  }
+  return text;
+}
 static void loadBrowser(){
   browserCount=0;browserMore=false;browserError="";selectedFile="";
   browserTotal=browserUsed=0;
@@ -255,10 +266,11 @@ static void drawLibrary(){
       String title = (slash >= 0) ? librarySelection.substring(slash + 1) : librarySelection;
       title.replace(".gpx", ""); title.replace(".fit", ""); title.replace(".csv", "");
       title.replace("_", " ");
+      String headTitle = truncateHeading(title, 16);
       int topY = 34 - archiveScroll;
 
       // Header
-      if (topY + 18 >= 28 && topY < 290) label(10, topY, fitBrowserText(title, 220), 2, uiFg());
+      if (topY + 18 >= 28 && topY < 290) label(10, topY, headTitle, 2, uiFg());
       if (topY + 36 >= 28 && topY < 290) label(10, topY + 19, "Track guidance  *  No street names", 1, uiMuted());
 
       // 1. Prominent Large Route Map Preview Card (180px tall!)
@@ -322,8 +334,9 @@ static void drawLibrary(){
     String title = (slash >= 0) ? librarySelection.substring(slash + 1) : librarySelection;
     title.replace(".fit", ""); title.replace(".gpx", ""); title.replace(".csv", "");
     title.replace("_", " ");
+    String headTitle = truncateHeading(title, 16);
     if (topY + 16 >= 28 && topY < 290) {
-      label(10, topY, fitBrowserText(title, 220), 2, uiFg());
+      label(10, topY, headTitle, 2, uiFg());
     }
     if (topY + 34 >= 28 && topY + 18 < 290) {
       label(10, topY + 19, completedText, 1, uiMuted());
@@ -447,7 +460,7 @@ static void libraryTap(int x,int y){
 
       // 1. Zoom + Button Tap
       if (x >= 194 && x <= 234 && y >= mapY + 4 && y < mapY + 32) {
-        if (previewZoomLevel < 2) {
+        if (previewZoomLevel < 4) {
           if (previewZoomLevel == 0 && previewLen > 0) {
             previewPanLat = preview[0].lat;
             previewPanLon = preview[0].lon;
@@ -604,7 +617,9 @@ static void drawHomeSubpage(){
       return;
     }
     drawCustomIcon(display,10,35,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon);
-    label(34,37,browserPath=="/"?"MY FILES":fitBrowserText(browserPath,160),2);
+    String folderName = (browserPath == "/") ? "MY FILES" : browserPath;
+    if (folderName.length() > 1 && folderName.startsWith("/")) folderName = folderName.substring(1);
+    label(34, 37, truncateHeading(folderName, 16), 2);
 
 
 
@@ -1222,7 +1237,7 @@ static void drawQuickSettings() {
     const char* titles[] = {"", "WI-FI", "BLUETOOTH", "GPS", "", "SYSTEM", "CONFIGURE", "ACTIVITY"};
     CustomIcon headingIcons[]={CustomIcon::systemIcon,CustomIcon::wifiDisconnectedIcon,CustomIcon::bluetoothDisconnectedIcon,CustomIcon::satelliteIcon,CustomIcon::themeSwitcherIcon,CustomIcon::systemIcon,CustomIcon::configureIcon,runningMode?CustomIcon::runIcon:CustomIcon::bikeIcon};
     drawCustomIcon(display,16,47,uiFg(),headingIcons[quickDetail]);
-    label(40,46,titles[quickDetail],2);
+    label(40,46,truncateHeading(titles[quickDetail], 16),2);
     if (quickDetail == 7) {
       label(16, 76, durationText(), 2);
       label(16, 102, rideStarted ? (ridePaused ? "PAUSED" : "RECORDING") : "STOPPED");

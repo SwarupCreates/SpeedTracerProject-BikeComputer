@@ -887,9 +887,12 @@ static void drawMapScreen() {
     }
   }
 
-  // Pass 4: Secondary & Major corridors (white corridors with subtle borders, matching Strava & Figma)
+  // Pass 4A: Secondary & Major road outer borders (Casings)
   const uint16_t majorBorder = 0xBDF7; // Soft gray outline (#B0BEC5)
   const uint16_t majorCorridor = 0xFFFF; // Pure white
+  int navBorderW = (mapZoom >= 3) ? 6 : 4;
+  int navCorridorW = (mapZoom >= 3) ? 3 : 2;
+
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
     float baseU = (float)g_mapCache.tiles[s].tileX;
@@ -905,14 +908,35 @@ static void drawMapScreen() {
                            baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
           projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
                            baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, majorBorder, 6);
-          clipAndDrawLine(x0, y0, x1, y1, majorCorridor, 3);
+          clipAndDrawLine(x0, y0, x1, y1, majorBorder, navBorderW);
         }
       }
     }
   }
 
-  // Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
+  // Pass 4B: Secondary & Major road inner corridors (Pure White Ribbons - seamless junctions)
+  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+    float baseU = (float)g_mapCache.tiles[s].tileX;
+    float baseV = (float)g_mapCache.tiles[s].tileY;
+    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
+      uint8_t ft = g_mapCache.tiles[s].features[f].type;
+      if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
+        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
+        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
+        for (uint8_t i = 1; i < cnt; i++) {
+          int x0, y0, x1, y1;
+          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
+                           baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
+          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
+                           baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
+          clipAndDrawLine(x0, y0, x1, y1, majorCorridor, navCorridorW);
+        }
+      }
+    }
+  }
+
+  // Render Planned GPX Route// Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
   const uint16_t routeOrange = 0xFD00; // #FF7A00
   if (routeLen > 1) {
     for (int i = 1; i < routeLen; i++) {

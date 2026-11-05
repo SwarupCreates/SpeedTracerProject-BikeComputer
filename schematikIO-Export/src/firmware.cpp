@@ -796,13 +796,22 @@ static void drawMapScreen() {
       if (!(c0 | c1)) {
         if (width <= 1) {
           display.drawLine(x0, y0, x1, y1, color);
-        } else if (width == 2) {
-          display.drawLine(x0, y0, x1, y1, color);
-          display.drawLine(x0 + 1, y0, x1 + 1, y1, color);
         } else {
-          for (int w = -(width / 2); w <= width / 2; w++) {
-            display.drawLine(x0 + w, y0, x1 + w, y1, color);
-            display.drawLine(x0, y0 + w, x1, y1 + w, color);
+          int dx = abs(x1 - x0);
+          int dy = abs(y1 - y0);
+          int h = width / 2;
+          if (dx >= dy) {
+            for (int k = -h; k <= width - 1 - h; k++) {
+              display.drawLine(x0, y0 + k, x1, y1 + k, color);
+            }
+          } else {
+            for (int k = -h; k <= width - 1 - h; k++) {
+              display.drawLine(x0 + k, y0, x1 + k, y1, color);
+            }
+          }
+          if (width >= 3) {
+            display.fillCircle(x0, y0, h, color);
+            display.fillCircle(x1, y1, h, color);
           }
         }
         return;
@@ -898,10 +907,10 @@ static void drawMapScreen() {
   // Pass 3: All Road Casings in Grey #D1D3D6 (Seamless intersections)
   const uint16_t roadCasing = 0xD69A; // #D1D3D6
   const uint16_t roadFill   = 0xFFFF; // #FFFFFF
-  int navMajorCasingW = (mapZoom >= 4) ? 7 : (mapZoom >= 3) ? 5 : 4;
-  int navMajorFillW   = (mapZoom >= 4) ? 5 : (mapZoom >= 3) ? 3 : 2;
-  int navMinorCasingW = (mapZoom >= 3) ? 3 : 2;
-  int navMinorFillW   = 1;
+  int navMajorCasingW = (mapZoom >= 4) ? 7 : (mapZoom >= 3) ? 5 : (mapZoom >= 2) ? 4 : 3;
+  int navMajorFillW   = (mapZoom >= 4) ? 5 : (mapZoom >= 3) ? 3 : (mapZoom >= 2) ? 2 : 1;
+  int navMinorCasingW = (mapZoom >= 4) ? 5 : (mapZoom >= 3) ? 4 : (mapZoom >= 2) ? 3 : 2;
+  int navMinorFillW   = (mapZoom >= 4) ? 3 : (mapZoom >= 3) ? 2 : 1;
 
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
@@ -975,11 +984,11 @@ static void drawMapScreen() {
     MapTileCache::latLonToTile(route[routeLen - 1].lat, route[routeLen - 1].lon, etx, ety, efx, efy);
     projectTilePoint((float)stx + sfx, (float)sty + sfy, sx, sy);
     projectTilePoint((float)etx + efx, (float)ety + efy, ex, ey);
-    if (sx >= -8 && sx <= 248 && sy >= -8 && sy <= 228) {
-      drawStartNodeIcon(display, sx - 8, sy - 8);
+    if (sx >= -10 && sx <= 250 && sy >= -10 && sy <= 230) {
+      drawStartNodeIcon(display, sx - 10, sy - 10);
     }
-    if (ex >= -8 && ex <= 248 && ey >= -8 && ey <= 228) {
-      drawFinishNodeIcon(display, ex - 8, ey - 8);
+    if (ex >= -10 && ex <= 250 && ey >= -10 && ey <= 230) {
+      drawFinishNodeIcon(display, ex - 10, ey - 10);
     }
   }
 

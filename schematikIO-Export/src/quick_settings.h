@@ -20,7 +20,7 @@ bool gpsWaiting=false;
 bool gpsRadarInspector=false;
 int gpsScroll=0;
 // Home subpages stay independent of dashboard navigation and touch calibration.
-enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES };
+enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS };
 HomePage homePage=HOME_MAIN;
 String browserPath="/", browserError, selectedFile;
 String browserNames[4];
@@ -66,6 +66,7 @@ static void drawLoadingScreen(const char* title = "Loading assets...", const cha
 
   display.refresh();
 }
+#include "settings_app.h"
 
 static String storageSize(uint64_t n){
   if(n>=1073741824ULL)return String((double)n/1073741824.0,2)+" GiB";
@@ -614,6 +615,7 @@ static void globalNext(){
   uiRevision++;
 }
 static bool globalHasBack(){
+  if(screenLocked) return false;
   if(shutdownDialog || gpsWaiting || gpsRadarInspector || countdownStart || quickOpen) return true;
   if(!welcomeOpen) return true;
   if(homePage != HOME_MAIN) return true;
@@ -630,6 +632,7 @@ static void globalHome(){
   fileDetailOpen=false;fileDeleteConfirm=false;
   shutdownDialog=false;gpsWaiting=false;gpsRadarInspector=false;countdownStart=0;
   quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;
+  settingsPage=SET_MAIN;settingChangePin=false;settingFormatConfirm=false;pinInput="";
   uiRevision++;
 }
 static void globalBack(){
@@ -674,6 +677,7 @@ static void globalBack(){
   uiRevision++;
 }
 static void drawHomeSubpage(){
+
   statusBar();
   if(isLibrary()){drawLibrary();return;}
   if(homePage==HOME_APPS){
@@ -691,6 +695,8 @@ static void drawHomeSubpage(){
       drawCustomIcon(display, x + (btnW - 22) / 2, y + 12, uiFg(), icons[i], 22, 22);
       centeredLabel(x, y + 41, btnW, names[i], 1);
     }
+  }else if(homePage==HOME_SETTINGS){
+    drawSettingsApp();
   }else{
     if(fileDetailOpen){
       drawFileDetail();
@@ -978,7 +984,9 @@ static void drawGpsRadarScreen() {
  static bool drawLifecycleScreen() {
   static String previous;
   String state;
-  if(shutdownDialog) state=shutdownPending?"release":"shutdown";
+  if(screenLocked) state="locked:"+pinInput+":"+String(pinError)+":"+String(millis()/500);
+
+  else if(shutdownDialog) state=shutdownPending?"release":"shutdown";
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
   else if(countdownStart) state="count"+String(3-min(2UL,(millis()-countdownStart)/1000));
   else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
@@ -987,6 +995,10 @@ static void drawGpsRadarScreen() {
   if(state==previous)return true;
   previous=state;
   display.fillScreen(uiBg());
+  if(screenLocked){
+    drawLockScreen();
+    return true;
+  }
   if(shutdownDialog) {
     label(24,72,"SHUT DOWN?",2,0xFFFF);
     label(16,116,"Current activity will be saved",1,0xFFFF);
@@ -1026,6 +1038,10 @@ static void drawGpsRadarScreen() {
 }
 
 static void quickTap(int x, int y) {
+  if(screenLocked){
+    tapLockScreen(x, y);
+    return;
+  }
   if(y>=290){
     if(x>=26 && x<78){if(globalHasBack())globalBack();}
     else if(x>=94 && x<146)globalHome();
@@ -1045,6 +1061,7 @@ static void quickTap(int x, int y) {
   if(countdownStart){countdownStart=0;uiRevision++;return;}
   if(welcomeOpen && !quickOpen && y>=29) {
     if(isLibrary()){libraryTap(x,y);return;}
+    if(homePage==HOME_SETTINGS){tapSettings(x,y);return;}
     if(homePage==HOME_FILES){
       if(fileDetailOpen){
         if(y>=29 && y<60 && x<60){
@@ -1101,7 +1118,7 @@ static void quickTap(int x, int y) {
       if(tile==0)openLibrary(HOME_ACTIVITY);
       else if(tile==1)openLibrary(HOME_RIDES);
       else if(tile==2)openLibrary(HOME_ROUTES);
-      else if(tile==3){quickOpen=true;quickDetail=0;uiRevision++;}
+      else if(tile==3){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;uiRevision++;}
       else if(tile==4)openBrowser("/");
       else {welcomeOpen=false;currentScreen=SCR_MAP;uiRevision++;}
       return;

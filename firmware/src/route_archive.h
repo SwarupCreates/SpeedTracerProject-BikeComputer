@@ -493,13 +493,22 @@ static void previewDraw(int y, int h, bool showControls = true) {
       if (!(c0 | c1)) {
         if (width <= 1) {
           display.drawLine(x0, y0, x1, y1, color);
-        } else if (width == 2) {
-          display.drawLine(x0, y0, x1, y1, color);
-          display.drawLine(x0 + 1, y0, x1 + 1, y1, color);
         } else {
-          for (int w = -(width / 2); w <= width / 2; w++) {
-            display.drawLine(x0 + w, y0, x1 + w, y1, color);
-            display.drawLine(x0, y0 + w, x1, y1 + w, color);
+          int dx = abs(x1 - x0);
+          int dy = abs(y1 - y0);
+          int h = width / 2;
+          if (dx >= dy) {
+            for (int k = -h; k <= width - 1 - h; k++) {
+              display.drawLine(x0, y0 + k, x1, y1 + k, color);
+            }
+          } else {
+            for (int k = -h; k <= width - 1 - h; k++) {
+              display.drawLine(x0 + k, y0, x1 + k, y1, color);
+            }
+          }
+          if (width >= 3) {
+            display.fillCircle(x0, y0, h, color);
+            display.fillCircle(x1, y1, h, color);
           }
         }
         return;
@@ -620,8 +629,8 @@ static void previewDraw(int y, int h, bool showControls = true) {
     // -----------------------------------------------------------------
     // PASS 2: ROADS (Casings in #D1D3D6 first, then Pure White #FFFFFF fills)
     // -----------------------------------------------------------------
-    int minorCasingW = (previewZoomLevel >= 3) ? 3 : 2;
-    int minorFillW   = 1;
+    int minorCasingW = (previewZoomLevel == 4) ? 5 : (previewZoomLevel == 3) ? 4 : (previewZoomLevel == 2) ? 3 : 2;
+    int minorFillW   = (previewZoomLevel == 4) ? 3 : (previewZoomLevel == 3) ? 2 : (previewZoomLevel == 2) ? 1 : 1;
     int majorCasingW = (previewZoomLevel == 4) ? 7 : (previewZoomLevel == 3) ? 5 : (previewZoomLevel == 2) ? 4 : 3;
     int majorFillW   = (previewZoomLevel == 4) ? 5 : (previewZoomLevel == 3) ? 3 : (previewZoomLevel == 2) ? 2 : 1;
 
@@ -742,11 +751,11 @@ static void previewDraw(int y, int h, bool showControls = true) {
   int sx, sy, ex, ey;
   projectCoord(preview[0].lat, preview[0].lon, sx, sy);
   projectCoord(preview[previewLen - 1].lat, preview[previewLen - 1].lon, ex, ey);
-  if (sy >= clipY1 - 8 && sy <= clipY2 + 8 && sx >= clipX1 - 8 && sx <= clipX2 + 8) {
-    drawStartNodeIcon(display, sx - 8, sy - 8);
+  if (sy >= clipY1 - 10 && sy <= clipY2 + 10 && sx >= clipX1 - 10 && sx <= clipX2 + 10) {
+    drawStartNodeIcon(display, sx - 10, sy - 10);
   }
-  if (ey >= clipY1 - 8 && ey <= clipY2 + 8 && ex >= clipX1 - 8 && ex <= clipX2 + 8) {
-    drawFinishNodeIcon(display, ex - 8, ey - 8);
+  if (ey >= clipY1 - 10 && ey <= clipY2 + 10 && ex >= clipX1 - 10 && ex <= clipX2 + 10) {
+    drawFinishNodeIcon(display, ex - 10, ey - 10);
   }
 
   // Draw clean rounded card border over map layers to frame map neatly
@@ -782,38 +791,40 @@ static void previewDraw(int y, int h, bool showControls = true) {
   }
 
   // --- ZOOM & NAVIGATION BUTTONS (+ / - / Start / End) at top-right corner ---
-  int btnX = cardX + cardW - 32; // 202
-  int btnW = 26, btnH = 24;
+  int btnW = 28, btnH = 26;
+  int btnX = cardX + cardW - btnW - 5; // 201
+  int iconOffX = btnX + (btnW - 20) / 2; // 205
+  int iconOffY = (btnH - 20) / 2;        // 3
 
   // 1. Plus Button (+)
   int btnPlusY = y + 6;
   display.fillRoundRect(btnX, btnPlusY, btnW, btnH, 4, (previewZoomLevel < 4) ? 0xFFFF : 0xE71C);
   display.drawRoundRect(btnX, btnPlusY, btnW, btnH, 4, 0xCE79);
   uint16_t plusCol = (previewZoomLevel < 4) ? 0x0000 : 0x8410;
-  display.drawFastHLine(btnX + 7, btnPlusY + 11, 12, plusCol);
-  display.drawFastHLine(btnX + 7, btnPlusY + 12, 12, plusCol);
-  display.drawFastVLine(btnX + 12, btnPlusY + 6, 12, plusCol);
-  display.drawFastVLine(btnX + 13, btnPlusY + 6, 12, plusCol);
+  display.drawFastHLine(btnX + 8, btnPlusY + 12, 12, plusCol);
+  display.drawFastHLine(btnX + 8, btnPlusY + 13, 12, plusCol);
+  display.drawFastVLine(btnX + 13, btnPlusY + 7, 12, plusCol);
+  display.drawFastVLine(btnX + 14, btnPlusY + 7, 12, plusCol);
 
   // 2. Minus Button (-)
   int btnMinusY = btnPlusY + 28;
   display.fillRoundRect(btnX, btnMinusY, btnW, btnH, 4, (previewZoomLevel > 0) ? 0xFFFF : 0xE71C);
   display.drawRoundRect(btnX, btnMinusY, btnW, btnH, 4, 0xCE79);
   uint16_t minusCol = (previewZoomLevel > 0) ? 0x0000 : 0x8410;
-  display.drawFastHLine(btnX + 7, btnMinusY + 11, 12, minusCol);
-  display.drawFastHLine(btnX + 7, btnMinusY + 12, 12, minusCol);
+  display.drawFastHLine(btnX + 8, btnMinusY + 12, 12, minusCol);
+  display.drawFastHLine(btnX + 8, btnMinusY + 13, 12, minusCol);
 
   // 3. Snap to Start Point Button
   int btnStartY = btnMinusY + 28;
   display.fillRoundRect(btnX, btnStartY, btnW, btnH, 4, 0xFFFF);
   display.drawRoundRect(btnX, btnStartY, btnW, btnH, 4, 0xCE79);
-  drawStartNodeIcon(display, btnX + 5, btnStartY + 4);
+  drawStartNodeIcon(display, iconOffX, btnStartY + iconOffY);
 
   // 4. Snap to End Point Button
   int btnEndY = btnStartY + 28;
   display.fillRoundRect(btnX, btnEndY, btnW, btnH, 4, 0xFFFF);
   display.drawRoundRect(btnX, btnEndY, btnW, btnH, 4, 0xCE79);
-  drawFinishNodeIcon(display, btnX + 5, btnEndY + 4);
+  drawFinishNodeIcon(display, iconOffX, btnEndY + iconOffY);
 }
 
 static void archiveGraph(String path,int y,int col,const char* title,const char* subtitle=nullptr){

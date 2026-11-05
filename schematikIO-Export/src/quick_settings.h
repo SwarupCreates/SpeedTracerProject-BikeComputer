@@ -619,7 +619,7 @@ static void globalNext(){
     return;
   }
   if(gpsRadarInspector){
-    gpsScroll = (gpsScroll == 0) ? 115 : 0;
+    gpsScroll = (gpsScroll == 0) ? 128 : 0;
     uiRevision++;
     return;
   }
@@ -893,7 +893,7 @@ static void drawBigNumber(int rightX, int y, int value, uint16_t fg = 0xFFFF) {
 
 static void drawGpsRadarScreen() {
   const int cx = 120;
-  const int cy = 122 - gpsScroll;
+  const int cy = 116 - gpsScroll;
   const uint32_t t = millis();
 
   // Theme-aware color palette
@@ -950,13 +950,14 @@ static void drawGpsRadarScreen() {
   // Center White Satellite Icon (native 32x32 high resolution)
   drawCustomIcon(display, cx - 16, cy - 16, 0xFFFF, CustomIcon::satelliteIconLarge);
 
-  // Content Below Radar
-  int textY = 224 - gpsScroll;
+  // Content Below Radar: Increased space gap between sat count and progress bar
+  int textY = 216 - gpsScroll;
   label(20, textY, "LOCKED", 2, uiFg());
-  label(20, textY + 18, "SATELLITES", 2, uiFg());
+  label(20, textY + 16, "SATELLITES", 2, uiFg());
   drawBigNumber(220, textY - 2, sats, uiFg());
+
   // Satellite Connection Quality Progress Bar (max 6 sats for stable connection)
-  int barY = 266 - gpsScroll;
+  int barY = 270 - gpsScroll;
   if (barY < 282 && barY > 24) {
     const int barX = 20;
     const int barW = 200;
@@ -980,15 +981,15 @@ static void drawGpsRadarScreen() {
     }
   }
 
-  // Coordinates (visible when scrolled down)
-  int latY = 282 - gpsScroll;
+  // Coordinates: Increased space between progressbar and lat/lon block below
+  int latY = 312 - gpsScroll;
   if (latY < 280 && latY > 24) {
     centeredLabel(0, latY, 240, "LATITUDE", 1, uiMuted());
     bool hasCoord = gps.location.isValid() && gps.location.age() < 3000;
     String latStr = hasCoord ? String(gps.location.lat(), 6) : ((ride.lat != 0.0f) ? String(ride.lat, 6) : "--.------");
     centeredLabel(0, latY + 18, 240, latStr, 2, uiFg());
   }
-  int lonY = 340 - gpsScroll;
+  int lonY = 368 - gpsScroll;
   if (lonY < 280 && lonY > 24) {
     centeredLabel(0, lonY, 240, "LONGITUDE", 1, uiMuted());
     bool hasCoord = gps.location.isValid() && gps.location.age() < 3000;
@@ -1378,7 +1379,7 @@ static void pollQuickTouch() {
     if(sliderGesture)setBrightnessFromTouch(x);
     else if(moved){
       if(gpsWaiting || gpsRadarInspector){
-        int offset=constrain(startScroll+startY-y,0,115);
+        int offset=constrain(startScroll+startY-y,0,128);
         if(offset!=gpsScroll){gpsScroll=offset;uiRevision++;}
       } else if(isLibrary() && librarySelection.length()){
         if (mapPanGesture) {

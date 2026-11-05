@@ -353,6 +353,54 @@ static void loadArchive(String path){
   }
 }
 
+static void fillPolygon(const int* polyX, const int* polyY, int n, uint16_t color,
+                        int clipX1, int clipY1, int clipX2, int clipY2) {
+  if (n < 3) return;
+  int minY = polyY[0], maxY = polyY[0];
+  for (int i = 1; i < n; i++) {
+    if (polyY[i] < minY) minY = polyY[i];
+    if (polyY[i] > maxY) maxY = polyY[i];
+  }
+  minY = max(clipX1 < 0 ? 0 : clipY1, minY);
+  maxY = min(clipY2, maxY);
+  if (minY > maxY) return;
+
+  const int MAX_INTERSECTIONS = 32;
+  int xInt[MAX_INTERSECTIONS];
+
+  for (int y = minY; y <= maxY; y++) {
+    int intCount = 0;
+    for (int i = 0; i < n; i++) {
+      int j = (i + 1 == n) ? 0 : (i + 1);
+      int y0 = polyY[i], x0 = polyX[i];
+      int y1 = polyY[j], x1 = polyX[j];
+      if ((y0 <= y && y < y1) || (y1 <= y && y < y0)) {
+        if (intCount < MAX_INTERSECTIONS) {
+          int x = x0 + (int)((int64_t)(y - y0) * (x1 - x0) / (y1 - y0));
+          xInt[intCount++] = x;
+        }
+      }
+    }
+    // Insertion sort xInt
+    for (int a = 1; a < intCount; a++) {
+      int tmp = xInt[a];
+      int b = a - 1;
+      while (b >= 0 && xInt[b] > tmp) {
+        xInt[b + 1] = xInt[b];
+        b--;
+      }
+      xInt[b + 1] = tmp;
+    }
+    for (int k = 0; k + 1 < intCount; k += 2) {
+      int xa = max(clipX1, min(clipX2, xInt[k]));
+      int xb = max(clipX1, min(clipX2, xInt[k + 1]));
+      if (xb >= xa) {
+        display.drawFastHLine(xa, y, xb - xa + 1, color);
+      }
+    }
+  }
+}
+
 static void previewDraw(int y, int h) {
   if (y + h <= 28 || y >= 290) return;
   const int cardX = 6, cardW = 228;
@@ -469,13 +517,8 @@ static void previewDraw(int y, int h) {
     }
   };
 
-  // --- DRAW BASEMAP ONLY WHEN ZOOMED IN (Ultra-Fast Slippy Integer Projection, Zero atan/sinh) ---
+  // --- DRAW BASEMAP ONLY WHEN ZOOMED IN (Ultra-Fast Slippy Integer Projection) ---
   if (previewZoomLevel > 0) {
-    const uint16_t waterColor = 0x9E5F; // #90CAF9
-    const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
-    const uint16_t majorBorder = 0xCE79;
-    const uint16_t majorCorridor = 0xFFFF;
-
     int centerTX, centerTY;
     float cfx, cfy;
     MapTileCache::latLonToTile(centerLat, centerLon, centerTX, centerTY, cfx, cfy);
@@ -490,7 +533,21 @@ static void previewDraw(int y, int h) {
     int maxDxU = (int)(120.0f / pxPerUnit) + 120;
     int maxDyU = (int)(100.0f / pxPerUnit) + 120;
 
-    // Single fast pass over neighboring tiles in PSRAM
+    static int s_polyX[256];
+    static int s_polyY[256];
+
+    // Colors matching Figma & Strava
+    const uint16_t parkFill = 0xC673;    // Soft pale green (#CBE8BA / #C8E6C9)
+    const uint16_t parkBorder = 0xAE30;  // Subtle dark green outline
+    const uint16_t waterFill = 0x9E5F;   // Soft sky blue (#90CAF9)
+    const uint16_t waterBorder = 0x7CD8; // Subtle deeper blue outline
+    const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
+    const uint16_t majorBorder = 0xBDF7;    // Soft gray outline (#B0BEC5)
+    const uint16_t majorCorridor = 0xFFFF;  // Crisp pure white
+
+    // -----------------------------------------------------------------
+    // PASS 1: FILLED POLYGONS (Parks & Water Bodies)
+    // -----------------------------------------------------------------
     for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
       if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
       int tx = g_mapCache.tiles[s].tileX;
@@ -506,48 +563,111 @@ static void previewDraw(int y, int h) {
 
       for (uint16_t f = 0; f < featCount; f++) {
         uint8_t ft = feats[f].type;
-        if (ft != FEAT_WATER && ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY &&
-            ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY) continue;
-
+        if (ft != FEAT_WATER && ft != FEAT_PARK) continue;
         uint8_t cnt = feats[f].pointCount;
         uint16_t off = feats[f].pointOffset;
-        if (cnt < 2) continue;
+        if (cnt < 2 || cnt > 255) continue;
 
-        // Ultra-fast AABB rejection in integer tile units:
         int p0X = tileDeltaX + pts[off].u;
         int p0Y = tileDeltaY + pts[off].v;
         int pEndX = tileDeltaX + pts[off + cnt - 1].u;
         int pEndY = tileDeltaY + pts[off + cnt - 1].v;
 
-        // Skip if entirely outside screen bounds
         if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-            (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) {
-          continue;
+            (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+        bool isClosed = (cnt >= 3 && abs(pts[off].u - pts[off + cnt - 1].u) <= 35 &&
+                                     abs(pts[off].v - pts[off + cnt - 1].v) <= 35);
+
+        for (uint8_t k = 0; k < cnt; k++) {
+          s_polyX[k] = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+          s_polyY[k] = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
         }
 
-        uint16_t col = minorRoadColor;
-        int w = 2;
-        bool isMajor = false;
-        if (ft == FEAT_WATER) { col = waterColor; w = 3; }
-        else if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
-          isMajor = true;
+        if (ft == FEAT_PARK || isClosed) {
+          uint16_t fCol = (ft == FEAT_PARK) ? parkFill : waterFill;
+          uint16_t bCol = (ft == FEAT_PARK) ? parkBorder : waterBorder;
+          fillPolygon(s_polyX, s_polyY, cnt, fCol, clipX1, clipY1, clipX2, clipY2);
+          for (uint8_t k = 1; k < cnt; k++) {
+            clipAndDrawLine(s_polyX[k - 1], s_polyY[k - 1], s_polyX[k], s_polyY[k], bCol, 1);
+          }
+        } else {
+          // Open linear waterway (canal, stream)
+          for (uint8_t k = 1; k < cnt; k++) {
+            clipAndDrawLine(s_polyX[k - 1], s_polyY[k - 1], s_polyX[k], s_polyY[k], waterFill, 3);
+          }
         }
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // PASS 2: ROADS (Minor streets first, then Major Corridors on top)
+    // -----------------------------------------------------------------
+    for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+      if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+      int tx = g_mapCache.tiles[s].tileX;
+      int ty = g_mapCache.tiles[s].tileY;
+      if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+      int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+      int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+      MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+      MapPoint12* pts = g_mapCache.tiles[s].points;
+      uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+      // 2A. Minor / Residential Streets
+      for (uint16_t f = 0; f < featCount; f++) {
+        uint8_t ft = feats[f].type;
+        if (ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+        uint8_t cnt = feats[f].pointCount;
+        uint16_t off = feats[f].pointOffset;
+        if (cnt < 2) continue;
+
+        int p0X = tileDeltaX + pts[off].u;
+        int p0Y = tileDeltaY + pts[off].v;
+        int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+        int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+        if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+            (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
 
         int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
         int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
-
         for (uint8_t k = 1; k < cnt; k++) {
           int pkX = tileDeltaX + pts[off + k].u;
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
           int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 2);
+          sx0 = sx1;
+          sy0 = sy1;
+        }
+      }
 
-          if (isMajor) {
-            clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 4);
-            clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 2);
-          } else {
-            clipAndDrawLine(sx0, sy0, sx1, sy1, col, w);
-          }
+      // 2B. Major / Primary Corridors (Wide white highway with soft gray outline, matching Strava)
+      for (uint16_t f = 0; f < featCount; f++) {
+        uint8_t ft = feats[f].type;
+        if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY) continue;
+        uint8_t cnt = feats[f].pointCount;
+        uint16_t off = feats[f].pointOffset;
+        if (cnt < 2) continue;
+
+        int p0X = tileDeltaX + pts[off].u;
+        int p0Y = tileDeltaY + pts[off].v;
+        int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+        int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+        if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+            (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+        int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
+        int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+        for (uint8_t k = 1; k < cnt; k++) {
+          int pkX = tileDeltaX + pts[off + k].u;
+          int pkY = tileDeltaY + pts[off + k].v;
+          int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
+          int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 6);
+          clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 3);
           sx0 = sx1;
           sy0 = sy1;
         }

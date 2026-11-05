@@ -799,8 +799,12 @@ static void drawMapScreen() {
     }
   };
 
-  // Pass 1: Water bodies (rivers, lakes, canals in soft pastel blue)
+  static int s_navPolyX[256];
+  static int s_navPolyY[256];
+
+  // Pass 1: Filled Water bodies (rivers, lakes, canals in soft pastel blue)
   const uint16_t waterColor = 0x9E5F; // #90CAF9
+  const uint16_t waterBorder = 0x7CD8;
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
     float baseU = (float)g_mapCache.tiles[s].tileX;
@@ -809,20 +813,35 @@ static void drawMapScreen() {
       if (g_mapCache.tiles[s].features[f].type == FEAT_WATER) {
         uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
         uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          int x0, y0, x1, y1;
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, waterColor, 3);
+        if (cnt < 2) continue;
+        bool isClosed = (cnt >= 3 && abs(g_mapCache.tiles[s].points[off].u - g_mapCache.tiles[s].points[off + cnt - 1].u) <= 35 &&
+                                     abs(g_mapCache.tiles[s].points[off].v - g_mapCache.tiles[s].points[off + cnt - 1].v) <= 35);
+        if (isClosed && cnt <= 255) {
+          for (uint8_t i = 0; i < cnt; i++) {
+            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
+                             baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, s_navPolyX[i], s_navPolyY[i]);
+          }
+          fillPolygon(s_navPolyX, s_navPolyY, cnt, waterColor, clipX1, clipY1, clipX2, clipY2);
+          for (uint8_t i = 1; i < cnt; i++) {
+            clipAndDrawLine(s_navPolyX[i - 1], s_navPolyY[i - 1], s_navPolyX[i], s_navPolyY[i], waterBorder, 1);
+          }
+        } else {
+          for (uint8_t i = 1; i < cnt; i++) {
+            int x0, y0, x1, y1;
+            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
+                             baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
+            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
+                             baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
+            clipAndDrawLine(x0, y0, x1, y1, waterColor, 3);
+          }
         }
       }
     }
   }
 
-  // Pass 2: Parks & Green spaces
-  const uint16_t parkColor = 0xC673; // #CBE8BA
+  // Pass 2: Filled Parks & Green spaces
+  const uint16_t parkColor = 0xC673; // #CBE8BA / #C8E6C9
+  const uint16_t parkBorder = 0xAE30;
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
     float baseU = (float)g_mapCache.tiles[s].tileX;
@@ -831,13 +850,15 @@ static void drawMapScreen() {
       if (g_mapCache.tiles[s].features[f].type == FEAT_PARK) {
         uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
         uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          int x0, y0, x1, y1;
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-          projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                           baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, parkColor, 2);
+        if (cnt >= 3 && cnt <= 255) {
+          for (uint8_t i = 0; i < cnt; i++) {
+            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
+                             baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, s_navPolyX[i], s_navPolyY[i]);
+          }
+          fillPolygon(s_navPolyX, s_navPolyY, cnt, parkColor, clipX1, clipY1, clipX2, clipY2);
+          for (uint8_t i = 1; i < cnt; i++) {
+            clipAndDrawLine(s_navPolyX[i - 1], s_navPolyY[i - 1], s_navPolyX[i], s_navPolyY[i], parkBorder, 1);
+          }
         }
       }
     }
@@ -860,14 +881,14 @@ static void drawMapScreen() {
                            baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
           projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
                            baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, minorRoadColor, 1);
+          clipAndDrawLine(x0, y0, x1, y1, minorRoadColor, 2);
         }
       }
     }
   }
 
-  // Pass 4: Secondary & Major roads (white corridors with subtle borders)
-  const uint16_t majorBorder = 0xCE79; // #C5C5C5
+  // Pass 4: Secondary & Major corridors (white corridors with subtle borders, matching Strava & Figma)
+  const uint16_t majorBorder = 0xBDF7; // Soft gray outline (#B0BEC5)
   const uint16_t majorCorridor = 0xFFFF; // Pure white
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
@@ -884,8 +905,8 @@ static void drawMapScreen() {
                            baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
           projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
                            baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-          clipAndDrawLine(x0, y0, x1, y1, majorBorder, 3);
-          clipAndDrawLine(x0, y0, x1, y1, majorCorridor, 1);
+          clipAndDrawLine(x0, y0, x1, y1, majorBorder, 6);
+          clipAndDrawLine(x0, y0, x1, y1, majorCorridor, 3);
         }
       }
     }

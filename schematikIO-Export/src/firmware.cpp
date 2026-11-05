@@ -1532,8 +1532,23 @@ void loop() {
   if (rmtRt.pressed) { rmtRt.pressed = false; currentScreen = (Screen)(((int)currentScreen+1)%SCR_COUNT);  }
 
   // Remote UP/DN → zoom (map) or future use on dash
-  if (rmtUp.pressed) { rmtUp.pressed = false; if (currentScreen == SCR_MAP) mapZoom = min((int)mapZoom+1, 5); }
-  if (rmtDn.pressed) { rmtDn.pressed = false; if (currentScreen == SCR_MAP) mapZoom = max((int)mapZoom-1, 1); }
+  if (rmtUp.pressed) {
+    rmtUp.pressed = false;
+    if (currentScreen == SCR_MAP) mapZoom = min((int)mapZoom+1, 5);
+    else if (quickOpen && isLibrary() && librarySelection.length()) {
+      archiveScroll = max(0, archiveScroll - 40);
+      uiRevision++;
+    }
+  }
+  if (rmtDn.pressed) {
+    rmtDn.pressed = false;
+    if (currentScreen == SCR_MAP) mapZoom = max((int)mapZoom-1, 1);
+    else if (quickOpen && isLibrary() && librarySelection.length()) {
+      int maxS = (homePage == HOME_ROUTES) ? 120 : ARCHIVE_MAX_SCROLL;
+      archiveScroll = min(maxS, archiveScroll + 40);
+      uiRevision++;
+    }
+  }
 
   // Body UP/DN → zoom on map too (mirrored for one-handed use)
 

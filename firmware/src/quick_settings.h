@@ -251,41 +251,63 @@ static void drawLibrary(){
 
   if(librarySelection.length()){
     if(routes){
-      // Dedicated Saved Route Screen: Map preview + Distance + Est Time @ Velocity + Elevation Gain + Gradient + Start Route
       int slash = librarySelection.lastIndexOf('/');
       String title = (slash >= 0) ? librarySelection.substring(slash + 1) : librarySelection;
       title.replace(".gpx", ""); title.replace(".fit", ""); title.replace(".csv", "");
       title.replace("_", " ");
-      label(10, 34, fitBrowserText(title, 220), 2, uiFg());
-      label(10, 53, "Track guidance  *  No street names", 1, uiMuted());
+      int topY = 34 - archiveScroll;
 
-      // 1. Prominent Route Map Preview Card
-      previewDraw(68, 106);
+      // Header
+      if (topY + 18 >= 28 && topY < 290) label(10, topY, fitBrowserText(title, 220), 2, uiFg());
+      if (topY + 36 >= 28 && topY < 290) label(10, topY + 19, "Track guidance  *  No street names", 1, uiMuted());
 
-      // 2. Metrics 2x2 Grid (Distance & Approx Time @ 20 km/h, Elevation Gain & Avg Gradient)
-      card(6, 178, 111, 34, uiCard());
-      label(14, 182, "DISTANCE", 1, uiMuted());
-      label(14, 196, String(previewKm, 2) + " km", 1, uiFg());
+      // 1. Prominent Large Route Map Preview Card (180px tall!)
+      int mapY = topY + 34;
+      previewDraw(mapY, 180);
 
-      card(123, 178, 111, 34, uiCard());
-      label(131, 182, "EST. TIME", 1, uiMuted());
-      int tMin = (int)round((previewKm / 20.0f) * 60.0f);
-      String tStr = (tMin >= 60 ? (String(tMin / 60) + "h " + String(tMin % 60) + "m") : (String(tMin) + " min")) + " @ 20k";
-      label(131, 196, tStr, 1, uiFg());
+      // 2. Metrics 2x2 Grid (below map)
+      int row1Y = mapY + 188;
+      if (row1Y + 36 >= 28 && row1Y < 290) {
+        card(6, row1Y, 111, 36, uiCard());
+        label(14, row1Y + 5, "DISTANCE", 1, uiMuted());
+        label(14, row1Y + 20, String(previewKm, 2) + " km", 1, uiFg());
 
-      card(6, 216, 111, 34, uiCard());
-      label(14, 220, "ELEV GAIN", 1, uiMuted());
-      label(14, 234, previewElevation ? (String(previewGain, 0) + " m up") : "--", 1, uiFg());
+        card(123, row1Y, 111, 36, uiCard());
+        label(131, row1Y + 5, "EST. TIME", 1, uiMuted());
+        int tMin = (int)round((previewKm / 20.0f) * 60.0f);
+        String tStr = (tMin >= 60 ? (String(tMin / 60) + "h " + String(tMin % 60) + "m") : (String(tMin) + " min")) + " @ 20k";
+        label(131, row1Y + 20, tStr, 1, uiFg());
+      }
 
-      card(123, 216, 111, 34, uiCard());
-      label(131, 220, "AVG GRADIENT", 1, uiMuted());
-      float grad = (previewKm > 0.01f && previewElevation) ? ((previewGain / (previewKm * 1000.0f)) * 100.0f) : 0.0f;
-      label(131, 234, (grad > 0.0f ? ("+" + String(grad, 1) + "%") : String("--")), 1, uiFg());
+      int row2Y = row1Y + 42;
+      if (row2Y + 36 >= 28 && row2Y < 290) {
+        card(6, row2Y, 111, 36, uiCard());
+        label(14, row2Y + 5, "ELEV GAIN", 1, uiMuted());
+        label(14, row2Y + 20, previewElevation ? (String(previewGain, 0) + " m up") : "--", 1, uiFg());
+
+        card(123, row2Y, 111, 36, uiCard());
+        label(131, row2Y + 5, "AVG GRADIENT", 1, uiMuted());
+        float grad = (previewKm > 0.01f && previewElevation) ? ((previewGain / (previewKm * 1000.0f)) * 100.0f) : 0.0f;
+        label(131, row2Y + 20, (grad > 0.0f ? ("+" + String(grad, 1) + "%") : String("--")), 1, uiFg());
+      }
 
       // 3. Confirm & Start Route Action Button
-      card(6, 254, 228, 32, TEAL);
-      centeredLabel(6, 263, 228, "CONFIRM & START ROUTE", 1, WHITE);
-      if(libraryMessage.length()) label(10, 240, fitBrowserText(libraryMessage, 218), 1, 0xF800);
+      int btnY = row2Y + 42;
+      if (btnY + 34 >= 28 && btnY < 290) {
+        card(6, btnY, 228, 34, TEAL);
+        centeredLabel(6, btnY + 9, 228, "CONFIRM & START ROUTE", 1, WHITE);
+      }
+      if (libraryMessage.length() && btnY - 14 >= 28 && btnY - 14 < 290) {
+        label(10, btnY - 14, fitBrowserText(libraryMessage, 218), 1, 0xF800);
+      }
+
+      // Scrollbar on the right edge
+      const int routeMaxScroll = 120;
+      if (routeMaxScroll > 0) {
+        int thumbH = 40;
+        int thumbY = 32 + (archiveScroll * (250 - thumbH) / routeMaxScroll);
+        display.fillRoundRect(236, thumbY, 3, thumbH, 1, uiMuted());
+      }
 
       statusBar(true, false);
       drawGlobalNav();
@@ -417,7 +439,12 @@ static void libraryTap(int x,int y){
   if(librarySelection.length()){
     bool routes=homePage==HOME_ROUTES;
     if(routes){
-      if(y >= 254 && y < 288){
+      int topY = 34 - archiveScroll;
+      int mapY = topY + 34;
+      int row1Y = mapY + 188;
+      int row2Y = row1Y + 42;
+      int btnY = row2Y + 42;
+      if(y >= btnY && y < btnY + 34 && x >= 6 && x <= 234){
         if(rideStarted){libraryMessage="Save current activity first";uiRevision++;return;}
         if(previewLen<2){libraryMessage="GPX missing or invalid";uiRevision++;return;}
         routeLen=previewLen;for(int i=0;i<routeLen;i++)route[i]={float(preview[i].lat),float(preview[i].lon)};
@@ -425,6 +452,7 @@ static void libraryTap(int x,int y){
         snapActiveRoute();
         currentScreen=SCR_MAP;requestRideStart();
       }
+      return;
     }
     return;
   }
@@ -1097,7 +1125,8 @@ static void pollQuickTouch() {
         int offset=constrain(startScroll+startY-y,0,115);
         if(offset!=gpsScroll){gpsScroll=offset;uiRevision++;}
       } else if(isLibrary() && librarySelection.length()){
-        int offset=constrain(startScroll+startY-y,0,ARCHIVE_MAX_SCROLL);
+        int maxS = (homePage == HOME_ROUTES) ? 120 : ARCHIVE_MAX_SCROLL;
+        int offset=constrain(startScroll+startY-y,0,maxS);
         if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
       } else {
         int offset=constrain(startScroll+startY-y,0,72);
@@ -1121,7 +1150,7 @@ static void pollQuickTouch() {
     } else if((gpsWaiting || gpsRadarInspector) && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=gpsScroll;
       sliderGesture=false;
-    } else if(isLibrary() && librarySelection.length() && homePage!=HOME_ROUTES && y>=29 && y<290){
+    } else if(isLibrary() && librarySelection.length() && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=archiveScroll;
       sliderGesture=false;
     } else quickTap(x, y);

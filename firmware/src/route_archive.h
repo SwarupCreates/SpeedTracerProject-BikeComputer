@@ -358,6 +358,7 @@ static void previewDraw(int y, int h) {
     return;
   }
 
+  // Calculate route bounds
   double minA = preview[0].lat, maxA = minA, minB = preview[0].lon, maxB = minB;
   for (int i = 1; i < previewLen; i++) {
     minA = min(minA, preview[i].lat);
@@ -369,12 +370,23 @@ static void previewDraw(int y, int h) {
   double centerLat = (minA + maxA) / 2.0;
   double centerLon = (minB + maxB) / 2.0;
 
-  g_mapCache.updatePosition(centerLat, centerLon);
+  // Determine required tile range covering route
+  int minTX, minTY, maxTX, maxTY;
+  float dummyFX, dummyFY;
+  MapTileCache::latLonToTile(maxA, minB, minTX, minTY, dummyFX, dummyFY); // top-left
+  MapTileCache::latLonToTile(minA, maxB, maxTX, maxTY, dummyFX, dummyFY); // bottom-right
+
+  // Expand by 1 tile margin for boundary road continuity
+  minTX = max(0, minTX - 1);
+  maxTX = min(16383, maxTX + 1);
+  minTY = max(0, minTY - 1);
+  maxTY = min(16383, maxTY + 1);
 
   double co = cos(radians(centerLat));
   double spanLonM = max(0.000001, (maxB - minB) * co * 111320.0);
   double spanLatM = max(0.000001, (maxA - minA) * 111320.0);
-  double scale = min((cardW - 24.0) / spanLonM, (h - 24.0) / spanLatM);
+  // Add 15% margin around the route
+  double scale = min((cardW - 30.0) / (spanLonM * 1.15), (h - 30.0) / (spanLatM * 1.15));
 
   const int clipX1 = cardX + 2;
   const int clipY1 = y + 2;
@@ -439,91 +451,114 @@ static void previewDraw(int y, int h) {
     }
   };
 
-  // 1. Draw Basemap Underlay from Cached Tiles
-  const uint16_t waterColor = 0x9E5F; // #90CAF9
-  double n = 16384.0;
-  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
-    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      if (g_mapCache.tiles[s].features[f].type == FEAT_WATER) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          double lat0, lon0, lat1, lon1;
-          double x0Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0;
-          double y0Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0;
-          lon0 = (x0Tile / n) * 360.0 - 180.0;
-          lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0Tile / n)))) * (180.0 / PI);
-
-          double x1Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i].u / 4096.0;
-          double y1Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i].v / 4096.0;
-          lon1 = (x1Tile / n) * 360.0 - 180.0;
-          lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1Tile / n)))) * (180.0 / PI);
-
-          int sx0, sy0, sx1, sy1;
-          projectCoord(lat0, lon0, sx0, sy0);
-          projectCoord(lat1, lon1, sx1, sy1);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, waterColor, 2);
-        }
-      }
-    }
+  // Reusable 64 KB tile buffer in PSRAM
+  static uint8_t* s_previewTileBuf = nullptr;
+  if (!s_previewTileBuf) {
+    s_previewTileBuf = (uint8_t*)ps_malloc(65536);
+    if (!s_previewTileBuf) s_previewTileBuf = (uint8_t*)malloc(65536);
   }
 
-  const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
-  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
-    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      uint8_t ft = g_mapCache.tiles[s].features[f].type;
-      if (ft == FEAT_RESIDENTIAL || ft == FEAT_CYCLEWAY) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          double lat0, lon0, lat1, lon1;
-          double x0Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0;
-          double y0Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0;
-          lon0 = (x0Tile / n) * 360.0 - 180.0;
-          lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0Tile / n)))) * (180.0 / PI);
+  // 1. Draw Basemap Underlay from PAK archive for all tiles covering the route
+  if (g_mapCache.pakLoaded && s_previewTileBuf) {
+    const uint16_t waterColor = 0x9E5F; // #90CAF9
+    const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
+    const uint16_t majorBorder = 0xCE79;
+    const uint16_t majorCorridor = 0xFFFF;
+    const double n = 16384.0;
 
-          double x1Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i].u / 4096.0;
-          double y1Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i].v / 4096.0;
-          lon1 = (x1Tile / n) * 360.0 - 180.0;
-          lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1Tile / n)))) * (180.0 / PI);
+    int tilesDrawn = 0;
+    for (int ty = minTY; ty <= maxTY && tilesDrawn < 40; ty++) {
+      for (int tx = minTX; tx <= maxTX && tilesDrawn < 40; tx++) {
+        int pIdx = g_mapCache.findInPak(tx, ty);
+        if (pIdx < 0) continue;
 
-          int sx0, sy0, sx1, sy1;
-          projectCoord(lat0, lon0, sx0, sy0);
-          projectCoord(lat1, lon1, sx1, sy1);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 1);
+        uint32_t tLen = g_mapCache.pakIndex[pIdx].length;
+        if (tLen > 65536) continue;
+
+        if (!g_mapCache.pakFile.seek(g_mapCache.pakIndex[pIdx].offset)) continue;
+        if (g_mapCache.pakFile.read(s_previewTileBuf, tLen) != tLen) continue;
+
+        MapTileHeader* hdr = (MapTileHeader*)s_previewTileBuf;
+        if (memcmp(hdr->magic, "MAP1", 4) != 0) continue;
+
+        MapFeatureRecord* feats = (MapFeatureRecord*)(s_previewTileBuf + sizeof(MapTileHeader));
+        MapPoint12* pts = (MapPoint12*)(s_previewTileBuf + sizeof(MapTileHeader) + hdr->featureCount * sizeof(MapFeatureRecord));
+
+        tilesDrawn++;
+
+        // Pass A: Water bodies
+        for (uint16_t f = 0; f < hdr->featureCount; f++) {
+          if (feats[f].type == FEAT_WATER) {
+            uint8_t cnt = feats[f].pointCount;
+            uint16_t off = feats[f].pointOffset;
+            for (uint8_t k = 1; k < cnt; k++) {
+              double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
+              double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
+              double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
+              double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
+
+              double lon0 = (x0T / n) * 360.0 - 180.0;
+              double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
+              double lon1 = (x1T / n) * 360.0 - 180.0;
+              double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
+
+              int sx0, sy0, sx1, sy1;
+              projectCoord(lat0, lon0, sx0, sy0);
+              projectCoord(lat1, lon1, sx1, sy1);
+              clipAndDrawLine(sx0, sy0, sx1, sy1, waterColor, 2);
+            }
+          }
         }
-      }
-    }
-  }
 
-  const uint16_t majorBorder = 0xCE79;
-  const uint16_t majorCorridor = 0xFFFF;
-  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
-    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      uint8_t ft = g_mapCache.tiles[s].features[f].type;
-      if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        for (uint8_t i = 1; i < cnt; i++) {
-          double lat0, lon0, lat1, lon1;
-          double x0Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0;
-          double y0Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0;
-          lon0 = (x0Tile / n) * 360.0 - 180.0;
-          lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0Tile / n)))) * (180.0 / PI);
+        // Pass B: Residential roads
+        for (uint16_t f = 0; f < hdr->featureCount; f++) {
+          uint8_t ft = feats[f].type;
+          if (ft == FEAT_RESIDENTIAL || ft == FEAT_CYCLEWAY) {
+            uint8_t cnt = feats[f].pointCount;
+            uint16_t off = feats[f].pointOffset;
+            for (uint8_t k = 1; k < cnt; k++) {
+              double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
+              double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
+              double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
+              double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
 
-          double x1Tile = (double)g_mapCache.tiles[s].tileX + (double)g_mapCache.tiles[s].points[off + i].u / 4096.0;
-          double y1Tile = (double)g_mapCache.tiles[s].tileY + (double)g_mapCache.tiles[s].points[off + i].v / 4096.0;
-          lon1 = (x1Tile / n) * 360.0 - 180.0;
-          lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1Tile / n)))) * (180.0 / PI);
+              double lon0 = (x0T / n) * 360.0 - 180.0;
+              double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
+              double lon1 = (x1T / n) * 360.0 - 180.0;
+              double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
 
-          int sx0, sy0, sx1, sy1;
-          projectCoord(lat0, lon0, sx0, sy0);
-          projectCoord(lat1, lon1, sx1, sy1);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 3);
-          clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 1);
+              int sx0, sy0, sx1, sy1;
+              projectCoord(lat0, lon0, sx0, sy0);
+              projectCoord(lat1, lon1, sx1, sy1);
+              clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 1);
+            }
+          }
+        }
+
+        // Pass C: Major / Primary roads (corridors)
+        for (uint16_t f = 0; f < hdr->featureCount; f++) {
+          uint8_t ft = feats[f].type;
+          if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
+            uint8_t cnt = feats[f].pointCount;
+            uint16_t off = feats[f].pointOffset;
+            for (uint8_t k = 1; k < cnt; k++) {
+              double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
+              double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
+              double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
+              double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
+
+              double lon0 = (x0T / n) * 360.0 - 180.0;
+              double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
+              double lon1 = (x1T / n) * 360.0 - 180.0;
+              double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
+
+              int sx0, sy0, sx1, sy1;
+              projectCoord(lat0, lon0, sx0, sy0);
+              projectCoord(lat1, lon1, sx1, sy1);
+              clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 3);
+              clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 1);
+            }
+          }
         }
       }
     }

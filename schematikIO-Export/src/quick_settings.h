@@ -357,8 +357,8 @@ static void drawHomeSubpage(){
       drawFileDetail();
       return;
     }
-    drawCustomIcon(display,10,37,uiFg(),CustomIcon::folderIcon);
-    label(34,36,"MY FILES",2);
+    drawCustomIcon(display,10,37,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon);
+    label(34,36,browserPath=="/"?"MY FILES":fitBrowserText(browserPath,160),2);
     label(10,61,browserTotal?storageSize(browserUsed)+" / "+storageSize(browserTotal)+" used":"Storage unavailable",1,uiMuted());
     display.fillRoundRect(10,77,220,7,3,uiCard());
     if(browserTotal){int filled=(int)(220.0*(double)browserUsed/(double)browserTotal);filled=constrain(filled,0,220);if(filled)display.fillRoundRect(10,77,filled,7,3,TEAL);}
@@ -603,6 +603,14 @@ static void quickTap(int x, int y) {
             }
           }
         }
+        return;
+      }
+      if(browserPath != "/" && y>=29 && y<60 && x<60){
+        int slash=browserPath.lastIndexOf('/');
+        browserPath=slash<=0?"/":browserPath.substring(0,slash);
+        browserPage=0;
+        loadBrowser();
+        uiRevision++;
         return;
       }
       int row=(y-112)/38;

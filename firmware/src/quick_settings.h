@@ -422,6 +422,7 @@ static void libraryTap(int x,int y){
         if(previewLen<2){libraryMessage="GPX missing or invalid";uiRevision++;return;}
         routeLen=previewLen;for(int i=0;i<routeLen;i++)route[i]={float(preview[i].lat),float(preview[i].lon)};
         nav.routeIndex=0;nav.hasDestination=true;nav.destLat=route[routeLen-1].lat;nav.destLon=route[routeLen-1].lon;
+        snapActiveRoute();
         currentScreen=SCR_MAP;requestRideStart();
       }
     }

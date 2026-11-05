@@ -507,16 +507,16 @@ static void previewDraw(int y, int h) {
         int x, y;
         uint8_t cOut = c0 ? c0 : c1;
         if (cOut & 8) {
-          x = x0 + (int)((int64_t)(x1 - x0) * (clipY2 - y0) / (y1 - y0));
+          x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY2 - y0) / (y1 - y0))) : x0;
           y = clipY2;
         } else if (cOut & 4) {
-          x = x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0));
+          x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0))) : x0;
           y = clipY1;
         } else if (cOut & 2) {
-          x = y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0));
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0;
           x = clipX2;
         } else {
-          y = y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0));
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0;
           x = clipX1;
         }
         if (cOut == c0) { x0 = x; y0 = y; c0 = getCode(x0, y0); }
@@ -549,9 +549,9 @@ static void previewDraw(int y, int h) {
     const uint16_t parkBorder = 0xAE30;  // Subtle dark green outline
     const uint16_t waterFill = 0x9E5F;   // Soft sky blue (#90CAF9)
     const uint16_t waterBorder = 0x7CD8; // Subtle deeper blue outline
-    const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
-    const uint16_t majorBorder = 0xBDF7;    // Soft gray outline (#B0BEC5)
-    const uint16_t majorCorridor = 0xFFFF;  // Crisp pure white
+    const uint16_t minorRoadColor = 0xA514; // High-contrast visible gray (#A0A0A0, matches Strava)
+    const uint16_t majorBorder = 0x7BEF;    // Slate gray outline (#78909C)
+    const uint16_t majorCorridor = 0xFFFF;  // Crisp pure white ribbon  // Crisp pure white
 
     // -----------------------------------------------------------------
     // PASS 1: FILLED POLYGONS (Parks & Water Bodies)
@@ -583,6 +583,14 @@ static void previewDraw(int y, int h) {
 
         if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
             (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+        bool hasJump = false;
+        for (uint8_t k = 1; k < cnt; k++) {
+          if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+            hasJump = true; break;
+          }
+        }
+        if (hasJump) continue;
 
         bool isClosed = (cnt >= 3 && abs(pts[off].u - pts[off + cnt - 1].u) <= 35 &&
                                      abs(pts[off].v - pts[off + cnt - 1].v) <= 35);
@@ -646,6 +654,11 @@ static void previewDraw(int y, int h) {
         int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
         int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
         for (uint8_t k = 1; k < cnt; k++) {
+          if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+            sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+            sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+            continue;
+          }
           int pkX = tileDeltaX + pts[off + k].u;
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
@@ -688,6 +701,11 @@ static void previewDraw(int y, int h) {
         int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
         int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
         for (uint8_t k = 1; k < cnt; k++) {
+          if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+            sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+            sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+            continue;
+          }
           int pkX = tileDeltaX + pts[off + k].u;
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
@@ -730,6 +748,11 @@ static void previewDraw(int y, int h) {
         int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
         int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
         for (uint8_t k = 1; k < cnt; k++) {
+          if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+            sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+            sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+            continue;
+          }
           int pkX = tileDeltaX + pts[off + k].u;
           int pkY = tileDeltaY + pts[off + k].v;
           int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
@@ -766,6 +789,9 @@ static void previewDraw(int y, int h) {
     display.drawCircle(ex, ey, 5, 0xFFFF);
     display.drawCircle(ex, ey, 6, 0x0000);
   }
+
+  // Draw clean rounded card border over map layers to frame map neatly
+  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xCE79);
 
   // --- HEADER & HINTS ON CARD ---
   if (previewZoomLevel == 0) {

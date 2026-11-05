@@ -781,16 +781,16 @@ static void drawMapScreen() {
         int x, y;
         uint8_t cOut = c0 ? c0 : c1;
         if (cOut & 8) {
-          x = x0 + (int)((int64_t)(x1 - x0) * (clipY2 - y0) / (y1 - y0));
+          x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY2 - y0) / (y1 - y0))) : x0;
           y = clipY2;
         } else if (cOut & 4) {
-          x = x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0));
+          x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0))) : x0;
           y = clipY1;
         } else if (cOut & 2) {
-          x = y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0));
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0;
           x = clipX2;
         } else {
-          y = y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0));
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0;
           x = clipX1;
         }
         if (cOut == c0) { x0 = x; y0 = y; c0 = getCode(x0, y0); }
@@ -865,7 +865,7 @@ static void drawMapScreen() {
   }
 
   // Pass 3: Minor & Residential roads
-  const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
+  const uint16_t minorRoadColor = 0xA514; // High-contrast visible gray (#A0A0A0)
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
     float baseU = (float)g_mapCache.tiles[s].tileX;
@@ -876,6 +876,8 @@ static void drawMapScreen() {
         uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
         uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
         for (uint8_t i = 1; i < cnt; i++) {
+          if (abs(g_mapCache.tiles[s].points[off + i].u - g_mapCache.tiles[s].points[off + i - 1].u) > 500 ||
+              abs(g_mapCache.tiles[s].points[off + i].v - g_mapCache.tiles[s].points[off + i - 1].v) > 500) continue;
           int x0, y0, x1, y1;
           projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
                            baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
@@ -888,7 +890,7 @@ static void drawMapScreen() {
   }
 
   // Pass 4A: Secondary & Major road outer borders (Casings)
-  const uint16_t majorBorder = 0xBDF7; // Soft gray outline (#B0BEC5)
+  const uint16_t majorBorder = 0x7BEF; // Slate gray outline (#78909C)
   const uint16_t majorCorridor = 0xFFFF; // Pure white
   int navBorderW = (mapZoom >= 3) ? 6 : 4;
   int navCorridorW = (mapZoom >= 3) ? 3 : 2;

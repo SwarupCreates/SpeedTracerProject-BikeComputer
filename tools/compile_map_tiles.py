@@ -38,7 +38,13 @@ HIGHWAY_MAP = {
     "residential": FEAT_RESIDENTIAL,
     "living_street": FEAT_RESIDENTIAL,
     "unclassified": FEAT_RESIDENTIAL,
+    "service": FEAT_RESIDENTIAL,
+    "pedestrian": FEAT_RESIDENTIAL,
+    "track": FEAT_RESIDENTIAL,
+    "road": FEAT_RESIDENTIAL,
     "cycleway": FEAT_CYCLEWAY,
+    "path": FEAT_CYCLEWAY,
+    "footway": FEAT_CYCLEWAY,
 }
 
 WATERWAY_MAP = {
@@ -132,9 +138,6 @@ class OsmFeatureExtractor(osmium.SimpleHandler):
                 # Crossed tile boundary: save segment in current tile
                 if len(current_subpoly) >= 2:
                     tile_segments[current_tile].append(current_subpoly)
-                elif len(current_subpoly) == 1:
-                    # Single point on boundary - still include for continuity
-                    tile_segments[current_tile].append([current_subpoly[0], (u, v)])
                 current_tile = tkey
                 current_subpoly = [(u, v)]
 

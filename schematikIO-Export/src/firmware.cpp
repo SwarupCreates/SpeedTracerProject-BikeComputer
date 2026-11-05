@@ -1414,6 +1414,39 @@ static void handleSerialTransfer() {
     Serial.println("PONG");
     return;
   }
+  if (line == "CMD:SYS_INFO") {
+    Serial.printf("RESET_REASON:%d\n", (int)esp_reset_reason());
+    Serial.printf("GPS_READY:%d\n", (int)gpsDataReady);
+    Serial.printf("GPS_SATS:%u\n", startSatellites());
+    Serial.printf("GEPRC_SATS:%u\n", (unsigned)geprcGps.satellitesUsed);
+    Serial.printf("GEPRC_PVT_AGE_MS:%lu\n", (unsigned long)(geprcGps.lastPvt ? (millis() - geprcGps.lastPvt) : 999999));
+    Serial.printf("GEPRC_MSG_AGE_MS:%lu\n", (unsigned long)(geprcGps.lastMessage ? (millis() - geprcGps.lastMessage) : 999999));
+    Serial.printf("TINYGPS_PASSED:%lu\n", (unsigned long)gps.passedChecksum());
+    Serial.printf("TINYGPS_FAILED:%lu\n", (unsigned long)gps.failedChecksum());
+    Serial.printf("COMPASS_READY:%d\n", (int)compass.ready);
+    Serial.printf("COMPASS_HEADING:%.1f\n", compass.heading);
+    Serial.printf("FREE_HEAP:%lu\n", (unsigned long)ESP.getFreeHeap());
+    Serial.printf("FREE_PSRAM:%lu\n", (unsigned long)ESP.getFreePsram());
+    return;
+  }
+  if (line == "CMD:GPS_LOG" || line.startsWith("CMD:GPS_LOG")) {
+    Serial.println("START_GPS_LOG");
+    uint32_t t0 = millis();
+    while (millis() - t0 < 6000) {
+      while (gpsSerial.available()) {
+        uint8_t c = (uint8_t)gpsSerial.read();
+        Serial.write(c);
+        geprcGps.feed(c, gps);
+      }
+      if (Serial.available()) {
+        while (Serial.available()) Serial.read();
+        break;
+      }
+      delay(1);
+    }
+    Serial.println("\nEND_GPS_LOG");
+    return;
+  }
   if (line.startsWith("CMD:LIST_FILES ")) {
     String dir = line.substring(15);
     File d = SD_MMC.open(dir);

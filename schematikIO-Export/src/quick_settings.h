@@ -893,7 +893,7 @@ static void drawBigNumber(int rightX, int y, int value, uint16_t fg = 0xFFFF) {
 
 static void drawGpsRadarScreen() {
   const int cx = 120;
-  const int cy = 116 - gpsScroll;
+  const int cy = 120 - gpsScroll;
   const uint32_t t = millis();
 
   // Theme-aware color palette
@@ -950,8 +950,8 @@ static void drawGpsRadarScreen() {
   // Center White Satellite Icon (native 32x32 high resolution)
   drawCustomIcon(display, cx - 16, cy - 16, 0xFFFF, CustomIcon::satelliteIconLarge);
 
-  // Content Below Radar: Increased space gap between sat count and progress bar, and between lines
-  int textY = 210 - gpsScroll;
+  // Content Below Radar: Lowered sat count row for balanced progress bar gap
+  int textY = 217 - gpsScroll;
   label(20, textY, "LOCKED", 2, uiFg());
   label(20, textY + 23, "SATELLITES", 2, uiFg());
   drawBigNumber(220, textY + 1, sats, uiFg());

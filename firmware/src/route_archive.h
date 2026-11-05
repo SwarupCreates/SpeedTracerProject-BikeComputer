@@ -34,7 +34,18 @@ static void loadArchive(String path){
  archiveSummary.clear();completedText="Completion unavailable";
  String summary=companion(path,".summary.json");File f=SD_MMC.open(summary,FILE_READ);
  if(f){deserializeJson(archiveSummary,f);f.close();time_t t=archiveSummary["completedEpoch"]|0;if(t){struct tm local;localtime_r(&t,&local);char b[40];strftime(b,sizeof b,"%d %b %Y %I:%M %p",&local);completedText=b;}}
- readGPX(companion(path,".gpx"));
+ String gpxP=companion(path,".gpx");
+ if(!SD_MMC.exists(gpxP)){
+   int slash=gpxP.lastIndexOf('/');
+   String fn=slash>=0?gpxP.substring(slash+1):gpxP;
+   if(SD_MMC.exists("/routes/"+fn)) gpxP="/routes/"+fn;
+   else if(SD_MMC.exists("/activities/"+fn)) gpxP="/activities/"+fn;
+   else if(SD_MMC.exists("/"+fn)) gpxP="/"+fn;
+ }
+ readGPX(gpxP);
+ if(completedText=="Completion unavailable" && previewLen>=2){
+   completedText=String(previewKm,2)+" km completed";
+ }
 }
 static void previewDraw(int y,int h){
  card(6,y,228,h,uiCard());if(previewLen<2){label(16,y+12,"GPX route unavailable",1,uiMuted());return;}

@@ -8,7 +8,7 @@ int quickDetail = 0;
 int quickScroll=0;
 int brightnessPercent=100;
 static void setBrightnessFromTouch(int x){
-  brightnessPercent=constrain(5+(x-52)*95/116,5,100);
+  brightnessPercent=constrain(5+(x-52)*95/166,5,100);
   // GPIO5 is the board's active-high backlight; PWM keeps power controls untouched.
   analogWrite(5,(brightnessPercent*255+50)/100);
   uiRevision++;
@@ -668,7 +668,7 @@ static void quickTap(int x, int y) {
     return;
   }
   y+=quickScroll;
-  if(y>=106 && y<156 && x>=40 && x<228){setBrightnessFromTouch(x);return;}
+  if(y>=106 && y<156 && x>=20 && x<234){setBrightnessFromTouch(x);return;}
   if (x>=6 && x<234 && y>=32 && y<101) {
     quickDetail=7;uiRevision++;
     return;
@@ -846,11 +846,10 @@ static void drawQuickSettings() {
   }
 
   card(6,106-offset,228,50,uiCard());
-  drawCustomIcon(display,18,122-offset,uiFg(),CustomIcon::brightnessIcon);
-  label(181,125-offset,String(brightnessPercent)+"%",1,uiMuted());
-  display.fillRoundRect(52,129-offset,116,5,2,uiMuted());
-  int thumb=52+(brightnessPercent-5)*116/95;
-  display.fillRoundRect(52,129-offset,max(3,thumb-52),5,2,TEAL);
+  drawCustomIcon(display,22,123-offset,uiFg(),CustomIcon::brightnessIcon);
+  display.fillRoundRect(52,128-offset,166,6,3,uiMuted());
+  int thumb=52+(brightnessPercent-5)*166/95;
+  display.fillRoundRect(52,128-offset,max(4,thumb-52),6,3,TEAL);
   display.fillCircle(thumb,131-offset,7,uiFg());
 
   // 2x3 Grid of Tiles

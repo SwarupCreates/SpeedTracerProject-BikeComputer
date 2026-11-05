@@ -1102,6 +1102,36 @@ static void handleSerialTransfer() {
     }
     return;
   }
+    if (line.startsWith("CMD:HEX ")) {
+    if (!uploadFile) {
+      Serial.println("ERR:NO_FILE");
+      return;
+    }
+    const char *hex = line.c_str() + 8;
+    int hexLen = strlen(hex);
+    uint8_t outBuf[256];
+    int outLen = 0;
+    auto hexVal = [](char c) -> int {
+      if (c >= '0' && c <= '9') return c - '0';
+      if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+      if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+      return -1;
+    };
+    for (int i = 0; i + 1 < hexLen && outLen < (int)sizeof(outBuf); i += 2) {
+      int h1 = hexVal(hex[i]);
+      int h2 = hexVal(hex[i + 1]);
+      if (h1 >= 0 && h2 >= 0) {
+        outBuf[outLen++] = (uint8_t)((h1 << 4) | h2);
+      }
+    }
+    if (outLen > 0) {
+      uploadFile.write(outBuf, outLen);
+      Serial.println("K");
+    } else {
+      Serial.println("ERR:HEX");
+    }
+    return;
+  }
   if (line.startsWith("CMD:CHUNK ")) {
     int length = line.substring(10).toInt();
     if (!uploadFile) {

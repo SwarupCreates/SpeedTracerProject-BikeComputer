@@ -250,6 +250,49 @@ static void drawLibrary(){
   bool routes=homePage==HOME_ROUTES;
 
   if(librarySelection.length()){
+    if(routes){
+      // Dedicated Saved Route Screen: Map preview + Distance + Est Time @ Velocity + Elevation Gain + Gradient + Start Route
+      int slash = librarySelection.lastIndexOf('/');
+      String title = (slash >= 0) ? librarySelection.substring(slash + 1) : librarySelection;
+      title.replace(".gpx", ""); title.replace(".fit", ""); title.replace(".csv", "");
+      title.replace("_", " ");
+      label(10, 34, fitBrowserText(title, 220), 2, uiFg());
+      label(10, 53, "Track guidance  *  No street names", 1, uiMuted());
+
+      // 1. Prominent Route Map Preview Card
+      previewDraw(68, 106);
+
+      // 2. Metrics 2x2 Grid (Distance & Approx Time @ 20 km/h, Elevation Gain & Avg Gradient)
+      card(6, 178, 111, 34, uiCard());
+      label(14, 182, "DISTANCE", 1, uiMuted());
+      label(14, 196, String(previewKm, 2) + " km", 1, uiFg());
+
+      card(123, 178, 111, 34, uiCard());
+      label(131, 182, "EST. TIME", 1, uiMuted());
+      int tMin = (int)round((previewKm / 20.0f) * 60.0f);
+      String tStr = (tMin >= 60 ? (String(tMin / 60) + "h " + String(tMin % 60) + "m") : (String(tMin) + " min")) + " @ 20k";
+      label(131, 196, tStr, 1, uiFg());
+
+      card(6, 216, 111, 34, uiCard());
+      label(14, 220, "ELEV GAIN", 1, uiMuted());
+      label(14, 234, previewElevation ? (String(previewGain, 0) + " m up") : "--", 1, uiFg());
+
+      card(123, 216, 111, 34, uiCard());
+      label(131, 220, "AVG GRADIENT", 1, uiMuted());
+      float grad = (previewKm > 0.01f && previewElevation) ? ((previewGain / (previewKm * 1000.0f)) * 100.0f) : 0.0f;
+      label(131, 234, (grad > 0.0f ? ("+" + String(grad, 1) + "%") : String("--")), 1, uiFg());
+
+      // 3. Confirm & Start Route Action Button
+      card(6, 254, 228, 32, TEAL);
+      centeredLabel(6, 263, 228, "CONFIRM & START ROUTE", 1, WHITE);
+      if(libraryMessage.length()) label(10, 240, fitBrowserText(libraryMessage, 218), 1, 0xF800);
+
+      statusBar(true, false);
+      drawGlobalNav();
+      return;
+    }
+
+    // Past Activity / Ride History: Full vertically scrollable activity report
     int topY = 34 - archiveScroll;
 
     // 1. Header (Title & Completed Date)
@@ -334,15 +377,10 @@ static void drawLibrary(){
       archiveGraph(librarySelection, spdY, 2, "SPEED", sub.c_str());
     }
 
-    // 6. Action Button (for Routes) or Footer (y = spdY + 80)
+    // 6. Footer (y = spdY + 80)
     int footY = spdY + 80;
     if (footY + 34 >= 28 && footY < 290) {
-      if (routes) {
-        card(6, footY, 228, 32, TEAL);
-        centeredLabel(6, footY + 9, 228, "CONFIRM & START ROUTE", 1, WHITE);
-      } else {
-        centeredLabel(6, footY + 8, 228, "-- End of Activity --", 1, uiMuted());
-      }
+      centeredLabel(6, footY + 8, 228, "-- End of Activity --", 1, uiMuted());
     }
 
     // Right edge scrollbar thumb
@@ -379,9 +417,7 @@ static void libraryTap(int x,int y){
   if(librarySelection.length()){
     bool routes=homePage==HOME_ROUTES;
     if(routes){
-      int topY = 34 - archiveScroll;
-      int footY = topY + 36 + 44 + 44 + 28 + 92 + 80 + 80;
-      if(y >= footY && y < footY + 34){
+      if(y >= 254 && y < 288){
         if(rideStarted){libraryMessage="Save current activity first";uiRevision++;return;}
         if(previewLen<2){libraryMessage="GPX missing or invalid";uiRevision++;return;}
         routeLen=previewLen;for(int i=0;i<routeLen;i++)route[i]={float(preview[i].lat),float(preview[i].lon)};
@@ -406,7 +442,11 @@ static bool globalHasNext(){
   if(gpsWaiting || gpsRadarInspector) return true;
   if(!welcomeOpen || quickOpen || shutdownDialog || countdownStart)return false;
   if(homePage==HOME_FILES && fileDetailOpen)return false;
-  return isLibrary()?(librarySelection.length()?true:libraryMore):homePage==HOME_FILES && browserMore;
+  if(isLibrary()){
+    if(homePage==HOME_ROUTES && librarySelection.length()) return false;
+    return librarySelection.length()?true:libraryMore;
+  }
+  return homePage==HOME_FILES && browserMore;
 }
 static void globalNext(){
   if(!globalHasNext())return;
@@ -1080,7 +1120,7 @@ static void pollQuickTouch() {
     } else if((gpsWaiting || gpsRadarInspector) && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=gpsScroll;
       sliderGesture=false;
-    } else if(isLibrary() && librarySelection.length() && y>=29 && y<290){
+    } else if(isLibrary() && librarySelection.length() && homePage!=HOME_ROUTES && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=archiveScroll;
       sliderGesture=false;
     } else quickTap(x, y);

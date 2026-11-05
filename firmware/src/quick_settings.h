@@ -164,7 +164,7 @@ static void openFileDetail(int row){
 }
 
 static void drawFileDetail(){
-  drawCustomIcon(display,10,35,uiFg(),CustomIcon::GoBackIcon);
+  drawCustomIcon(display,8,33,uiFg(),CustomIcon::GoBackIcon,20,20);
   label(34,37,"FILE DETAILS",2);
   display.drawFastHLine(6,58,228,uiCard());
 
@@ -268,25 +268,11 @@ static void loadLibrary(){
   else {scan("/activities");if(!libraryMore)scan("/");}
 }
 static void openLibrary(HomePage page){drawLoadingScreen("Loading assets...", "Please wait!");homePage=page;libraryPage=0;loadLibrary();uiRevision++;}
-// Static refresh control only for stored-data apps.
+// App refresh button removed per user request
 static bool refreshPending=false;
-static bool showAppRefresh(){
-  return welcomeOpen && !quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart
-    && ((homePage==HOME_FILES && !fileDetailOpen) || isLibrary());
-}
-static void drawAppRefresh(){
-  if(!showAppRefresh())return;
-  display.fillCircle(222,43,11,0x2A5F);
-  drawCustomIcon(display,214,35,0xE71C,CustomIcon::refreshIcon);
-}
-static void serviceAppRefresh(){
-  if(!refreshPending)return;
-  refreshPending=false;
-  if(!showAppRefresh())return;
-  if(homePage==HOME_FILES)loadBrowser();
-  else if(isLibrary())loadLibrary();
-  uiRevision++;
-}
+static bool showAppRefresh(){ return false; }
+static void drawAppRefresh(){}
+static void serviceAppRefresh(){}
 static void drawLibrary(){
   bool routes=homePage==HOME_ROUTES;
 
@@ -461,7 +447,7 @@ static void drawLibrary(){
     return;
   }
 
-  drawCustomIcon(display,10,35,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
+  drawCustomIcon(display,8,33,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon,20,20);
   label(34,37,routes?"SAVED ROUTES":homePage==HOME_RIDES?"RIDE HISTORY":"PAST ACTIVITY",2);
 
   if(!libraryCount){
@@ -691,7 +677,7 @@ static void drawHomeSubpage(){
   statusBar();
   if(isLibrary()){drawLibrary();return;}
   if(homePage==HOME_APPS){
-    drawCustomIcon(display,10,35,uiFg(),CustomIcon::allAppsIcon);
+    drawCustomIcon(display,8,33,uiFg(),CustomIcon::allAppsIcon,20,20);
     label(34,37,"ALL APPS",2);
     const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","MAP"};
     CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
@@ -704,7 +690,7 @@ static void drawHomeSubpage(){
       drawFileDetail();
       return;
     }
-    drawCustomIcon(display,10,35,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon);
+    drawCustomIcon(display,8,33,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon,20,20);
     String folderName = (browserPath == "/") ? "MY FILES" : browserPath;
     if (folderName.length() > 1 && folderName.startsWith("/")) folderName = folderName.substring(1);
     label(34, 37, truncateHeading(folderName, 16), 2);
@@ -1034,10 +1020,6 @@ static void drawGpsRadarScreen() {
 }
 
 static void quickTap(int x, int y) {
-  if(showAppRefresh() && x>=196 && y>=28 && y<62){
-    refreshPending=true;
-    return;
-  }
   if(y>=290){
     if(x>=26 && x<78){if(globalHasBack())globalBack();}
     else if(x>=94 && x<146)globalHome();
@@ -1324,7 +1306,7 @@ static void drawQuickSettings() {
     card(6, 32, 228, 254, uiCard());
     const char* titles[] = {"", "WI-FI", "BLUETOOTH", "GPS", "", "SYSTEM", "CONFIGURE", "ACTIVITY"};
     CustomIcon headingIcons[]={CustomIcon::systemIcon,CustomIcon::wifiDisconnectedIcon,CustomIcon::bluetoothDisconnectedIcon,CustomIcon::satelliteIcon,CustomIcon::themeSwitcherIcon,CustomIcon::systemIcon,CustomIcon::configureIcon,runningMode?CustomIcon::runIcon:CustomIcon::bikeIcon};
-    drawCustomIcon(display,16,47,uiFg(),headingIcons[quickDetail]);
+    drawCustomIcon(display,14,43,uiFg(),headingIcons[quickDetail],20,20);
     label(40,46,truncateHeading(titles[quickDetail], 16),2);
     if (quickDetail == 7) {
       label(16, 76, durationText(), 2);

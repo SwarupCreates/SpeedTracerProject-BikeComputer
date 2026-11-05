@@ -3,7 +3,7 @@
 #include "custom_icon_masks.h"
 // Small LVGL offscreen renderer: does not own LCD or touch. Existing dirty-tile
 // presenter remains in charge, so icons never cause full LCD redraws.
-static void drawCustomIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color,CustomIcon icon) {
+static void drawCustomIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color,CustomIcon icon,int targetW=0,int targetH=0) {
  const int w=customWidths[(int)icon],h=customHeights[(int)icon];
  static lv_obj_t *canvas=nullptr;
  alignas(4) static uint8_t pixels[40*40*4];
@@ -34,6 +34,34 @@ static void drawCustomIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color,CustomIc
  lv_area_t area={0,0,w-1,h-1};lv_draw_image(&layer,&dsc,&area);
  lv_canvas_finish_layer(canvas,&layer);
  lastIcon=(int)icon;lastColor=color;
+ }
+ if(targetW > 0 && targetH > 0 && (targetW != w || targetH != h)){
+   for(int r = 0; r < targetH; r++){
+     int yf = (h > 1) ? (r * (h - 1) * 256) / (targetH - 1) : 0;
+     int r0 = yf >> 8, r1 = min(h - 1, r0 + 1);
+     int yr = yf & 255;
+     for(int c = 0; c < targetW; c++){
+       int xf = (w > 1) ? (c * (w - 1) * 256) / (targetW - 1) : 0;
+       int c0 = xf >> 8, c1 = min(w - 1, c0 + 1);
+       int xr = xf & 255;
+
+       const uint8_t *p00 = pixels + 4 * (r0 * 40 + c0);
+       const uint8_t *p01 = pixels + 4 * (r0 * 40 + c1);
+       const uint8_t *p10 = pixels + 4 * (r1 * 40 + c0);
+       const uint8_t *p11 = pixels + 4 * (r1 * 40 + c1);
+
+       int a0 = (p00[3] * (256 - xr) + p01[3] * xr) >> 8;
+       int a1 = (p10[3] * (256 - xr) + p11[3] * xr) >> 8;
+       int a  = (a0 * (256 - yr) + a1 * yr) >> 8;
+       if(!a) continue;
+       uint16_t bg = display.backgroundPixel(x + c, y + r);
+       int red   = (p00[2] * a + ((bg >> 11) * 255 / 31) * (255 - a) + 127) / 255;
+       int green = (p00[1] * a + (((bg >> 5) & 63) * 255 / 63) * (255 - a) + 127) / 255;
+       int blue  = (p00[0] * a + ((bg & 31) * 255 / 31) * (255 - a) + 127) / 255;
+       gfx.drawPixel(x + c, y + r, ((red >> 3) << 11) | ((green >> 2) << 5) | (blue >> 3));
+     }
+   }
+   return;
  }
  for(int r=0;r<h;r++)for(int c=0;c<w;c++){
    const uint8_t *p=pixels+4*(r*40+c);int a=p[3];if(!a)continue;

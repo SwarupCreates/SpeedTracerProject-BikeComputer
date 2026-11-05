@@ -233,6 +233,8 @@ int archiveScroll=0;
 const int ARCHIVE_MAX_SCROLL=190;
 // Dedicated activity/route library, independent of the general file browser.
 String libraryNames[4],libraryPaths[4],librarySelection,libraryMessage;
+static HomePage prevActivityPage = HOME_APPS;
+static String prevActivitySelection = "";
 uint64_t librarySizes[4];
 int libraryCount=0,libraryPage=0;
 bool libraryMore=false;
@@ -303,7 +305,7 @@ static void drawLibrary(){
 
       // 1. Prominent Large Route Map Preview Card (180px tall!)
       int mapY = topY + 34;
-      previewDraw(mapY, 180);
+      previewDraw(mapY, 180, true);
 
       // 2. Metrics 2x2 Grid (below map)
       int row1Y = mapY + 188;
@@ -423,7 +425,7 @@ static void drawLibrary(){
     // 3. Route Preview Map Card (y = mY3 + 28, h = 88)
     int mapY = mY3 + 28;
     if (mapY + 88 >= 28 && mapY < 290) {
-      previewDraw(mapY, 88);
+      previewDraw(mapY, 88, false);
     }
 
     // 4. Heart Rate Graph Card (y = mapY + 92, h = 76)
@@ -543,12 +545,44 @@ static void libraryTap(int x,int y){
         currentScreen=SCR_MAP;requestRideStart();
       }
       return;
+    } else {
+      // Past Activity / Ride History Details
+      int topY = 34 - archiveScroll;
+      int mY3 = topY + 36 + 44 + 44;
+      int mapY = mY3 + 28;
+      if (x >= 6 && x <= 234 && y >= mapY && y < mapY + 88) {
+        String gpxPath = companion(librarySelection, ".gpx");
+        if (!SD_MMC.exists(gpxPath)) {
+          int slash = gpxPath.lastIndexOf('/');
+          String fn = (slash >= 0) ? gpxPath.substring(slash + 1) : gpxPath;
+          if (SD_MMC.exists("/activities/" + fn)) gpxPath = "/activities/" + fn;
+          else if (SD_MMC.exists("/routes/" + fn)) gpxPath = "/routes/" + fn;
+          else if (SD_MMC.exists("/" + fn)) gpxPath = "/" + fn;
+        }
+        if (SD_MMC.exists(gpxPath) || previewLen >= 2) {
+          drawLoadingScreen("Loading Route...", "Please wait!");
+          prevActivityPage = homePage;
+          prevActivitySelection = librarySelection;
+          homePage = HOME_ROUTES;
+          librarySelection = gpxPath;
+          archiveScroll = 0;
+          previewZoomLevel = 0;
+          previewPanLat = 0.0;
+          previewPanLon = 0.0;
+          loadArchive(librarySelection);
+          uiRevision++;
+          return;
+        }
+      }
+      return;
     }
     return;
   }
   int row=(y-68)/44;
   if(y>=68 && row>=0 && row<libraryCount && y<68+row*44+40){
     drawLoadingScreen("Loading assets...", "Please wait!");
+    prevActivitySelection = "";
+    prevActivityPage = HOME_APPS;
     librarySelection=libraryPaths[row];
     librarySelectedSize=librarySizes[row];
     libraryMessage="";
@@ -621,8 +655,19 @@ static void globalBack(){
   else if(welcomeOpen){
     if(isLibrary()){
       if(librarySelection.length()){
-        librarySelection="";libraryMessage="";archiveScroll=0;
-        previewZoomLevel=0;previewPanLat=0.0;previewPanLon=0.0;
+        if(prevActivitySelection.length()){
+          drawLoadingScreen("Loading assets...", "Please wait!");
+          homePage = prevActivityPage;
+          librarySelection = prevActivitySelection;
+          prevActivitySelection = "";
+          prevActivityPage = HOME_APPS;
+          archiveScroll = 0;
+          previewZoomLevel = 0; previewPanLat = 0.0; previewPanLon = 0.0;
+          loadArchive(librarySelection);
+        } else {
+          librarySelection="";libraryMessage="";archiveScroll=0;
+          previewZoomLevel=0;previewPanLat=0.0;previewPanLon=0.0;
+        }
       }else if(libraryPage>0){
         libraryPage--;loadLibrary();
       }else homePage=HOME_APPS;

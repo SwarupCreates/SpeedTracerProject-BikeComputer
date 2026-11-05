@@ -401,7 +401,7 @@ static void fillPolygon(const int* polyX, const int* polyY, int n, uint16_t colo
   }
 }
 
-static void previewDraw(int y, int h) {
+static void previewDraw(int y, int h, bool showControls = true) {
   if (y + h <= 28 || y >= 290) return;
   const int cardX = 6, cardW = 228;
   const uint16_t terrainBg = 0xF79D; // #F2F1EE (Strava light beige-grey base color)
@@ -424,7 +424,7 @@ static void previewDraw(int y, int h) {
   double centerLon = 0.0;
   double scale = 1.0;
 
-  if (previewZoomLevel == 0) {
+  if (!showControls || previewZoomLevel == 0) {
     // --- MODE 0: FULL ROUTE OVERVIEW (Instantaneous, 0 basemap disk reads, never freezes) ---
     double minA = preview[0].lat, maxA = minA, minB = preview[0].lon, maxB = minB;
     for (int i = 1; i < previewLen; i++) {
@@ -438,7 +438,9 @@ static void previewDraw(int y, int h) {
     double co = cos(radians(centerLat));
     double spanLonM = max(0.000001, (maxB - minB) * co * 111320.0);
     double spanLatM = max(0.000001, (maxA - minA) * 111320.0);
-    scale = min((cardW - 30.0) / (spanLonM * 1.15), (h - 30.0) / (spanLatM * 1.15));
+    double padW = showControls ? 30.0 : 40.0;
+    double padH = showControls ? 30.0 : 20.0;
+    scale = min((cardW - padW) / (spanLonM * 1.15), (h - padH) / (spanLatM * 1.15));
     previewScale = scale;
   } else {
     // --- MODE 1 & 2: ZOOMED-IN PROCEDURAL STREET INSPECTION (PSRAM 3x3 tiles only) ---
@@ -526,7 +528,7 @@ static void previewDraw(int y, int h) {
   };
 
   // --- DRAW BASEMAP ONLY WHEN ZOOMED IN (Ultra-Fast Slippy Integer Projection) ---
-  if (previewZoomLevel > 0) {
+  if (showControls && previewZoomLevel > 0) {
     int centerTX, centerTY;
     float cfx, cfy;
     MapTileCache::latLonToTile(centerLat, centerLon, centerTX, centerTY, cfx, cfy);
@@ -749,6 +751,21 @@ static void previewDraw(int y, int h) {
 
   // Draw clean rounded card border over map layers to frame map neatly
   display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xD69A);
+
+  if (!showControls) {
+    label(14, y + 6, "ROUTE MAP", 1, 0x4208);
+    label(14, y + 18, String(previewKm, 2) + " km", 1, uiMuted());
+    label(14, y + h - 14, "Tap to open route details", 1, uiMuted());
+
+    // Single Route Map Icon Button at top-right
+    int btnW = 28, btnH = 26;
+    int btnX = cardX + cardW - btnW - 6;
+    int btnY = y + 6;
+    display.fillRoundRect(btnX, btnY, btnW, btnH, 4, 0xFFFF);
+    display.drawRoundRect(btnX, btnY, btnW, btnH, 4, 0xCE79);
+    drawCustomIcon(display, btnX + 6, btnY + 5, 0x0000, CustomIcon::routeMapIcon);
+    return;
+  }
 
   // --- HEADER & HINTS ON CARD ---
   if (previewZoomLevel == 0) {

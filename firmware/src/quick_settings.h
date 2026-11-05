@@ -122,8 +122,8 @@ static void openFileDetail(int row){
 }
 
 static void drawFileDetail(){
-  drawCustomIcon(display,10,37,uiFg(),CustomIcon::GoBackIcon);
-  label(34,36,"FILE DETAILS",2);
+  drawCustomIcon(display,10,35,uiFg(),CustomIcon::GoBackIcon);
+  label(34,37,"FILE DETAILS",2);
   display.drawFastHLine(6,58,228,uiCard());
 
   // Icon & Type Header
@@ -230,8 +230,8 @@ static bool showAppRefresh(){
 }
 static void drawAppRefresh(){
   if(!showAppRefresh())return;
-  display.fillCircle(222,45,11,0x2A5F);
-  drawCustomIcon(display,214,37,0xE71C,CustomIcon::refreshIcon);
+  display.fillCircle(222,43,11,0x2A5F);
+  drawCustomIcon(display,214,35,0xE71C,CustomIcon::refreshIcon);
 }
 static void serviceAppRefresh(){
   if(!refreshPending)return;
@@ -243,8 +243,8 @@ static void serviceAppRefresh(){
 }
 static void drawLibrary(){
   bool routes=homePage==HOME_ROUTES;
-  drawCustomIcon(display,10,37,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
-  label(34,36,routes?"SAVED ROUTES":homePage==HOME_RIDES?"RIDE HISTORY":"PAST ACTIVITY",2);
+  drawCustomIcon(display,10,35,uiFg(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
+  label(34,37,routes?"SAVED ROUTES":homePage==HOME_RIDES?"RIDE HISTORY":"PAST ACTIVITY",2);
   
   if(librarySelection.length()){
     label(10,65,fitBrowserText(librarySelection,215),1);
@@ -350,8 +350,8 @@ static void drawHomeSubpage(){
   statusBar();
   if(isLibrary()){drawLibrary();return;}
   if(homePage==HOME_APPS){
-    drawCustomIcon(display,10,41,uiFg(),CustomIcon::allAppsIcon);
-    label(34,40,"ALL APPS",2);
+    drawCustomIcon(display,10,35,uiFg(),CustomIcon::allAppsIcon);
+    label(34,37,"ALL APPS",2);
     const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","MAP"};
     CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
     for(int i=0;i<6;i++){int x=6+(i%2)*117,y=72+(i/2)*70;
@@ -363,8 +363,8 @@ static void drawHomeSubpage(){
       drawFileDetail();
       return;
     }
-    drawCustomIcon(display,10,37,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon);
-    label(34,36,browserPath=="/"?"MY FILES":fitBrowserText(browserPath,160),2);
+    drawCustomIcon(display,10,35,uiFg(),browserPath=="/"?CustomIcon::folderIcon:CustomIcon::GoBackIcon);
+    label(34,37,browserPath=="/"?"MY FILES":fitBrowserText(browserPath,160),2);
 
 
 
@@ -548,8 +548,8 @@ static bool drawLifecycleScreen() {
     card(6,182,228,66,0xF800);
     label(22,195,"Start",2,0xFFFF);label(22,219,runningMode?"Run":"Ride",2,0xFFFF);
     drawCustomIcon(display,102,197,0xFFFF,runningMode?CustomIcon::runIconLarge:CustomIcon::bikeIconLarge);
-    label(173,211,"GO",2,0xFFFF);
-    drawCustomIcon(display,197,197,0xFFFF,CustomIcon::goNextIconLarge);
+    label(165,209,"GO",2,0xFFFF);
+    drawCustomIcon(display,189,197,0xFFFF,CustomIcon::goNextIconLarge);
     card(6,254,111,34,uiCard());drawCustomIcon(display,17,263,uiFg(),CustomIcon::allAppsIcon);
     centeredLabel(36,266,77,"ALL APPS",1);
     card(123,254,111,34,uiCard());drawCustomIcon(display,134,263,uiFg(),CustomIcon::folderIcon);

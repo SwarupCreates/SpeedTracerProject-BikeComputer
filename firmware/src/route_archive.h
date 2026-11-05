@@ -4,6 +4,15 @@ ArchivePoint preview[MAX_ROUTE];int previewLen=0;
 float previewKm=0,previewGain=0;bool previewElevation=false;
 String previewPath,completedText;JsonDocument archiveSummary;
 
+// Route preview interactive zoom and procedural map state
+static int previewZoomLevel = 0; // 0 = Overview (instant, no basemap), 1 = Street 1x, 2 = Street 2x
+static double previewPanLat = 0.0;
+static double previewPanLon = 0.0;
+static double previewScale = 1.0;
+static bool mapPanGesture = false;
+static double startPanLat = 0.0;
+static double startPanLon = 0.0;
+
 // Graph cache for HR and Speed so we never re-read SD CSV on every screen redraw:
 static float archiveHrValues[100];
 static float archiveSpeedValues[100];
@@ -351,53 +360,62 @@ static void previewDraw(int y, int h) {
   display.fillRoundRect(cardX, y, cardW, h, 8, terrainBg);
   display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xCE79);
 
-  label(14, y + 6, "ROUTE PREVIEW", 1, 0x4208);
-
   if (previewLen < 2) {
+    label(14, y + 6, "ROUTE PREVIEW", 1, 0x4208);
     centeredLabel(cardX, y + h / 2, cardW, "GPX route unavailable", 1, uiMuted());
     return;
   }
 
-  // Calculate route bounds
-  double minA = preview[0].lat, maxA = minA, minB = preview[0].lon, maxB = minB;
-  for (int i = 1; i < previewLen; i++) {
-    minA = min(minA, preview[i].lat);
-    maxA = max(maxA, preview[i].lat);
-    minB = min(minB, preview[i].lon);
-    maxB = max(maxB, preview[i].lon);
-  }
-
-  double centerLat = (minA + maxA) / 2.0;
-  double centerLon = (minB + maxB) / 2.0;
-
-  // Determine required tile range covering route
-  int minTX, minTY, maxTX, maxTY;
-  float dummyFX, dummyFY;
-  MapTileCache::latLonToTile(maxA, minB, minTX, minTY, dummyFX, dummyFY); // top-left
-  MapTileCache::latLonToTile(minA, maxB, maxTX, maxTY, dummyFX, dummyFY); // bottom-right
-
-  // Expand by 1 tile margin for boundary road continuity
-  minTX = max(0, minTX - 1);
-  maxTX = min(16383, maxTX + 1);
-  minTY = max(0, minTY - 1);
-  maxTY = min(16383, maxTY + 1);
-
-  double co = cos(radians(centerLat));
-  double spanLonM = max(0.000001, (maxB - minB) * co * 111320.0);
-  double spanLatM = max(0.000001, (maxA - minA) * 111320.0);
-  // Add 15% margin around the route
-  double scale = min((cardW - 30.0) / (spanLonM * 1.15), (h - 30.0) / (spanLatM * 1.15));
-
+  // Clip boundaries inside map card
   const int clipX1 = cardX + 2;
   const int clipY1 = y + 2;
   const int clipX2 = cardX + cardW - 3;
   const int clipY2 = y + h - 3;
 
+  double centerLat = 0.0;
+  double centerLon = 0.0;
+  double scale = 1.0;
+
+  if (previewZoomLevel == 0) {
+    // --- MODE 0: FULL ROUTE OVERVIEW (Instantaneous, 0 basemap disk reads, never freezes) ---
+    double minA = preview[0].lat, maxA = minA, minB = preview[0].lon, maxB = minB;
+    for (int i = 1; i < previewLen; i++) {
+      minA = min(minA, preview[i].lat);
+      maxA = max(maxA, preview[i].lat);
+      minB = min(minB, preview[i].lon);
+      maxB = max(maxB, preview[i].lon);
+    }
+    centerLat = (minA + maxA) / 2.0;
+    centerLon = (minB + maxB) / 2.0;
+    double co = cos(radians(centerLat));
+    double spanLonM = max(0.000001, (maxB - minB) * co * 111320.0);
+    double spanLatM = max(0.000001, (maxA - minA) * 111320.0);
+    scale = min((cardW - 30.0) / (spanLonM * 1.15), (h - 30.0) / (spanLatM * 1.15));
+    previewScale = scale;
+  } else {
+    // --- MODE 1 & 2: ZOOMED-IN PROCEDURAL STREET INSPECTION (PSRAM 3x3 tiles only) ---
+    if (previewPanLat == 0.0 && previewPanLon == 0.0) {
+      previewPanLat = preview[0].lat;
+      previewPanLon = preview[0].lon;
+    }
+    centerLat = previewPanLat;
+    centerLon = previewPanLon;
+    scale = (previewZoomLevel == 1) ? 0.85 : 1.6; // 0.85 px/m (~260m across) or 1.6 px/m (~140m across)
+    previewScale = scale;
+
+    // Align PSRAM sliding window around current pan position
+    g_mapCache.updatePosition(centerLat, centerLon);
+  }
+
+  double co = cos(radians(centerLat));
+  int cardCenterX = cardX + cardW / 2;
+  int cardCenterY = y + h / 2;
+
   auto projectCoord = [&](double pLat, double pLon, int &outX, int &outY) {
     double dxM = (pLon - centerLon) * co * 111320.0;
     double dyM = (pLat - centerLat) * 111320.0;
-    outX = 120 + (int)(dxM * scale);
-    outY = (y + h / 2) - (int)(dyM * scale);
+    outX = cardCenterX + (int)lround(dxM * scale);
+    outY = cardCenterY - (int)lround(dyM * scale);
   };
 
   auto clipAndDrawLine = [&](int x0, int y0, int x1, int y1, uint16_t color, int width) {
@@ -451,126 +469,115 @@ static void previewDraw(int y, int h) {
     }
   };
 
-  // Reusable 64 KB tile buffer in PSRAM
-  static uint8_t* s_previewTileBuf = nullptr;
-  if (!s_previewTileBuf) {
-    s_previewTileBuf = (uint8_t*)ps_malloc(65536);
-    if (!s_previewTileBuf) s_previewTileBuf = (uint8_t*)malloc(65536);
-  }
-
-  // 1. Draw Basemap Underlay from PAK archive for all tiles covering the route
-  if (g_mapCache.pakLoaded && s_previewTileBuf) {
+  // --- DRAW BASEMAP ONLY WHEN ZOOMED IN (Zero overhead in overview!) ---
+  if (previewZoomLevel > 0) {
     const uint16_t waterColor = 0x9E5F; // #90CAF9
     const uint16_t minorRoadColor = 0xD6BA; // #D6D6D6
     const uint16_t majorBorder = 0xCE79;
     const uint16_t majorCorridor = 0xFFFF;
     const double n = 16384.0;
 
-    int tilesDrawn = 0;
-    for (int ty = minTY; ty <= maxTY && tilesDrawn < 40; ty++) {
-      for (int tx = minTX; tx <= maxTX && tilesDrawn < 40; tx++) {
-        int pIdx = g_mapCache.findInPak(tx, ty);
-        if (pIdx < 0) continue;
+    int centerTX, centerTY;
+    float cfx, cfy;
+    MapTileCache::latLonToTile(centerLat, centerLon, centerTX, centerTY, cfx, cfy);
 
-        uint32_t tLen = g_mapCache.pakIndex[pIdx].length;
-        if (tLen > 65536) continue;
+    // Only render tiles from the 9-tile PSRAM sliding window that touch our view
+    for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+      if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+      int tx = g_mapCache.tiles[s].tileX;
+      int ty = g_mapCache.tiles[s].tileY;
+      // Only process immediate neighboring tiles (1-2 tiles max)
+      if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
 
-        if (!g_mapCache.pakFile.seek(g_mapCache.pakIndex[pIdx].offset)) continue;
-        if (g_mapCache.pakFile.read(s_previewTileBuf, tLen) != tLen) continue;
+      MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+      MapPoint12* pts = g_mapCache.tiles[s].points;
+      uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
 
-        MapTileHeader* hdr = (MapTileHeader*)s_previewTileBuf;
-        if (memcmp(hdr->magic, "MAP1", 4) != 0) continue;
+      // Pass A: Water bodies
+      for (uint16_t f = 0; f < featCount; f++) {
+        if (feats[f].type == FEAT_WATER) {
+          uint8_t cnt = feats[f].pointCount;
+          uint16_t off = feats[f].pointOffset;
+          for (uint8_t k = 1; k < cnt; k++) {
+            double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
+            double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
+            double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
+            double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
 
-        MapFeatureRecord* feats = (MapFeatureRecord*)(s_previewTileBuf + sizeof(MapTileHeader));
-        MapPoint12* pts = (MapPoint12*)(s_previewTileBuf + sizeof(MapTileHeader) + hdr->featureCount * sizeof(MapFeatureRecord));
+            double lon0 = (x0T / n) * 360.0 - 180.0;
+            double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
+            double lon1 = (x1T / n) * 360.0 - 180.0;
+            double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
 
-        tilesDrawn++;
-
-        // Pass A: Water bodies
-        for (uint16_t f = 0; f < hdr->featureCount; f++) {
-          if (feats[f].type == FEAT_WATER) {
-            uint8_t cnt = feats[f].pointCount;
-            uint16_t off = feats[f].pointOffset;
-            for (uint8_t k = 1; k < cnt; k++) {
-              double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
-              double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
-              double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
-              double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
-
-              double lon0 = (x0T / n) * 360.0 - 180.0;
-              double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
-              double lon1 = (x1T / n) * 360.0 - 180.0;
-              double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
-
-              int sx0, sy0, sx1, sy1;
-              projectCoord(lat0, lon0, sx0, sy0);
-              projectCoord(lat1, lon1, sx1, sy1);
-              clipAndDrawLine(sx0, sy0, sx1, sy1, waterColor, 2);
-            }
+            int sx0, sy0, sx1, sy1;
+            projectCoord(lat0, lon0, sx0, sy0);
+            projectCoord(lat1, lon1, sx1, sy1);
+            clipAndDrawLine(sx0, sy0, sx1, sy1, waterColor, 3);
           }
         }
+      }
 
-        // Pass B: Residential roads
-        for (uint16_t f = 0; f < hdr->featureCount; f++) {
-          uint8_t ft = feats[f].type;
-          if (ft == FEAT_RESIDENTIAL || ft == FEAT_CYCLEWAY) {
-            uint8_t cnt = feats[f].pointCount;
-            uint16_t off = feats[f].pointOffset;
-            for (uint8_t k = 1; k < cnt; k++) {
-              double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
-              double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
-              double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
-              double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
+      // Pass B: Residential / minor roads
+      for (uint16_t f = 0; f < featCount; f++) {
+        uint8_t ft = feats[f].type;
+        if (ft == FEAT_RESIDENTIAL || ft == FEAT_CYCLEWAY) {
+          uint8_t cnt = feats[f].pointCount;
+          uint16_t off = feats[f].pointOffset;
+          for (uint8_t k = 1; k < cnt; k++) {
+            double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
+            double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
+            double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
+            double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
 
-              double lon0 = (x0T / n) * 360.0 - 180.0;
-              double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
-              double lon1 = (x1T / n) * 360.0 - 180.0;
-              double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
+            double lon0 = (x0T / n) * 360.0 - 180.0;
+            double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
+            double lon1 = (x1T / n) * 360.0 - 180.0;
+            double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
 
-              int sx0, sy0, sx1, sy1;
-              projectCoord(lat0, lon0, sx0, sy0);
-              projectCoord(lat1, lon1, sx1, sy1);
-              clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 1);
-            }
+            int sx0, sy0, sx1, sy1;
+            projectCoord(lat0, lon0, sx0, sy0);
+            projectCoord(lat1, lon1, sx1, sy1);
+            clipAndDrawLine(sx0, sy0, sx1, sy1, minorRoadColor, 2);
           }
         }
+      }
 
-        // Pass C: Major / Primary roads (corridors)
-        for (uint16_t f = 0; f < hdr->featureCount; f++) {
-          uint8_t ft = feats[f].type;
-          if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
-            uint8_t cnt = feats[f].pointCount;
-            uint16_t off = feats[f].pointOffset;
-            for (uint8_t k = 1; k < cnt; k++) {
-              double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
-              double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
-              double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
-              double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
+      // Pass C: Major / Primary corridors (white with gray border)
+      for (uint16_t f = 0; f < featCount; f++) {
+        uint8_t ft = feats[f].type;
+        if (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY) {
+          uint8_t cnt = feats[f].pointCount;
+          uint16_t off = feats[f].pointOffset;
+          for (uint8_t k = 1; k < cnt; k++) {
+            double x0T = (double)tx + (double)pts[off + k - 1].u / 4096.0;
+            double y0T = (double)ty + (double)pts[off + k - 1].v / 4096.0;
+            double x1T = (double)tx + (double)pts[off + k].u / 4096.0;
+            double y1T = (double)ty + (double)pts[off + k].v / 4096.0;
 
-              double lon0 = (x0T / n) * 360.0 - 180.0;
-              double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
-              double lon1 = (x1T / n) * 360.0 - 180.0;
-              double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
+            double lon0 = (x0T / n) * 360.0 - 180.0;
+            double lat0 = atan(sinh(PI * (1.0 - 2.0 * (y0T / n)))) * (180.0 / PI);
+            double lon1 = (x1T / n) * 360.0 - 180.0;
+            double lat1 = atan(sinh(PI * (1.0 - 2.0 * (y1T / n)))) * (180.0 / PI);
 
-              int sx0, sy0, sx1, sy1;
-              projectCoord(lat0, lon0, sx0, sy0);
-              projectCoord(lat1, lon1, sx1, sy1);
-              clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 3);
-              clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 1);
-            }
+            int sx0, sy0, sx1, sy1;
+            projectCoord(lat0, lon0, sx0, sy0);
+            projectCoord(lat1, lon1, sx1, sy1);
+            clipAndDrawLine(sx0, sy0, sx1, sy1, majorBorder, 4);
+            clipAndDrawLine(sx0, sy0, sx1, sy1, majorCorridor, 2);
           }
         }
       }
     }
   }
 
-  // 2. Draw GPX Route on Top in Vibrant Orange (3px)
+  // --- DRAW GPX ROUTE VECTOR (Vibrant Orange, 3px or 4px) ---
   const uint16_t routeOrange = 0xFD00; // #FF7A00
+  int routeW = (previewZoomLevel > 0) ? 4 : 3;
   for (int i = 1; i < previewLen; i++) {
     int sx0, sy0, sx1, sy1;
     projectCoord(preview[i - 1].lat, preview[i - 1].lon, sx0, sy0);
     projectCoord(preview[i].lat, preview[i].lon, sx1, sy1);
-    clipAndDrawLine(sx0, sy0, sx1, sy1, routeOrange, 3);
+    clipAndDrawLine(sx0, sy0, sx1, sy1, routeOrange, routeW);
   }
 
   // Start (Green) & End (Red) Badges
@@ -578,12 +585,56 @@ static void previewDraw(int y, int h) {
   projectCoord(preview[0].lat, preview[0].lon, sx, sy);
   projectCoord(preview[previewLen - 1].lat, preview[previewLen - 1].lon, ex, ey);
   if (sy >= clipY1 && sy <= clipY2 && sx >= clipX1 && sx <= clipX2) {
-    display.fillCircle(sx, sy, 4, 0x07E0);
-    display.drawCircle(sx, sy, 4, 0xFFFF);
+    display.fillCircle(sx, sy, 5, 0x07E0);
+    display.drawCircle(sx, sy, 5, 0xFFFF);
+    display.drawCircle(sx, sy, 6, 0x0000);
   }
   if (ey >= clipY1 && ey <= clipY2 && ex >= clipX1 && ex <= clipX2) {
-    display.fillCircle(ex, ey, 4, 0xF800);
-    display.drawCircle(ex, ey, 4, 0xFFFF);
+    display.fillCircle(ex, ey, 5, 0xF800);
+    display.drawCircle(ex, ey, 5, 0xFFFF);
+    display.drawCircle(ex, ey, 6, 0x0000);
+  }
+
+  // --- HEADER & HINTS ON CARD ---
+  if (previewZoomLevel == 0) {
+    label(14, y + 6, "ROUTE PREVIEW", 1, 0x4208);
+    label(14, y + 18, "Overview", 1, uiMuted());
+    label(14, y + h - 14, "Tap + to inspect turns", 1, uiMuted());
+  } else {
+    label(14, y + 6, "STREET DETAIL", 1, 0x4208);
+    label(14, y + 18, (previewZoomLevel == 1 ? "1x Turn View" : "2x Close View"), 1, 0x02E0);
+    label(14, y + h - 14, "Drag to pan along route", 1, uiMuted());
+  }
+
+  // --- ZOOM BUTTONS (+ / - / Reset) at top-right corner ---
+  int btnX = cardX + cardW - 32; // 202
+  int btnW = 26, btnH = 24;
+
+  // 1. Plus Button (+)
+  int btnPlusY = y + 6;
+  display.fillRoundRect(btnX, btnPlusY, btnW, btnH, 4, (previewZoomLevel < 2) ? 0xFFFF : 0xE71C);
+  display.drawRoundRect(btnX, btnPlusY, btnW, btnH, 4, 0xCE79);
+  uint16_t plusCol = (previewZoomLevel < 2) ? 0x0000 : 0x8410;
+  display.drawFastHLine(btnX + 7, btnPlusY + 11, 12, plusCol);
+  display.drawFastHLine(btnX + 7, btnPlusY + 12, 12, plusCol);
+  display.drawFastVLine(btnX + 12, btnPlusY + 6, 12, plusCol);
+  display.drawFastVLine(btnX + 13, btnPlusY + 6, 12, plusCol);
+
+  // 2. Minus Button (-)
+  int btnMinusY = btnPlusY + 28;
+  display.fillRoundRect(btnX, btnMinusY, btnW, btnH, 4, (previewZoomLevel > 0) ? 0xFFFF : 0xE71C);
+  display.drawRoundRect(btnX, btnMinusY, btnW, btnH, 4, 0xCE79);
+  uint16_t minusCol = (previewZoomLevel > 0) ? 0x0000 : 0x8410;
+  display.drawFastHLine(btnX + 7, btnMinusY + 11, 12, minusCol);
+  display.drawFastHLine(btnX + 7, btnMinusY + 12, 12, minusCol);
+
+  // 3. Reset to Start Button (only shown when zoomed in)
+  if (previewZoomLevel > 0) {
+    int btnResetY = btnMinusY + 28;
+    display.fillRoundRect(btnX, btnResetY, btnW, btnH, 4, 0xFFFF);
+    display.drawRoundRect(btnX, btnResetY, btnW, btnH, 4, 0xCE79);
+    display.fillCircle(btnX + 13, btnResetY + 12, 4, 0x07E0);
+    display.drawCircle(btnX + 13, btnResetY + 12, 4, 0x0000);
   }
 }
 

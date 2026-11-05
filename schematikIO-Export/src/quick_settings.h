@@ -444,6 +444,41 @@ static void libraryTap(int x,int y){
       int row1Y = mapY + 188;
       int row2Y = row1Y + 42;
       int btnY = row2Y + 42;
+
+      // 1. Zoom + Button Tap
+      if (x >= 194 && x <= 234 && y >= mapY + 4 && y < mapY + 32) {
+        if (previewZoomLevel < 2) {
+          if (previewZoomLevel == 0 && previewLen > 0) {
+            previewPanLat = preview[0].lat;
+            previewPanLon = preview[0].lon;
+            g_mapCache.updatePosition(previewPanLat, previewPanLon);
+          }
+          previewZoomLevel++;
+          uiRevision++;
+        }
+        return;
+      }
+
+      // 2. Zoom - Button Tap
+      if (x >= 194 && x <= 234 && y >= mapY + 32 && y < mapY + 60) {
+        if (previewZoomLevel > 0) {
+          previewZoomLevel--;
+          uiRevision++;
+        }
+        return;
+      }
+
+      // 3. Reset to Ride Start Button Tap (when zoomed in)
+      if (previewZoomLevel > 0 && x >= 194 && x <= 234 && y >= mapY + 60 && y < mapY + 92) {
+        if (previewLen > 0) {
+          previewPanLat = preview[0].lat;
+          previewPanLon = preview[0].lon;
+          g_mapCache.updatePosition(previewPanLat, previewPanLon);
+          uiRevision++;
+        }
+        return;
+      }
+
       if(y >= btnY && y < btnY + 34 && x >= 6 && x <= 234){
         if(rideStarted){libraryMessage="Save current activity first";uiRevision++;return;}
         if(previewLen<2){libraryMessage="GPX missing or invalid";uiRevision++;return;}
@@ -462,6 +497,7 @@ static void libraryTap(int x,int y){
     librarySelectedSize=librarySizes[row];
     libraryMessage="";
     archiveScroll=0;
+    previewZoomLevel=0;previewPanLat=0.0;previewPanLon=0.0;
     loadArchive(librarySelection);
     uiRevision++;
   }
@@ -530,6 +566,7 @@ static void globalBack(){
     if(isLibrary()){
       if(librarySelection.length()){
         librarySelection="";libraryMessage="";archiveScroll=0;
+        previewZoomLevel=0;previewPanLat=0.0;previewPanLon=0.0;
       }else if(libraryPage>0){
         libraryPage--;loadLibrary();
       }else homePage=HOME_APPS;
@@ -1075,7 +1112,7 @@ static void pollQuickTouch() {
   static int startX=0,startY=0,startScroll=0,endX=0,endY=0;
   auto release=[&](){
     if(rootGesture && !sliderGesture && !moved)quickTap(endX,endY);
-    rootGesture=false;sliderGesture=false;held=false;candidateX=-1;
+    rootGesture=false;sliderGesture=false;mapPanGesture=false;held=false;candidateX=-1;
   };
   if (!touchReady || millis() - poll < 25) return;
   poll = millis();
@@ -1125,9 +1162,19 @@ static void pollQuickTouch() {
         int offset=constrain(startScroll+startY-y,0,115);
         if(offset!=gpsScroll){gpsScroll=offset;uiRevision++;}
       } else if(isLibrary() && librarySelection.length()){
-        int maxS = (homePage == HOME_ROUTES) ? 120 : ARCHIVE_MAX_SCROLL;
-        int offset=constrain(startScroll+startY-y,0,maxS);
-        if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
+        if (mapPanGesture) {
+          double co = cos(radians(startPanLat));
+          double dXm = (x - startX) / max(0.0001, previewScale);
+          double dYm = (y - startY) / max(0.0001, previewScale);
+          previewPanLon = startPanLon - (dXm / max(0.0001, co * 111320.0));
+          previewPanLat = startPanLat + (dYm / 111320.0);
+          g_mapCache.updatePosition(previewPanLat, previewPanLon);
+          uiRevision++;
+        } else {
+          int maxS = (homePage == HOME_ROUTES) ? 120 : ARCHIVE_MAX_SCROLL;
+          int offset=constrain(startScroll+startY-y,0,maxS);
+          if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
+        }
       } else {
         int offset=constrain(startScroll+startY-y,0,72);
         if(offset!=quickScroll){quickScroll=offset;uiRevision++;}
@@ -1153,6 +1200,14 @@ static void pollQuickTouch() {
     } else if(isLibrary() && librarySelection.length() && y>=29 && y<290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=archiveScroll;
       sliderGesture=false;
+      int mapY = 34 - archiveScroll + 34;
+      mapPanGesture = (homePage == HOME_ROUTES && previewZoomLevel > 0 &&
+                       x >= 6 && x <= 234 && y >= mapY && y < mapY + 180 &&
+                       !(x >= 194 && y < mapY + 95));
+      if (mapPanGesture) {
+        startPanLat = previewPanLat;
+        startPanLon = previewPanLon;
+      }
     } else quickTap(x, y);
   }
 }

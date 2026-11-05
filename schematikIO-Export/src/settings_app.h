@@ -1,4 +1,5 @@
 #pragma once
+static void drawGlobalNav();
 RTC_DATA_ATTR static uint32_t rtc_last_epoch = 0;
 RTC_DATA_ATTR static uint32_t rtc_last_millis = 0;
 
@@ -559,10 +560,10 @@ static void drawSettingsApp() {
       CustomIcon::powerIcon
     };
 
-    display.fillRect(0, 52, 240, 234, uiBg());
+    display.fillRect(0, 29, 240, 261, uiBg());
     for (int i = 0; i < 6; i++) {
       int y = 56 - settingsScroll + i * 54;
-      if (y + 48 < 52 || y > 286) continue;
+      if (y + 48 <= 56 || y >= 286) continue;
       display.fillRoundRect(6, y, 228, 48, 12, uiCard());
       drawCustomIcon(display, 16, y + 13, uiFg(), icons[i], 22, 22);
       label(46, y + 9, titles[i], 1, uiFg());
@@ -570,9 +571,14 @@ static void drawSettingsApp() {
       drawCustomIcon(display, 212, y + 16, uiMuted(), CustomIcon::goNextIcon, 16, 16);
     }
 
-    // Fixed header overlay
-    display.fillRect(0, 29, 240, 25, uiBg());
+    // Fixed header overlay (covers y = 29..55, clean transition)
+    display.fillRect(0, 29, 240, 27, uiBg());
     drawScreenHeader("SETTINGS", CustomIcon::configureIcon, true);
+
+    // Redraw fixed status bar and navigation bar to prevent any bleed
+    statusBar(true, false);
+    display.fillRect(0, 286, 240, 34, uiBg());
+    drawGlobalNav();
   }
   else if (settingsPage == SET_THEME) {
     drawScreenHeader("THEME", CustomIcon::themeSwitcherIcon, true);
@@ -825,7 +831,7 @@ static void tapSettings(int x, int y) {
   }
 
   if (settingsPage == SET_MAIN) {
-    if (x >= 6 && x < 234) {
+    if (x >= 6 && x < 234 && y >= 56 && y < 286) {
       int yScrolled = y + settingsScroll;
       int item = -1;
       for (int i = 0; i < 6; i++) {

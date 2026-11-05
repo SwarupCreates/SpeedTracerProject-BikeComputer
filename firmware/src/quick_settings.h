@@ -1396,7 +1396,7 @@ static void pollQuickTouch() {
           if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
         }
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
-        int offset=constrain(startScroll+startY-y,0,80);
+        int offset=constrain(startScroll+startY-y,0,88);
         if(offset!=settingsScroll){settingsScroll=offset;uiRevision++;}
       } else {
         int offset=constrain(startScroll+startY-y,0,140);
@@ -1443,7 +1443,7 @@ static void pollQuickTouch() {
         startPanLat = previewPanLat;
         startPanLon = previewPanLon;
       }
-    } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 29 && y < 286){
+    } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 54 && y < 286){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;
       sliderGesture=false;
     } else quickTap(x, y);

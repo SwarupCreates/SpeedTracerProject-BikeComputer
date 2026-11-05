@@ -1,4 +1,5 @@
 #pragma once
+#include "smooth_digits48.h"
 // CST3530 protocol follows Waveshare's esp_lcd_touch_cst3530 driver.
 // https://github.com/waveshareteam/Waveshare-ESP32-components
 TwoWire touchBus(1);
@@ -518,40 +519,42 @@ static void updateRideCountdown() {
 static void drawBigNumber(int rightX, int y, int value, uint16_t fg = 0xFFFF) {
   String s = String(value);
   int totalAdvance = 0;
-  for (unsigned char c : s) {
-    if (c >= 32 && c <= 126) {
-      totalAdvance += smoothFont28.glyphs[c - 32].advance * 2;
+  for (unsigned int k = 0; k < s.length(); k++) {
+    char ch = s[k];
+    if (ch >= '0' && ch <= '9') {
+      totalAdvance += smoothDigitGlyphs48[ch - '0'].advance;
     }
   }
   int pen = (rightX * 16) - totalAdvance;
-  for (unsigned char c : s) {
-    if (c < 32 || c > 126) c = '?';
-    const auto& g = smoothFont28.glyphs[c - 32];
-    int gx = (pen + 8) / 16 + g.x * 2;
-    int gy = y + (smoothFont28.cap - g.h - g.y) * 2;
+  for (unsigned int k = 0; k < s.length(); k++) {
+    char ch = s[k];
+    if (ch < '0' || ch > '9') continue;
+    const auto& g = smoothDigitGlyphs48[ch - '0'];
+    int gx = (pen + 8) / 16 + g.x;
+    int gy = y + g.y;
     for (int row = 0; row < g.h; row++) {
       for (int col = 0; col < g.w; col++) {
         int i = row * g.w + col;
-        uint8_t bits = smoothFont28.bits[g.offset + i / 2];
+        uint8_t bits = pgm_read_byte(&smoothDigitBits48[g.offset + i / 2]);
         int a = (bits >> ((i & 1) ? 0 : 4)) & 15;
         if (a) {
-          uint16_t colr = blendText(fg, 0x0000, a);
-          display.fillRect(gx + col * 2, gy + row * 2, 2, 2, colr);
+          uint16_t bg = display.backgroundPixel(gx + col, gy + row);
+          display.drawPixel(gx + col, gy + row, blendText(fg, bg, a));
         }
       }
     }
-    pen += g.advance * 2;
+    pen += g.advance;
   }
 }
 
-static void drawWhiteIcon2x(int x, int y, CustomIcon icon) {
+static void drawWhiteIcon2x(int x, int y, CustomIcon icon, uint16_t bg = 0x2564) {
   const int w = customWidths[(int)icon], h = customHeights[(int)icon];
   const uint8_t *mask = customMasks[(int)icon];
   for (int r = 0; r < h; r++) {
     for (int c = 0; c < w; c++) {
       uint8_t a = mask[r * w + c];
       if (a < 24) continue;
-      uint16_t colr = blendText(0xFFFF, 0x2564, a >> 4);
+      uint16_t colr = blendText(0xFFFF, bg, a >> 4);
       display.fillRect(x + c * 2, y + r * 2, 2, 2, colr);
     }
   }
@@ -559,38 +562,38 @@ static void drawWhiteIcon2x(int x, int y, CustomIcon icon) {
 
 static void drawGpsRadarScreen() {
   const int cx = 120;
-  const int cy = 132 - gpsScroll;
+  const int cy = 116 - gpsScroll;
   const uint32_t t = millis();
 
-  // Outer ring (R=88): dark forest green fill, outline
-  display.fillCircle(cx, cy, 88, 0x0180);
-  display.drawCircle(cx, cy, 88, 0x0340);
+  // Theme-aware color palette
+  uint16_t outerFill, middleFill, radarLineColor, centerDiscColor;
+  if (darkTheme) {
+    outerFill = 0x0040;        // subtle deep dark green (0, 8, 0)
+    middleFill = 0x00A0;       // slightly lighter dark green (0, 20, 0)
+    radarLineColor = 0x3620;   // vibrant neon green outline and sweep line (#34C200)
+    centerDiscColor = 0x3620;  // solid neon green center disc
+  } else {
+    outerFill = 0xEFBD;        // soft pastel mint tint (238, 246, 238)
+    middleFill = 0xD79A;       // deeper pastel mint (213, 242, 213)
+    radarLineColor = 0x24C0;   // rich crisp green outline and sweep line (32, 153, 0)
+    centerDiscColor = 0x24C0;  // rich green center disc
+  }
 
-  // Middle ring (R=58): dark green fill, outline
-  display.fillCircle(cx, cy, 58, 0x0280);
-  display.drawCircle(cx, cy, 58, 0x04C0);
+  // Outer ring (R=88): fill + boundary outline
+  display.fillCircle(cx, cy, 88, outerFill);
+  display.drawCircle(cx, cy, 88, radarLineColor);
 
-  // Rotating Radar Sweep Beam (radius 28 to 88)
+  // Middle ring (R=56): fill (no inner outline, matches Figma)
+  display.fillCircle(cx, cy, 56, middleFill);
+
+  // Single Rotating Radar Sweep Line (radius 26 to 88)
   int deg = (t / 8) % 360;
-  for (int k = 16; k >= 1; k--) {
-    int aDeg = (deg - k + 360) % 360;
-    float rad = radians((float)aDeg);
-    int x1 = cx + (int)(28.0f * cosf(rad));
-    int y1 = cy + (int)(28.0f * sinf(rad));
-    int x2 = cx + (int)(88.0f * cosf(rad));
-    int y2 = cy + (int)(88.0f * sinf(rad));
-    int g = (18 - k) * 3;
-    uint16_t c = (uint16_t)(g << 5);
-    display.drawLine(x1, y1, x2, y2, c);
-  }
-  {
-    float rad = radians((float)deg);
-    int x1 = cx + (int)(28.0f * cosf(rad));
-    int y1 = cy + (int)(28.0f * sinf(rad));
-    int x2 = cx + (int)(88.0f * cosf(rad));
-    int y2 = cy + (int)(88.0f * sinf(rad));
-    display.drawLine(x1, y1, x2, y2, 0x2564);
-  }
+  float rad = radians((float)deg);
+  int x1 = cx + (int)(26.0f * cosf(rad));
+  int y1 = cy + (int)(26.0f * sinf(rad));
+  int x2 = cx + (int)(88.0f * cosf(rad));
+  int y2 = cy + (int)(88.0f * sinf(rad));
+  display.drawLine(x1, y1, x2, y2, radarLineColor);
 
   // Satellite Dots
   struct SatPoint { uint8_t r; uint16_t deg; };
@@ -608,55 +611,52 @@ static void drawGpsRadarScreen() {
     float sRad = radians((float)satPoints[i].deg);
     int sx = cx + (int)(satPoints[i].r * cosf(sRad));
     int sy = cy + (int)(satPoints[i].r * sinf(sRad));
-    display.fillCircle(sx, sy, 3, 0x2564);
-    display.drawPixel(sx, sy, 0xFFFF);
+    display.fillCircle(sx, sy, 3, radarLineColor);
   }
 
-  // Center Disc: solid vibrant lime green with outline
-  display.fillCircle(cx, cy, 28, 0x2564);
-  display.drawCircle(cx, cy, 28, 0x3666);
+  // Center Disc: solid vibrant green disc (R=26)
+  display.fillCircle(cx, cy, 26, centerDiscColor);
   // Center White Satellite Icon (2x scaled antialiased)
-  drawWhiteIcon2x(cx - 16, cy - 16, CustomIcon::satelliteIcon);
+  drawWhiteIcon2x(cx - 16, cy - 16, CustomIcon::satelliteIcon, centerDiscColor);
 
   // Content Below Radar
-  int textY = 226 - gpsScroll;
-  label(20, textY, "LOCKED", 2, 0xFFFF);
-  label(20, textY + 20, "SATELLITES", 2, 0xFFFF);
-  drawBigNumber(220, textY - 2, sats, 0xFFFF);
+  int textY = 230 - gpsScroll;
+  label(20, textY, "LOCKED", 2, uiFg());
+  label(20, textY + 18, "SATELLITES", 2, uiFg());
+  drawBigNumber(220, textY - 2, sats, uiFg());
 
   // Coordinates (visible when scrolled down)
-  int latY = 286 - gpsScroll;
+  int latY = 290 - gpsScroll;
   if (latY < 280 && latY > 24) {
-    centeredLabel(0, latY, 240, "LATITUDE", 1, 0x8410);
+    centeredLabel(0, latY, 240, "LATITUDE", 1, uiMuted());
     bool hasCoord = gps.location.isValid() && gps.location.age() < 3000;
     String latStr = hasCoord ? String(gps.location.lat(), 6) : ((ride.lat != 0.0f) ? String(ride.lat, 6) : "--.------");
-    centeredLabel(0, latY + 18, 240, latStr, 2, 0xFFFF);
+    centeredLabel(0, latY + 18, 240, latStr, 2, uiFg());
   }
-  int lonY = 342 - gpsScroll;
+  int lonY = 348 - gpsScroll;
   if (lonY < 280 && lonY > 24) {
-    centeredLabel(0, lonY, 240, "LONGITUDE", 1, 0x8410);
+    centeredLabel(0, lonY, 240, "LONGITUDE", 1, uiMuted());
     bool hasCoord = gps.location.isValid() && gps.location.age() < 3000;
     String lonStr = hasCoord ? String(gps.location.lng(), 6) : ((ride.lon != 0.0f) ? String(ride.lon, 6) : "--.------");
-    centeredLabel(0, lonY + 18, 240, lonStr, 2, 0xFFFF);
+    centeredLabel(0, lonY + 18, 240, lonStr, 2, uiFg());
   }
 
   // Overlay clean top status bar and bottom nav bar
   statusBar(true, false);
   drawGlobalNav();
 }
-
-static bool drawLifecycleScreen() {
+ static bool drawLifecycleScreen() {
   static String previous;
   String state;
   if(shutdownDialog) state=shutdownPending?"release":"shutdown";
-  else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector);
+  else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
   else if(countdownStart) state="count"+String(3-min(2UL,(millis()-countdownStart)/1000));
   else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
   if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart){previous="";return false;}
   if(state.isEmpty()){previous="";return false;}
   if(state==previous)return true;
   previous=state;
-  display.fillScreen(0);
+  display.fillScreen(uiBg());
   if(shutdownDialog) {
     label(24,72,"SHUT DOWN?",2,0xFFFF);
     label(16,116,"Current activity will be saved",1,0xFFFF);

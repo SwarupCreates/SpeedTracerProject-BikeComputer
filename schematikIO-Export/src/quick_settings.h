@@ -4,6 +4,11 @@
 // https://github.com/waveshareteam/Waveshare-ESP32-components
 TwoWire touchBus(1);
 bool touchReady = false, quickOpen = false, ridePaused = false;
+extern bool autoPauseEnabled, autoPaused;
+extern uint32_t autoPauseStartMs, nearZeroSpeedStartMs, autoPauseOverrideGraceMs;
+extern int controlSliderOffset;
+extern bool controlSliderDragging;
+extern int controlSliderStartX;
 uint32_t pauseStart = 0;
 int quickDetail = 0;
 int quickScroll=0;
@@ -2287,6 +2292,23 @@ static void quickTap(int x, int y) {
     return;
   }
   if (!quickOpen) {
+    if (autoPaused && rideStarted) {
+      // Tap on Override pill (y = 220..286)
+      if (y >= 220 && y <= 286 && x >= 8 && x <= 232) {
+        autoPaused = false;
+        if (autoPauseStartMs > 0) {
+          rideStartMs += (millis() - autoPauseStartMs);
+          autoPauseStartMs = 0;
+        }
+        autoPauseOverrideGraceMs = millis() + 15000;
+        nearZeroSpeedStartMs = 0;
+        distAnchorLat = distAnchorLon = 0.0f;
+        fitEvent(0);
+        uiRevision++;
+        return;
+      }
+      return;
+    }
     if (currentScreen == SCR_CONTROLS) {
       if (activityEndConfirm) {
         if (y >= 150 && y <= 210) {
@@ -2310,24 +2332,29 @@ static void quickTap(int x, int y) {
         return;
       }
 
-      if (y >= 106 && y < 165 && x >= 6 && x < 234) {
-        if (!rideStarted) requestRideStart();
-        else toggleRide();
+      // Row 2: Auto Pause Activity toggle (y = 102..156)
+      if (y >= 102 && y < 156 && x >= 8 && x < 232) {
+        autoPauseEnabled = !autoPauseEnabled;
+        Preferences p;
+        if (p.begin("cyclo", false)) {
+          p.putBool("autoPause", autoPauseEnabled);
+          p.end();
+        }
+        if (!autoPauseEnabled && autoPaused) {
+          autoPaused = false;
+          if (autoPauseStartMs > 0) {
+            rideStartMs += (millis() - autoPauseStartMs);
+            autoPauseStartMs = 0;
+          }
+        }
         uiRevision++;
         return;
       }
 
-      if (y >= 170 && y < 228 && x >= 6 && x < 234) {
-        if (rideStarted) {
-          activityEndConfirm = true;
-          uiRevision++;
-        }
-        return;
-      }
-
-      if (y >= 234 && y < 285 && x >= 6 && x < 234) {
-        runningMode = !runningMode;
-        saveActivityConfig();
+      // Row 3: Pause / Resume Ride (y = 166..220)
+      if (y >= 166 && y < 220 && x >= 8 && x < 232) {
+        if (!rideStarted) requestRideStart();
+        else toggleRide();
         uiRevision++;
         return;
       }
@@ -2472,6 +2499,16 @@ static void pollQuickTouch() {
       rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
       return;
     }
+    if (controlSliderDragging) {
+      if (controlSliderOffset <= -85) {
+        activityEndConfirm = true;
+      }
+      controlSliderOffset = 0;
+      controlSliderDragging = false;
+      uiRevision++;
+      rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
+      return;
+    }
     if(rootGesture && !sliderGesture) {
       if (welcomeOpen && !quickOpen && homePage == HOME_MAIN) {
         int dx = endX - startX;
@@ -2578,6 +2615,9 @@ static void pollQuickTouch() {
     else if(homeSliderDragging){
       homeSliderOffset = constrain(x - homeSliderStartX, 0, 116);
       uiRevision++;
+    } else if(controlSliderDragging){
+      controlSliderOffset = constrain(x - controlSliderStartX, -116, 0);
+      uiRevision++;
     } else if(moved){
       if(gpsWaiting || gpsRadarInspector){
         int offset=constrain(startScroll+startY-y,0,128);
@@ -2682,6 +2722,12 @@ static void pollQuickTouch() {
         homeSliderStartX = x;
         homeSliderOffset = 0;
       }
+    } else if(!welcomeOpen && !quickOpen && currentScreen == SCR_CONTROLS && y >= 226 && y < 288 && x >= 110) {
+      rootGesture = true; moved = false; startX = endX = x; startY = endY = y;
+      sliderGesture = false;
+      controlSliderDragging = true;
+      controlSliderStartX = x;
+      controlSliderOffset = 0;
     } else quickTap(x, y);
   }
 }

@@ -5,7 +5,7 @@
 // High-definition alpha mask renderer with edge-contrast sharpening.
 // Samples directly from customMasks with centered subpixel interpolation,
 // eliminating blur and dark halos.
-static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, CustomIcon icon, int targetW = 0, int targetH = 0, bool flipV = false) {
+static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, CustomIcon icon, int targetW = 0, int targetH = 0, bool flipV = false, bool flipH = false) {
   const int iconIdx = (int)icon;
   if (iconIdx < 0 || iconIdx >= (int)(sizeof(customMasks) / sizeof(customMasks[0]))) return;
   const uint8_t *mask = customMasks[iconIdx];
@@ -29,7 +29,8 @@ static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, Cust
       int yr = v_fp & 255;
 
       for (int c = 0; c < targetW; c++) {
-        int u_fp = ((c * 2 + 1) * w * 128) / targetW - 128;
+        int effective_c = flipH ? (targetW - 1 - c) : c;
+        int u_fp = ((effective_c * 2 + 1) * w * 128) / targetW - 128;
         if (u_fp < 0) u_fp = 0;
         int max_u = (w - 1) << 8;
         if (u_fp > max_u) u_fp = max_u;
@@ -72,7 +73,8 @@ static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, Cust
   for (int r = 0; r < h; r++) {
     int src_r = flipV ? (h - 1 - r) : r;
     for (int c = 0; c < w; c++) {
-      int a = mask[src_r * w + c];
+      int src_c = flipH ? (w - 1 - c) : c;
+      int a = mask[src_r * w + src_c];
       if (a < 24) continue;
       if (a > 192) a = 255;
       else a = (a - 24) * 255 / (192 - 24);
@@ -94,5 +96,9 @@ static void drawCustomIcon(Adafruit_GFX &gfx, int x, int y, uint16_t color, Cust
 }
 
 static inline void drawCustomIconFlippedV(Adafruit_GFX &gfx, int x, int y, uint16_t color, CustomIcon icon, int targetW = 0, int targetH = 0) {
-  drawCustomIcon(gfx, x, y, color, icon, targetW, targetH, true);
+  drawCustomIcon(gfx, x, y, color, icon, targetW, targetH, true, false);
+}
+
+static inline void drawCustomIconFlippedH(Adafruit_GFX &gfx, int x, int y, uint16_t color, CustomIcon icon, int targetW = 0, int targetH = 0) {
+  drawCustomIcon(gfx, x, y, color, icon, targetW, targetH, false, true);
 }

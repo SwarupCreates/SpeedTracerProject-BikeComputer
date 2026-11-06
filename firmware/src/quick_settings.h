@@ -953,6 +953,7 @@ static void toggleRide() {
     if(!beginActivityFile()){uiRevision++;return;}
     distAccum=0; trackLen=0; ride.distanceKm=0;ride.elapsedSec=0;
     ride.avgSpeedKmh=0;ride.maxSpeedKmh=0;ride.maxPowerW=0;
+    resetMaxSpeedTracker();
     hrSum=powerSum=0;hrSamples=powerSamples=0;hrMax=0;lastLat=lastLon=0;
     rideStarted = true;
     rideStartMs = millis();

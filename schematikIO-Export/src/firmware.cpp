@@ -602,10 +602,90 @@ static bool beginActivityFile() {
   if(!activityFile){activityMessage="SD open failed";return false;}
   fitBegin();archiveBegin();activityMessage="Recording FIT to SD";return true;
 }
+static float topPeaks[4] = {0, 0, 0, 0};
+static int peakCount = 0;
+static float speedHist[3] = {0, 0, 0};
+static int histCount = 0;
+
+static void resetMaxSpeedTracker() {
+  for (int i = 0; i < 4; i++) topPeaks[i] = 0.0f;
+  for (int i = 0; i < 3; i++) speedHist[i] = 0.0f;
+  peakCount = 0;
+  histCount = 0;
+  ride.maxSpeedKmh = 0.0f;
+}
+
+extern bool ridePaused;
+static void updateMaxSpeed(float currentSpeed) {
+  if (!rideStarted || ridePaused) return;
+
+  float minMovingSpeed = runningMode ? 2.5f : 2.0f;
+  float gaugeMax = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
+
+  // Reject speeds below moving threshold (idle) or above plausible physical maximum
+  if (currentSpeed < minMovingSpeed || currentSpeed > gaugeMax * 1.3f) {
+    histCount = 0; // Break sustained chain when in idle/deadzone
+    return;
+  }
+
+  // Physical acceleration limit: human motion cannot jump more than 10 km/h in a single second from standstill
+  if (histCount > 0 && abs(currentSpeed - speedHist[0]) > 10.0f) {
+    return; // Discard erratic single-second GPS jump
+  }
+
+  // Shift history
+  speedHist[2] = speedHist[1];
+  speedHist[1] = speedHist[0];
+  speedHist[0] = currentSpeed;
+  if (histCount < 3) histCount++;
+
+  // Must have at least 3 consecutive seconds of actual movement
+  if (histCount < 3) return;
+
+  // 3-second sustained speed
+  float sustained = (speedHist[0] + speedHist[1] + speedHist[2]) / 3.0f;
+
+  // Track top 4 sustained peaks
+  if (peakCount == 0) {
+    topPeaks[0] = sustained;
+    peakCount = 1;
+  } else {
+    if (peakCount < 4) {
+      topPeaks[peakCount++] = sustained;
+      // Sort descending
+      for (int i = 0; i < peakCount - 1; i++) {
+        for (int j = i + 1; j < peakCount; j++) {
+          if (topPeaks[j] > topPeaks[i]) {
+            float tmp = topPeaks[i]; topPeaks[i] = topPeaks[j]; topPeaks[j] = tmp;
+          }
+        }
+      }
+    } else if (sustained > topPeaks[3]) {
+      topPeaks[3] = sustained;
+      // Sort descending
+      for (int i = 2; i >= 0; i--) {
+        if (topPeaks[i+1] > topPeaks[i]) {
+          float tmp = topPeaks[i]; topPeaks[i] = topPeaks[i+1]; topPeaks[i+1] = tmp;
+        }
+      }
+    }
+  }
+
+  // Calculate mean average of top maxes
+  if (peakCount >= 3) {
+    float sum = 0.0f;
+    for (int i = 0; i < peakCount; i++) sum += topPeaks[i];
+    ride.maxSpeedKmh = sum / (float)peakCount;
+  } else {
+    ride.maxSpeedKmh = topPeaks[0];
+  }
+}
+
 static void saveActivity() {
   if(activityFile){bool ok=fitFinish();archiveFinish(ok);activityMessage=ok?"Saved "+String(activityPoints)+" FIT points":"FIT save failed";}
   else activityMessage="No open activity to save";
   rideStarted=false;
+  resetMaxSpeedTracker();
   uiRevision++;
 }
 static bool activityEndConfirm = false;
@@ -1775,6 +1855,7 @@ void loop() {
   // Sample only fresh, measured data, at one-second intervals.
   if(millis()-statsMs>=1000){uint32_t dt=millis()-statsMs;statsMs=millis();
     if(rideStarted&&!ridePaused){
+      updateMaxSpeed(ride.speedKmh);
       if(samplesFile){samplesFile.print(ride.elapsedSec);samplesFile.print(',');if(bleHRReady)samplesFile.print(bleHR);samplesFile.print(',');if(speedAvailable())samplesFile.print(ride.speedKmh,2);samplesFile.println();}
       if(bleHRReady&&cfg.massConfirmed&&cfg.ageYears>=18&&cfg.ageYears<=80&&cfg.calorieSex&&dt<=2000){
         float kj=cfg.calorieSex==1 ? -55.0969f+0.6309f*bleHR+0.1988f*cfg.riderMassKg+0.2017f*cfg.ageYears : -20.4022f+0.4472f*bleHR-0.1263f*cfg.riderMassKg+0.074f*cfg.ageYears;
@@ -1790,10 +1871,6 @@ void loop() {
     ride.elapsedSec = (millis() - rideStartMs) / 1000;
     if (ride.elapsedSec > 0)
       ride.avgSpeedKmh = (distAccum / (float)ride.elapsedSec) * 3600.0f;
-  }
-  float gaugeMax = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
-  if (ride.speedKmh > ride.maxSpeedKmh && ride.speedKmh <= (gaugeMax * 1.5f)) {
-    ride.maxSpeedKmh = ride.speedKmh;
   }
   if (ride.powerW   > ride.maxPowerW)   ride.maxPowerW   = ride.powerW;
 

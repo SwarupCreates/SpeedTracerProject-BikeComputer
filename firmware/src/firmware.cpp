@@ -120,6 +120,7 @@ class CycleDisplay : public GFXcanvas16 {
  bool logoOverlay=false;
  bool logoLight=false;
  int logoX=0,logoY=0;
+ int logoW=BOOT_LOGO_WIDTH,logoH=BOOT_LOGO_HEIGHT;
  uint8_t *compact=nullptr;
  // Ten neutral shades preserve card contrast and antialiased text even without PSRAM.
  static uint16_t palette(int i){
@@ -139,8 +140,11 @@ class CycleDisplay : public GFXcanvas16 {
    if(logoOverlay){
      int x=i%DISP_W-logoX;
      int y=i/DISP_W-logoY;
-     if(x>=0 && x<BOOT_LOGO_WIDTH && y>=0 && y<BOOT_LOGO_HEIGHT)
-       return pgm_read_word(&(logoLight?HOME_LOGO_LIGHT_DATA:BOOT_LOGO_DATA)[y*BOOT_LOGO_WIDTH+x]);
+     if(x>=0 && x<logoW && y>=0 && y<logoH){
+        int srcX=(logoW==BOOT_LOGO_WIDTH)?x:(x*BOOT_LOGO_WIDTH/logoW);
+        int srcY=(logoH==BOOT_LOGO_HEIGHT)?y:(y*BOOT_LOGO_HEIGHT/logoH);
+        return pgm_read_word(&(logoLight?HOME_LOGO_LIGHT_DATA:BOOT_LOGO_DATA)[srcY*BOOT_LOGO_WIDTH+srcX]);
+      }
    }
    return buffer?buffer[i]:palette((compact[i/2]>>((i&1)?0:4))&15);
  }
@@ -185,18 +189,22 @@ public:
    uint8_t v=pack(c);for(int r=max(0,int(y));r<min(DISP_H,int(y)+h);r++)putCompact(r*DISP_W+x,v);
  }
  uint16_t backgroundPixel(int x,int y)const{return (x>=0&&x<DISP_W&&y>=0&&y<DISP_H)?pixelAt(y*DISP_W+x):0;}
- void drawBrandLogo(int x,int y,bool light=false){
+ void drawBrandLogo(int x,int y,bool light=false,int targetW=0,int targetH=0){
    logoLight=light;
    logoX=x;logoY=y;logoOverlay=true;
+   logoW=(targetW>0)?targetW:BOOT_LOGO_WIDTH;
+   logoH=(targetH>0)?targetH:BOOT_LOGO_HEIGHT;
    const uint16_t* data=light?HOME_LOGO_LIGHT_DATA:BOOT_LOGO_DATA;
    if(buffer){
-     for(int r=0;r<BOOT_LOGO_HEIGHT;r++){
+     for(int r=0;r<logoH;r++){
        int py=y+r;
        if(py<0 || py>=DISP_H)continue;
-       for(int c=0;c<BOOT_LOGO_WIDTH;c++){
+       int srcY=(logoH==BOOT_LOGO_HEIGHT)?r:(r*BOOT_LOGO_HEIGHT/logoH);
+       for(int c=0;c<logoW;c++){
          int px=x+c;
          if(px<0 || px>=DISP_W)continue;
-         buffer[py*DISP_W+px]=pgm_read_word(&data[r*BOOT_LOGO_WIDTH+c]);
+         int srcX=(logoW==BOOT_LOGO_WIDTH)?c:(c*BOOT_LOGO_WIDTH/logoW);
+         buffer[py*DISP_W+px]=pgm_read_word(&data[srcY*BOOT_LOGO_WIDTH+srcX]);
        }
      }
    }

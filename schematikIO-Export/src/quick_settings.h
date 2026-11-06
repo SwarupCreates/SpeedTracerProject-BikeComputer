@@ -26,6 +26,9 @@ int settingsScroll=0;
 enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH };
 HomePage homePage=HOME_MAIN;
 bool homeHeroClock = false;
+static int homeSliderOffset = 0;
+static bool homeSliderDragging = false;
+static int homeSliderStartX = 0;
 bool activityMapNorthUp = false;
 int appsScroll = 0;
 const int MAX_APPS_SCROLL = 220;
@@ -1844,9 +1847,9 @@ static void drawHomeClockWidget() {
     local.tm_hour = (sec / 3600UL) % 24;
     local.tm_min = (sec / 60UL) % 60;
     local.tm_sec = sec % 60;
-    local.tm_mday = 1;
-    local.tm_mon = 0;
-    local.tm_year = 124;
+    local.tm_mday = 6;
+    local.tm_mon = 10;
+    local.tm_year = 126;
   }
 
   const char* const days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -1854,19 +1857,23 @@ static void drawHomeClockWidget() {
   int h12 = local.tm_hour % 12;
   if (h12 == 0) h12 = 12;
 
+  char timeBuf[16];
+  snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", local.tm_hour, local.tm_min);
+
   String dateStr;
   if (timeValid) {
     dateStr = String(days[local.tm_wday]) + " " + String(local.tm_mday) + " " + String(months[local.tm_mon]) + ", " + String(1900 + local.tm_year);
   } else {
-    dateStr = "Waiting for time sync";
+    dateStr = "Friday 6 Nov, 2026";
   }
 
-  // Large 56px smooth digital clock centered at Y = 44
-  drawSmoothClock56(44, h12, local.tm_min, fg);
+  // Large smooth digits centered at Y = 38 (cap height ~20px, total visual height 28px)
+  centeredLabel(0, 38, DISP_W, timeBuf, 3, fg);
 
-  // Date subtitle centered at Y = 96 (size 0 = 12px smooth anti-aliased font)
-  centeredLabel(0, 96, DISP_W, dateStr, 0, fg);
+  // Date subtitle centered at Y = 74 (size 0 = 12px smooth font)
+  centeredLabel(0, 74, DISP_W, dateStr, 0, fg);
 }
+
 
 bool drawLifecycleScreen() {
   static String previous;
@@ -1912,25 +1919,54 @@ bool drawLifecycleScreen() {
     if (homeHeroClock) {
       drawHomeClockWidget();
     } else {
-      display.drawBrandLogo((DISP_W-BOOT_LOGO_WIDTH)/2,48,!darkTheme);
+      display.drawBrandLogo((DISP_W - 118) / 2, 40, !darkTheme, 118, 48);
     }
-    bool ready=gpsStartReady();
-    bool countValid=gpsDataReady && ((geprcGps.lastStatus && millis()-geprcGps.lastStatus<3000) || (gps.satellites.isValid() && gps.satellites.age()<3000));
-    uint16_t gpsFg=ready?(darkTheme?0x9E73:0x2400):gpsDataReady?(darkTheme?0xFFE0:0x8380):(darkTheme?0xFA6A:0x9800);
-    uint16_t gpsBg=ready?(darkTheme?0x0940:0xD753):gpsDataReady?(darkTheme?0x2920:0xFFF1):(darkTheme?0x3000:0xFDE7);
-    card(6,140,184,36,gpsBg);drawSatelliteIcon(display,16,150,gpsFg);
-    centeredLabel(38,154,144,countValid?String(startSatellites())+" SATELLITES"+(ready?" - READY":" - SEARCHING"):"NO GPS DATA AVAILABLE",1,gpsFg);
-    card(196,140,38,36,uiCard());
-    drawCustomIcon(display,207,150,uiFg(),runningMode?CustomIcon::bikeIcon:CustomIcon::runIcon);
-    card(6,182,228,66,0xF800);
-    label(22,195,rideStarted?(ridePaused?"Resume":"Active"):"Start",2,0xFFFF);label(22,219,runningMode?"Run":"Ride",2,0xFFFF);
-    drawCustomIcon(display,102,197,0xFFFF,runningMode?CustomIcon::runIconLarge:CustomIcon::bikeIconLarge);
-    label(165,209,"GO",2,0xFFFF);
-    drawCustomIcon(display,189,197,0xFFFF,CustomIcon::goNextIconLarge);
-    card(6,254,111,34,uiCard());drawCustomIcon(display,17,263,uiFg(),CustomIcon::allAppsIcon);
-    centeredLabel(36,266,77,"ALL APPS",1);
-    card(123,254,111,34,uiCard());drawCustomIcon(display,134,263,uiFg(),CustomIcon::folderIcon);
-    centeredLabel(153,266,77,"MY FILES",1);
+
+    // Row 1: Two Clean Pill Cards (108x54, R=27, Y=100..154)
+    bool ready = gpsStartReady();
+    int sats = startSatellites();
+    bool countValid = gpsDataReady && ((geprcGps.lastStatus && millis() - geprcGps.lastStatus < 3000) || (gps.satellites.isValid() && gps.satellites.age() < 3000));
+    uint16_t gpsBg = darkTheme ? (ready ? 0x0900 : (gpsDataReady ? 0x2100 : 0x1082)) : (ready ? 0xD753 : 0xFDE7);
+    uint16_t gpsFg = darkTheme ? (ready ? 0x7FE0 : (gpsDataReady ? 0xFD20 : 0x8410)) : (ready ? 0x2400 : 0x9800);
+
+    // Row 1 Left: GPS Status Pill
+    display.fillRoundRect(8, 100, 108, 54, 27, gpsBg);
+    String satStr = (countValid && sats > 0) ? String(sats) : (gpsDataReady ? "0" : "--");
+    int satNumW = textWidth(satStr, 2);
+    int totalGpsW = 26 + 8 + satNumW;
+    int gpsStartX = 8 + (108 - totalGpsW) / 2;
+    drawCustomIcon(display, gpsStartX, 114, gpsFg, CustomIcon::satelliteIconLarge, 26, 26);
+    label(gpsStartX + 26 + 8, 118, satStr, 2, gpsFg);
+
+    // Row 1 Right: Sport Switcher Pill (108x54, R=27)
+    display.fillRoundRect(124, 100, 108, 54, 27, uiCard());
+    int switchStartX = 124 + (108 - (24 + 12 + 24)) / 2;
+    uint16_t sportAltColor = darkTheme ? 0x475F : 0x034E;
+    drawCustomIcon(display, switchStartX, 115, sportAltColor, runningMode ? CustomIcon::bikeIcon : CustomIcon::runIcon, 24, 24);
+    drawCustomIcon(display, switchStartX + 24 + 12, 115, uiFg(), CustomIcon::switchIcon, 24, 24);
+
+    // Row 2: Slide-to-Start Slider (224x54, R=27, Y=164..218)
+    display.fillRoundRect(8, 164, 224, 54, 27, uiCard());
+    centeredLabel(88, 184, 136, rideStarted ? "Swipe to open >" : "Swipe to start >", 0, uiMuted());
+    int pillX = 8 + homeSliderOffset;
+    display.fillRoundRect(pillX, 164, 78, 54, 27, 0xF800);
+    drawCustomIcon(display, pillX + (78 - 28) / 2, 177, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 28, 28);
+
+    // Row 3: Two Clean Pill Cards (108x54, R=27, Y=228..282)
+    // Row 3 Left: Compass App Pill (amber background)
+    uint16_t compassBg = darkTheme ? 0x2900 : 0xFFE0;
+    display.fillRoundRect(8, 228, 108, 54, 27, compassBg);
+    drawCustomIcon(display, 8 + (108 - 28) / 2, 241, 0xFE64, CustomIcon::compassIconLarge, 28, 28);
+
+    // Row 3 Right: All Apps Launcher Pill (3x3 white dot matrix)
+    display.fillRoundRect(124, 228, 108, 54, 27, uiCard());
+    int dotCx = 124 + 54;
+    int dotCy = 228 + 27;
+    for (int dy = -7; dy <= 7; dy += 7) {
+      for (int dx = -7; dx <= 7; dx += 7) {
+        display.fillCircle(dotCx + dx, dotCy + dy, 2, uiFg());
+      }
+    }
   }
   return true;
 }
@@ -2171,33 +2207,36 @@ static void quickTap(int x, int y) {
       }
       return;
     }
-    if (y >= 28 && y < 140) {
+    if (y >= 28 && y < 98) {
       homeHeroClock = !homeHeroClock;
       saveHomeHeroPref();
       uiRevision++;
       return;
     }
-    if(y>=140 && y<176 && x>=6 && x<190){
-      openGpsInspector();
+    if (y >= 98 && y < 158) {
+      if (x < 120) {
+        openGpsInspector();
+      } else {
+        if (rideStarted) {
+          activityMessage = "Save activity before switching mode";
+        } else {
+          runningMode = !runningMode;
+          activityMessage = runningMode ? "Running mode" : "Cycling mode";
+        }
+        uiRevision++;
+      }
       return;
     }
-    else if(x>=196 && x<234 && y>=140 && y<176){
-      if(rideStarted){activityMessage="Save activity before switching mode";}
-      else {runningMode=!runningMode;activityMessage=runningMode?"Running - GPS + heart rate":"Cycling mode";}
-      uiRevision++;
-    }
-    else if(x>=6 && x<234 && y>=182 && y<248) {
-      if(rideStarted) {
-        welcomeOpen=false;
-        currentScreen=(nav.hasDestination && routeLen>1)?SCR_MAP:SCR_DASH;
+    if (y >= 224 && y < 288) {
+      if (x < 120) {
+        homePage = HOME_COMPASS;
+        uiRevision++;
       } else {
-        requestRideStart();
+        homePage = HOME_APPS;
+        appsScroll = 0;
+        uiRevision++;
       }
-      uiRevision++;
-    }
-    else if(y>=254 && y<288){
-      if(x>=6 && x<117){homePage=HOME_APPS;appsScroll=0;uiRevision++;}
-      else if(x>=123 && x<234)openBrowser("/");
+      return;
     }
     return;
   }
@@ -2378,11 +2417,26 @@ static void pollQuickTouch() {
       rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
       return;
     }
+    if (homeSliderDragging) {
+      if (homeSliderOffset >= 110) {
+        if (rideStarted) {
+          welcomeOpen = false;
+          currentScreen = (nav.hasDestination && routeLen > 1) ? SCR_MAP : SCR_DASH;
+        } else {
+          requestRideStart();
+        }
+      }
+      homeSliderOffset = 0;
+      homeSliderDragging = false;
+      uiRevision++;
+      rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
+      return;
+    }
     if(rootGesture && !sliderGesture) {
       if (welcomeOpen && !quickOpen && homePage == HOME_MAIN) {
         int dx = endX - startX;
         int dy = endY - startY;
-        if (startY < 140) {
+        if (startY < 98) {
           if (abs(dx) >= 20 && abs(dx) > abs(dy)) {
             homeHeroClock = !homeHeroClock;
             saveHomeHeroPref();
@@ -2392,14 +2446,8 @@ static void pollQuickTouch() {
             saveHomeHeroPref();
             uiRevision++;
           }
-        } else {
-          if (abs(dx) >= 35 && abs(dx) > abs(dy) * 1.5) {
-            homeHeroClock = !homeHeroClock;
-            saveHomeHeroPref();
-            uiRevision++;
-          } else if (!moved || (abs(dx) < 20 && abs(dy) < 20)) {
-            quickTap(startX, startY);
-          }
+        } else if (!moved || (abs(dx) < 20 && abs(dy) < 20)) {
+          quickTap(startX, startY);
         }
       } else if (!moved) {
         quickTap(endX, endY);
@@ -2487,7 +2535,10 @@ static void pollQuickTouch() {
     endX=x;endY=y;
     if(abs(y-startY)>7 || abs(x-startX)>7)moved=true;
     if(sliderGesture)setBrightnessFromTouch(x);
-    else if(moved){
+    else if(homeSliderDragging){
+      homeSliderOffset = constrain(x - homeSliderStartX, 0, 146);
+      uiRevision++;
+    } else if(moved){
       if(gpsWaiting || gpsRadarInspector){
         int offset=constrain(startScroll+startY-y,0,128);
         if(offset!=gpsScroll){gpsScroll=offset;uiRevision++;}
@@ -2585,6 +2636,11 @@ static void pollQuickTouch() {
     } else if(welcomeOpen && !quickOpen && homePage == HOME_MAIN && y >= 28 && y < 290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
+      if (y >= 160 && y < 224 && x >= 4 && x <= 8 + homeSliderOffset + 88) {
+        homeSliderDragging = true;
+        homeSliderStartX = x;
+        homeSliderOffset = 0;
+      }
     } else quickTap(x, y);
   }
 }

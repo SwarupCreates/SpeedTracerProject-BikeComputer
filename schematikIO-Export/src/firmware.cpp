@@ -102,6 +102,7 @@ struct TrackPoint  { float lat, lon, alt; uint32_t sec; };
 
 enum Screen { SCR_DASH, SCR_METRICS, SCR_MAP, SCR_CONTROLS, SCR_COUNT };
 bool darkTheme=false;
+bool appsListView=false;
 uint32_t uiRevision=0;
 
 // ─── Globals ─────────────────────────────────────────────────────────────────
@@ -306,6 +307,17 @@ static void setDarkTheme(bool value){
     themePrefs.end();
   }else Serial.println("Theme storage unavailable");
 }
+
+static void setAppsListView(bool value){
+  if(appsListView==value)return;
+  appsListView=value;
+  Preferences p;
+  if(p.begin("cyclo",false)){
+    if(p.putBool("appsList",value)!=1)Serial.println("Apps layout save failed");
+    p.end();
+  }else Serial.println("Apps layout storage unavailable");
+}
+
 
 uint8_t activeFontId = FONT_METROPOLIS;
 static void setActiveFont(uint8_t id) {
@@ -1514,6 +1526,7 @@ void setup() {
 
   if(prefs.begin("cyclo", true)){
     darkTheme = prefs.getBool("darkTheme", false);
+    appsListView = prefs.getBool("appsList", false);
     activeFontId = prefs.getUChar("fontId", FONT_METROPOLIS);
     if (activeFontId > FONT_TEKTUR) activeFontId = FONT_METROPOLIS;
     prefs.end();

@@ -30,6 +30,7 @@ static int homeSliderOffset = 0;
 static bool homeSliderDragging = false;
 static int homeSliderStartX = 0;
 bool activityMapNorthUp = false;
+extern bool appsListView;
 int appsScroll = 0;
 const int MAX_APPS_SCROLL = 220;
 static int appsPage = 0;
@@ -367,13 +368,7 @@ static void drawLibrary(){
         label(10, btnY - 14, fitBrowserText(libraryMessage, 218), 1, 0xF800);
       }
 
-      // Scrollbar on the right edge
-      const int routeMaxScroll = 120;
-      if (routeMaxScroll > 0) {
-        int thumbH = 40;
-        int thumbY = 32 + (archiveScroll * (250 - thumbH) / routeMaxScroll);
-        display.fillRoundRect(236, thumbY, 3, thumbH, 1, uiMuted());
-      }
+// Scrollbar removed per user design request
 
       statusBar(true, false);
       drawGlobalNav();
@@ -517,12 +512,7 @@ static void drawLibrary(){
     display.fillRect(0, 290, 240, 30, uiBg());
     drawGlobalNav();
 
-    // Scrollbar on the right edge
-    if (ARCHIVE_MAX_SCROLL > 0) {
-      int thumbH = 40;
-      int thumbY = 70 + (archiveScroll * (216 - thumbH) / ARCHIVE_MAX_SCROLL);
-      display.fillRoundRect(236, thumbY, 3, thumbH, 1, uiMuted());
-    }
+// Scrollbar removed per user design request
     return;
   }
 
@@ -1362,29 +1352,49 @@ static void drawHomeSubpage(){
       {"My Files", CustomIcon::folderIconLarge, 0x0CA1}         // Teal (#0D9488)
     };
     const int kNumApps = 7;
-    const int R = 38;
-    const int rowPitch = 114;
+    if (appsListView) {
+      // LIST VIEW: 1 app per row, button with label beside in row, column layout
+      const int rowH = 48;
+      const int rowPitch = 56;
 
-    for (int i = 0; i < kNumApps; i++) {
-      int col = i % 2;
-      int row = i / 2;
-      int cx = (col == 0) ? 68 : 172;
-      int cy = 102 + row * rowPitch - appsScroll;
+      for (int i = 0; i < kNumApps; i++) {
+        int cardY = 66 + i * rowPitch - appsScroll;
+        if (cardY + rowH < 56 || cardY > 290) continue;
 
-      // Cull items completely offscreen
-      if (cy + R + 24 < 56 || cy - R > 290) continue;
+        display.fillRoundRect(6, cardY, 228, rowH, 12, uiCard());
+        if (!darkTheme) display.drawRoundRect(6, cardY, 228, rowH, 12, 0xD69A);
 
-      display.fillCircle(cx, cy, R, kApps[i].color);
-      drawCustomIcon(display, cx - 20, cy - 20, 0xFFFF, kApps[i].icon);
-      centeredLabel(cx - 58, cy + R + 7, 116, kApps[i].name, 0, uiFg());
-    }
+        // Circular colored app button on the left (R = 17, diameter 34)
+        int btnCx = 28;
+        int btnCy = cardY + rowH / 2;
+        int btnR = 17;
+        display.fillCircle(btnCx, btnCy, btnR, kApps[i].color);
+        drawCustomIcon(display, btnCx - 12, btnCy - 12, 0xFFFF, kApps[i].icon, 24, 24);
 
-    // Scrollbar indicator
-    const int maxS = MAX_APPS_SCROLL;
-    if (maxS > 0) {
-      int trackH = 290 - 58 - 36;
-      int thumbY = 58 + (appsScroll * trackH) / maxS;
-      display.fillRoundRect(236, thumbY, 3, 36, 1, uiMuted());
+        // App label beside button in row
+        label(54, cardY + 16, kApps[i].name, 1, uiFg());
+
+        // goNext chevron on the right
+        drawCustomIcon(display, 212, cardY + 16, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+      }
+    } else {
+      // GRID VIEW: 2-column icon grid
+      const int R = 38;
+      const int rowPitch = 114;
+
+      for (int i = 0; i < kNumApps; i++) {
+        int col = i % 2;
+        int row = i / 2;
+        int cx = (col == 0) ? 68 : 172;
+        int cy = 102 + row * rowPitch - appsScroll;
+
+        // Cull items completely offscreen
+        if (cy + R + 24 < 56 || cy - R > 290) continue;
+
+        display.fillCircle(cx, cy, R, kApps[i].color);
+        drawCustomIcon(display, cx - 20, cy - 20, 0xFFFF, kApps[i].icon);
+        centeredLabel(cx - 58, cy + R + 7, 116, kApps[i].name, 0, uiFg());
+      }
     }
 
     // Re-draw fixed header and status bar to cleanly clip top scroll
@@ -2160,52 +2170,68 @@ static void quickTap(int x, int y) {
     }
     if(homePage==HOME_APPS){
       if(y < 56 || y >= 290) return;
-      for(int i = 0; i < 7; i++){
-        int col = i % 2;
-        int row = i / 2;
-        int cx = (col == 0) ? 68 : 172;
-        int cy = 102 + row * 114 - appsScroll;
-        int dx = x - cx;
-        int dy = y - cy;
-        bool inCircle = (dx * dx + dy * dy <= 44 * 44);
-        bool inLabel = (abs(dx) <= 58 && (y >= cy + 34 && y <= cy + 64));
-        if (inCircle || inLabel) {
-          if(i == 0){ // Maps
-            if(ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0){
-              mapViewerLat = ride.lat;
-              mapViewerLon = ride.lon;
-            }
-            g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
-            homePage = HOME_MAPS;
-            uiRevision++;
+      int hitApp = -1;
+      if (appsListView) {
+        const int rowH = 48;
+        const int rowPitch = 56;
+        for (int i = 0; i < 7; i++) {
+          int cardY = 66 + i * rowPitch - appsScroll;
+          if (x >= 6 && x <= 234 && y >= cardY && y <= cardY + rowH) {
+            hitApp = i;
+            break;
           }
-          else if(i == 1){ // Compass
-            homePage = HOME_COMPASS;
-            uiRevision++;
+        }
+      } else {
+        for(int i = 0; i < 7; i++){
+          int col = i % 2;
+          int row = i / 2;
+          int cx = (col == 0) ? 68 : 172;
+          int cy = 102 + row * 114 - appsScroll;
+          int dx = x - cx;
+          int dy = y - cy;
+          bool inCircle = (dx * dx + dy * dy <= 44 * 44);
+          bool inLabel = (abs(dx) <= 58 && (y >= cy + 34 && y <= cy + 64));
+          if (inCircle || inLabel) {
+            hitApp = i;
+            break;
           }
-          else if(i == 2){ // My Activities
-            openLibrary(HOME_ACTIVITY);
-          }
-          else if(i == 3){ // Past Routes
-            openLibrary(HOME_ROUTES);
-          }
-          else if(i == 4){ // Settings
-            homePage = HOME_SETTINGS;
-            settingsPage = SET_MAIN;
-            settingsScroll = 0;
-            uiRevision++;
-          }
-          else if(i == 5){ // Activity Settings
-            homePage = HOME_ACTIVITY_SETTINGS;
-            uiRevision++;
-          }
-          else if(i == 6){ // My Files
-            openBrowser("/");
-          }
-          return;
         }
       }
-      return;
+      if (hitApp >= 0) {
+        if(hitApp == 0){ // Maps
+          if(ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0){
+            mapViewerLat = ride.lat;
+            mapViewerLon = ride.lon;
+          }
+          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+          homePage = HOME_MAPS;
+          uiRevision++;
+        }
+        else if(hitApp == 1){ // Compass
+          homePage = HOME_COMPASS;
+          uiRevision++;
+        }
+        else if(hitApp == 2){ // My Activities
+          openLibrary(HOME_ACTIVITY);
+        }
+        else if(hitApp == 3){ // Past Routes
+          openLibrary(HOME_ROUTES);
+        }
+        else if(hitApp == 4){ // Settings
+          homePage = HOME_SETTINGS;
+          settingsPage = SET_MAIN;
+          settingsScroll = 0;
+          uiRevision++;
+        }
+        else if(hitApp == 5){ // Activity Settings
+          homePage = HOME_ACTIVITY_SETTINGS;
+          uiRevision++;
+        }
+        else if(hitApp == 6){ // My Files
+          openBrowser("/");
+        }
+        return;
+      }
     }
     if (y >= 28 && y < 98) {
       homeHeroClock = !homeHeroClock;
@@ -2568,7 +2594,8 @@ static void pollQuickTouch() {
           uiRevision++;
         }
       } else if(welcomeOpen && !quickOpen && homePage == HOME_APPS){
-        int offset=constrain(startScroll+startY-y,0,MAX_APPS_SCROLL);
+        int maxS = appsListView ? 180 : MAX_APPS_SCROLL;
+        int offset=constrain(startScroll+startY-y,0,maxS);
         if(offset!=appsScroll){appsScroll=offset;uiRevision++;}
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
         int offset=constrain(startScroll+startY-y,0,88);
@@ -2814,7 +2841,6 @@ static void drawQuickSettings() {
   // not the whole page: a full clear here erases every settings tile.
   statusBar(false, false);
   drawCustomIcon(display,108,12,0x8430,CustomIcon::downArrowIcon);
-  // Small position indicator; all settings remain reachable above the fixed tray.
-  display.fillRoundRect(236,32+quickScroll*174/140,3,40,1,uiMuted());
+  // Scrollbar removed per user design request
 
 }

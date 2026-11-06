@@ -90,6 +90,8 @@ static String resetMessage = "";
 static void enterPowerOff();
 static uint16_t blendText(uint16_t fg, uint16_t bg, int a);
 static void setDarkTheme(bool value);
+static void setAppsListView(bool value);
+extern bool appsListView;
 static void setActiveFont(uint8_t id);
 extern uint8_t activeFontId;
 
@@ -588,18 +590,31 @@ static void drawSettingsApp() {
     display.fillCircle(circleX, ty + 13, 10, 0xFFFF);
     label(darkTheme ? (tx + 7) : (tx + 27), ty + 8, darkTheme ? "ON" : "OFF", 0, 0xFFFF);
 
-    // 2. System Font Card (y = 122, h = 48)
-    display.fillRoundRect(6, 122, 228, 48, 12, uiCard());
-    drawCustomIcon(display, 16, 135, uiFg(), CustomIcon::fontIcon, 22, 22);
-    label(46, 130, "System Font", 1, uiFg());
-    label(46, 146, SYSTEM_FONT_NAMES[activeFontId], 0, 0x34C2);
-    drawCustomIcon(display, 212, 138, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+    // 2. System Font Card (y = 120, h = 48)
+    display.fillRoundRect(6, 120, 228, 48, 12, uiCard());
+    drawCustomIcon(display, 16, 133, uiFg(), CustomIcon::fontIcon, 22, 22);
+    label(46, 128, "System Font", 1, uiFg());
+    label(46, 144, SYSTEM_FONT_NAMES[activeFontId], 0, 0x34C2);
+    drawCustomIcon(display, 212, 136, uiMuted(), CustomIcon::goNextIcon, 16, 16);
 
-    // 3. Info Note Card (y = 178, h = 64)
-    display.fillRoundRect(6, 178, 228, 64, 12, uiCard());
-    label(16, 190, "Dynamic Font Engine", 1, uiFg());
-    label(16, 206, "Typography updates across all", 0, uiMuted());
-    label(16, 220, "dashboards, maps, and menus.", 0, uiMuted());
+    // 3. Apps Screen Layout Card (y = 174, h = 48)
+    display.fillRoundRect(6, 174, 228, 48, 12, uiCard());
+    drawCustomIcon(display, 16, 187, uiFg(), CustomIcon::allAppsIcon, 22, 22);
+    label(46, 182, "Apps Layout", 1, uiFg());
+    label(46, 198, appsListView ? "Single column list" : "2-column icon grid", 0, uiMuted());
+
+    // Toggle pill for Apps Layout (Grid / List)
+    int tx2 = 166, ty2 = 185, tw2 = 56, th2 = 26;
+    uint16_t toggleBg2 = appsListView ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
+    display.fillRoundRect(tx2, ty2, tw2, th2, 13, toggleBg2);
+    int circleX2 = appsListView ? (tx2 + tw2 - 13) : (tx2 + 13);
+    display.fillCircle(circleX2, ty2 + 13, 10, 0xFFFF);
+    label(appsListView ? (tx2 + 6) : (tx2 + 25), ty2 + 8, appsListView ? "LIST" : "GRID", 0, 0xFFFF);
+
+    // 4. Info Note Card (y = 228, h = 48)
+    display.fillRoundRect(6, 228, 228, 48, 12, uiCard());
+    label(16, 236, "Theme & Appearance", 1, uiFg());
+    label(16, 252, "Customize look, typography & launcher.", 0, uiMuted());
   }
   else if (settingsPage == SET_FONT) {
     drawScreenHeader("SYSTEM FONT", CustomIcon::fontIcon, true);
@@ -842,8 +857,11 @@ static void tapSettings(int x, int y) {
     if (x >= 6 && x < 234 && y >= 66 && y < 114) {
       setDarkTheme(!darkTheme);
       uiRevision++;
-    } else if (x >= 6 && x < 234 && y >= 122 && y < 170) {
+    } else if (x >= 6 && x < 234 && y >= 120 && y < 168) {
       settingsPage = SET_FONT;
+      uiRevision++;
+    } else if (x >= 6 && x < 234 && y >= 174 && y < 222) {
+      setAppsListView(!appsListView);
       uiRevision++;
     }
   }

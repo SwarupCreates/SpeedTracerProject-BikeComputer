@@ -31,6 +31,7 @@ static bool homeSliderDragging = false;
 static int homeSliderStartX = 0;
 bool activityMapNorthUp = false;
 extern bool appsListView;
+extern float distAnchorLat, distAnchorLon;
 int appsScroll = 0;
 const int MAX_APPS_SCROLL = 220;
 static int appsPage = 0;
@@ -853,7 +854,7 @@ static void drawActivitySettingsApp() {
   card(6, y, 228, 38, uiCard());
   drawSatelliteIcon(display, 16, y + 10, uiFg());
   label(44, y + 6, "GPS SPEED DEADZONE", 1, uiFg());
-  label(44, y + 20, runningMode ? "Run: < 1.8 km/h clamped to 0" : "Ride: < 1.2 km/h clamped to 0", 1, uiMuted());
+  label(44, y + 20, runningMode ? "Run: < 0.8 km/h clamped to 0" : "Ride: < 1.0 km/h clamped to 0", 1, uiMuted());
 }
 
 static void tapActivitySettings(int x, int y) {
@@ -1529,7 +1530,7 @@ static void toggleRide() {
     distAccum=0; trackLen=0; ride.distanceKm=0;ride.elapsedSec=0;
     ride.avgSpeedKmh=0;ride.maxSpeedKmh=0;ride.maxPowerW=0;
     resetMaxSpeedTracker();
-    hrSum=powerSum=0;hrSamples=powerSamples=0;hrMax=0;lastLat=lastLon=0;
+    hrSum=powerSum=0;hrSamples=powerSamples=0;hrMax=0;lastLat=lastLon=0;distAnchorLat=distAnchorLon=0;
     rideStarted = true;
     rideStartMs = millis();
     ridePaused = false;
@@ -1541,6 +1542,7 @@ static void toggleRide() {
     fitEvent(0);
     rideStartMs += (millis() - pauseStart);
     ridePaused = false;
+    distAnchorLat = distAnchorLon = 0;
   }
   uiRevision++;
 }

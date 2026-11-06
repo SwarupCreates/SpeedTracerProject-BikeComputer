@@ -374,6 +374,7 @@ static uint32_t rideStartMs  = 0;
 static bool     rideStarted  = false;
 static float    lastLat      = 0, lastLon = 0, lastAltM = 0;
 static float    distAccum    = 0;
+float           distAnchorLat = 0.0f, distAnchorLon = 0.0f;
 
 // ─── Forward declarations ────────────────────────────────────────────────────
 static float haversineKm(float la1, float lo1, float la2, float lo2);
@@ -1968,33 +1969,78 @@ void loop() {
   compass.update();
 
   if (gps.location.isValid() && gps.location.isUpdated()) {
-    float nLat = gps.location.lat(), nLon = gps.location.lng();
+    float nLat = (float)gps.location.lat(), nLon = (float)gps.location.lng();
 
-    if (lastLat != 0.0f) {
-      float delta = haversineKm(lastLat, lastLon, nLat, nLon);
-      if (rideStarted && !ridePaused && delta > 0.001f && delta<0.1f && gps.speed.kmph()>2 && ((geprcGps.lastPvt && millis()-geprcGps.lastPvt<3000)?geprcGps.pdop<3:(gps.hdop.isValid() && gps.hdop.hdop()<3))) {   // ignore sub-metre jitter
-        distAccum += delta;
-        ride.distanceKm = distAccum;
-        // Grade: alt change / horizontal distance
-        float altDelta = ride.altM - lastAltM;
-        float rawGrade = (altDelta / (delta * 1000.0f)) * 100.0f;
-        ride.gradePercent = constrain((0.65f * ride.gradePercent) + (0.35f * rawGrade), -30.0f, 30.0f);
+    // Check GPS fix quality: accept fixes with PDOP/HDOP < 6.0f, or valid 3D fixes when DOP is unavailable
+    bool goodFixQuality = true;
+    if (geprcGps.lastPvt && (millis() - geprcGps.lastPvt < 3000)) {
+      goodFixQuality = (geprcGps.pdop < 6.0f);
+    } else if (gps.hdop.isValid() && (gps.hdop.age() < 5000)) {
+      goodFixQuality = (gps.hdop.hdop() < 6.0f);
+    }
+
+    if (rideStarted && !ridePaused) {
+      static uint32_t lastDistCommitMs = 0;
+
+      // Anchor holds its position until distance exceeds displacement threshold,
+      // preventing fractional sub-metre walking movement from being wiped on each sample.
+      if (distAnchorLat == 0.0f || distAnchorLon == 0.0f) {
+        distAnchorLat = nLat;
+        distAnchorLon = nLon;
+        lastDistCommitMs = millis();
         lastAltM = ride.altM;
-        // Advance route waypoint
-        if (routeLen > 0 && nav.routeIndex < routeLen - 1) {
-          float wd = haversineKm(nLat, nLon, route[nav.routeIndex+1].lat, route[nav.routeIndex+1].lon);
-          if (wd < 0.025f) nav.routeIndex++;
-          // Remaining distance follows the selected polyline, not a straight line.
-          int next=min(nav.routeIndex+1,routeLen-1);
-          nav.remainDistKm=haversineKm(nLat,nLon,route[next].lat,route[next].lon);
-          for(int k=next;k<routeLen-1;k++)nav.remainDistKm+=haversineKm(route[k].lat,route[k].lon,route[k+1].lat,route[k+1].lon);
-          nav.bearingDeg=bearingTo(nLat,nLon,route[next].lat,route[next].lon);
+      } else {
+        float delta = haversineKm(distAnchorLat, distAnchorLon, nLat, nLon);
+        uint32_t dtMs = millis() - lastDistCommitMs;
+        float dtSec = dtMs > 0 ? (dtMs / 1000.0f) : 1.0f;
+        float impliedSpeedKmh = (dtSec > 0.1f) ? ((delta / dtSec) * 3600.0f) : 0.0f;
+
+        // Current speed check (GPS or BLE sensor)
+        float curSpd = ride.speedKmh > 0.0f ? ride.speedKmh : (gps.speed.isValid() && gps.speed.age() < 3000 ? (float)gps.speed.kmph() : 0.0f);
+        if (!runningMode && bleSpeedReady) curSpd = max(curSpd, bleSpeed);
+
+        // Movement conditions:
+        // Accumulate once displaced at least 2.5 meters (0.0025 km) from anchor,
+        // which filters stationary GPS noise while seamlessly capturing walking steps (~0.8 to 1.5 m/s).
+        // Implied speed cap (< 130 km/h) and step distance cap (< 150m) reject GPS teleport jumps.
+        bool hasMoved = (delta >= 0.0025f && delta < 0.150f && impliedSpeedKmh < 130.0f);
+        bool isMotion = (curSpd >= 0.8f) || (impliedSpeedKmh >= 0.8f);
+
+        if (goodFixQuality && hasMoved && isMotion) {
+          distAccum += delta;
+          ride.distanceKm = distAccum;
+          distAnchorLat = nLat;
+          distAnchorLon = nLon;
+          lastDistCommitMs = millis();
+
+          // Grade: alt change / horizontal distance (only over >= 5m to avoid division noise)
+          if (delta >= 0.005f) {
+            float altDelta = ride.altM - lastAltM;
+            float rawGrade = (altDelta / (delta * 1000.0f)) * 100.0f;
+            ride.gradePercent = constrain((0.65f * ride.gradePercent) + (0.35f * rawGrade), -30.0f, 30.0f);
+            lastAltM = ride.altM;
+          }
+
+          // Advance route waypoint
+          if (routeLen > 0 && nav.routeIndex < routeLen - 1) {
+            float wd = haversineKm(nLat, nLon, route[nav.routeIndex+1].lat, route[nav.routeIndex+1].lon);
+            if (wd < 0.025f) nav.routeIndex++;
+            int next = min(nav.routeIndex + 1, routeLen - 1);
+            nav.remainDistKm = haversineKm(nLat, nLon, route[next].lat, route[next].lon);
+            for (int k = next; k < routeLen - 1; k++) nav.remainDistKm += haversineKm(route[k].lat, route[k].lon, route[k+1].lat, route[k+1].lon);
+            nav.bearingDeg = bearingTo(nLat, nLon, route[next].lat, route[next].lon);
+          }
+        } else if (impliedSpeedKmh > 130.0f || delta >= 0.150f) {
+          // Reject multipath teleport jump: reset anchor to current point without accumulating
+          distAnchorLat = nLat;
+          distAnchorLon = nLon;
+          lastDistCommitMs = millis();
         }
       }
     }
     lastLat = ride.lat = nLat;
     lastLon = ride.lon = nLon;
-    ride.gpsFixed = gps.location.age()<3000;
+    ride.gpsFixed = gps.location.age() < 3000;
 
     // Update nav
     if (nav.hasDestination) {
@@ -2017,9 +2063,9 @@ void loop() {
   float rawGpsSpeed = (ride.gpsFixed && gps.speed.isValid() && gps.speed.age() < 3000) ? (float)gps.speed.kmph() : 0.0f;
   
   // GPS noise deadzones:
-  // In outdoor ride: variance 0.1-0.6 km/h, stationary jitter up to ~1.2 km/h
-  // In outdoor run: walking / stationary drift up to 1.8 km/h
-  float speedDeadzone = runningMode ? 1.8f : 1.2f;
+  // In outdoor ride: stationary jitter up to ~1.0 km/h
+  // In outdoor run/walk: stationary drift up to 0.8 km/h
+  float speedDeadzone = runningMode ? 0.8f : 1.0f;
   if (rawGpsSpeed < speedDeadzone) {
     rawGpsSpeed = 0.0f;
   }
@@ -2092,7 +2138,7 @@ void loop() {
   if (ride.speedKmh < 2.0f) {
     ride.gradePercent = 0.0f;
   }
-  if(!ride.gpsFixed) {ride.lat=0;ride.lon=0;ride.gradePercent=0;nav.remainDistKm=0;lastLat=0;lastLon=0;}
+  if(!ride.gpsFixed) {ride.lat=0;ride.lon=0;ride.gradePercent=0;nav.remainDistKm=0;lastLat=0;lastLon=0;distAnchorLat=0;distAnchorLon=0;}
 
   // Speed source
   if (!runningMode && sensors.speedPhysical && millis()-externalSensorMs<5000)

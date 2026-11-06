@@ -406,7 +406,7 @@ static void previewDraw(int y, int h, bool showControls = true) {
   const int cardX = 6, cardW = 228;
   const uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
   display.fillRoundRect(cardX, y, cardW, h, 8, terrainBg);
-  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xD69A);
+  if (!darkTheme) display.drawRoundRect(cardX, y, cardW, h, 8, 0xD69A);
 
   if (previewLen < 2) {
     label(14, y + 6, "ROUTE PREVIEW", 1, 0x4208);
@@ -759,7 +759,7 @@ static void previewDraw(int y, int h, bool showControls = true) {
   }
 
   // Draw clean rounded card border over map layers to frame map neatly
-  display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xD69A);
+  if (!darkTheme) display.drawRoundRect(cardX, y, cardW, h, 8, 0xD69A);
 
   if (!showControls) {
     label(14, y + 6, "ROUTE MAP", 1, 0x4208);
@@ -850,10 +850,10 @@ static void archiveGraph(String path,int y,int col,const char* title,const char*
 static void drawActivitySquareMap(int x, int y, int w, int h) {
   if (y + h <= 68 || y >= 290) return;
   display.fillRoundRect(x, y, w, h, 10, uiCard());
-  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+  if (!darkTheme) display.drawRoundRect(x, y, w, h, 10, 0xD69A);
 
   if (previewLen < 2) {
-    drawCustomIcon(display, x + 6, y + 6, 0xFFFF, CustomIcon::routeMapIcon);
+    drawCustomIcon(display, x + 8, y + 8, uiFg(), CustomIcon::routeMapIcon, 20, 20);
     centeredLabel(x, y + h / 2 - 4, w, "No GPX", 1, uiMuted());
     return;
   }
@@ -925,30 +925,30 @@ static void drawActivitySquareMap(int x, int y, int w, int h) {
     clipLine(sx0, sy0, sx1, sy1, routeOrange, 3);
   }
 
-  // Floating map icon at top-left
-  drawCustomIcon(display, x + 6, y + 6, 0xFFFF, CustomIcon::routeMapIcon);
-  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+  // Floating map icon at top-left: square 20x20 with uiFg()
+  drawCustomIcon(display, x + 8, y + 8, uiFg(), CustomIcon::routeMapIcon, 20, 20);
+  if (!darkTheme) display.drawRoundRect(x, y, w, h, 10, 0xD69A);
 }
 
 static void drawActivityGraph(int x, int y, int w, int h, int col) {
   if (y + h <= 68 || y >= 290) return;
   display.fillRoundRect(x, y, w, h, 10, uiCard());
-  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+  if (!darkTheme) display.drawRoundRect(x, y, w, h, 10, 0xD69A);
 
   float *vals = (col == 1 ? archiveHrValues : archiveSpeedValues);
   float top = (col == 1 ? archiveHrTop : archiveSpeedTop);
 
-  // Header: Icon on left, max metric on right
+  // Header: Icon on left (square 20x20), max metric on right (size 2), center aligned vertically with each other
   if (col == 1) {
-    drawCustomIcon(display, x + 10, y + 8, 0xF800, CustomIcon::heartRateIcon);
+    drawCustomIcon(display, x + 10, y + 8, 0xF800, CustomIcon::heartRateIcon, 20, 20);
     String metricStr = (top > 0) ? (String((int)top) + " BPM") : "-- BPM";
     int tw = textWidth(metricStr, 2);
-    label(x + w - 10 - tw, y + 8, metricStr, 2, 0xFFFF);
+    label(x + w - 10 - tw, y + 10, metricStr, 2, uiFg());
   } else {
     drawCustomIcon(display, x + 10, y + 8, 0x475F, CustomIcon::speedometerIcon, 20, 20);
     String metricStr = (top > 0) ? (String(top, 1) + " KMPH") : "-- KMPH";
     int tw = textWidth(metricStr, 2);
-    label(x + w - 10 - tw, y + 8, metricStr, 2, 0xFFFF);
+    label(x + w - 10 - tw, y + 10, metricStr, 2, uiFg());
   }
 
   if (!archiveCsvLoaded || top <= 0) {
@@ -956,8 +956,8 @@ static void drawActivityGraph(int x, int y, int w, int h, int col) {
     return;
   }
 
-  const uint16_t fillColor   = (col == 1 ? 0x58E4 : 0x1229); // HR burgundy #5C1D24, Speed deep teal #16464D
-  const uint16_t lineColor   = (col == 1 ? 0x8926 : 0x1B2E);
+  const uint16_t fillColor   = (col == 1 ? (darkTheme ? 0x58E4 : 0xFCCF) : (darkTheme ? 0x1229 : 0xCFBF)); // HR burgundy / rose, Speed deep teal / soft sea
+  const uint16_t lineColor   = (col == 1 ? (darkTheme ? 0x8926 : 0xE8A6) : (darkTheme ? 0x1B2E : 0x2475));
   const uint16_t peakDotCol  = (col == 1 ? 0xF800 : 0x475F);
 
   const int Y_base = y + h - 5;
@@ -1011,15 +1011,25 @@ static void drawActivityGraph(int x, int y, int w, int h, int col) {
     }
   }
 
-  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+  if (!darkTheme) display.drawRoundRect(x, y, w, h, 10, 0xD69A);
 }
 
 static void drawStravaSyncButton(int x, int y, int w, int h) {
   if (y + h <= 68 || y >= 290) return;
   const uint16_t stravaOrange = 0xFA80; // Vibrant Strava #FC5200
   display.fillRoundRect(x, y, w, h, 10, stravaOrange);
+  // Center-aligned Strava Logo + "Sync to Strava" content
+  const char* labelText = "Sync to Strava";
+  int iconW = 18;
+  int iconH = 26;
+  int gap = 8;
+  int tw = textWidth(labelText, 2);
+  int totalW = iconW + gap + tw;
+  int startX = x + (w - totalW) / 2;
+  int iconY = y + (h - iconH) / 2;
+  int textY = y + (h - 14) / 2;
   // White Strava Logo
-  drawCustomIcon(display, x + 24, y + (h - 24) / 2, 0xFFFF, CustomIcon::stravaIcon, 16, 24);
+  drawCustomIcon(display, startX, iconY, 0xFFFF, CustomIcon::stravaIcon, iconW, iconH);
   // White text "Sync to Strava"
-  label(x + 50, y + (h - 18) / 2, "Sync to Strava", 2, 0xFFFF);
+  label(startX + iconW + gap, textY, labelText, 2, 0xFFFF);
 }

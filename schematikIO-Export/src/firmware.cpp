@@ -461,7 +461,7 @@ static const char* cardinalStr(int hdg) {
 //  DASHBOARD & SCREENS (Figma-Matched Design)
 // ═══════════════════════════════════════════════════════════════════════════════
 static uint16_t uiBg()   { return darkTheme ? 0x0000 : 0xFFFF; }
-static uint16_t uiCard() { return darkTheme ? 0x18C3 : 0xDEFB; }
+static uint16_t uiCard() { return darkTheme ? 0x1082 : 0xDEFB; }
 static uint16_t uiFg()   { return darkTheme ? 0xFFFF : 0x18C3; }
 static uint16_t uiMuted(){ return 0x8410; }
 static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60, RED = 0xF800, GREEN = 0x07E0;
@@ -1257,7 +1257,7 @@ static void drawMapScreen() {
 
   // Left Card: SPEED
   card(6, hudY, 111, hudH, uiCard());
-  display.drawRoundRect(6, hudY, 111, hudH, 10, darkTheme ? 0x2945 : 0xD6BA);
+  if (!darkTheme) display.drawRoundRect(6, hudY, 111, hudH, 10, 0xD6BA);
   float curSpeed = speedAvailable() ? ride.speedKmh : 0.0f;
   if (curSpeed < 0.1f) curSpeed = 0.0f;
   String spdStr = String(curSpeed, 1);
@@ -1269,7 +1269,7 @@ static void drawMapScreen() {
 
   // Right Card: DISTANCE
   card(123, hudY, 111, hudH, uiCard());
-  display.drawRoundRect(123, hudY, 111, hudH, 10, darkTheme ? 0x2945 : 0xD6BA);
+  if (!darkTheme) display.drawRoundRect(123, hudY, 111, hudH, 10, 0xD6BA);
   String distStr = (ride.distanceKm >= 10.0f) ? (String(ride.distanceKm, 1) + "km") :
                    (ride.distanceKm >= 1.0f)  ? (String(ride.distanceKm, 1) + "km") :
                    (ride.distanceKm > 0.01f)  ? (String((int)(ride.distanceKm * 1000.0f)) + "m") : "0.0km";

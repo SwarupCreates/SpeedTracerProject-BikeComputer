@@ -59,7 +59,7 @@ static void drawLoadingScreen(const char* title = "Loading assets...", const cha
 
   const int cardX = 20, cardY = 95, cardW = 200, cardH = 130, cardR = 12;
   display.fillRoundRect(cardX, cardY, cardW, cardH, cardR, uiCard());
-  display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, darkTheme ? 0x2945 : 0xD6BA);
+  if (!darkTheme) display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, 0xD6BA);
 
   const int cx = 120, cy = 132, r = 16;
   display.drawCircle(cx, cy, r, darkTheme ? 0x2945 : 0xCE79);
@@ -414,21 +414,21 @@ static void drawLibrary(){
     // 1B. Distance Card (108x48)
     if (topY + 48 >= 68 && topY < 290) {
       display.fillRoundRect(124, topY, 108, 48, 10, uiCard());
-      display.drawRoundRect(124, topY, 108, 48, 10, darkTheme ? 0x2945 : 0xD69A);
+      if (!darkTheme) display.drawRoundRect(124, topY, 108, 48, 10, 0xD69A);
       String distStr = (previewKm > 0.001f) ? (String(previewKm, 2) + "KM") : "--KM";
-      centeredLabel(124, topY + 15, 108, distStr, 2, 0xFFFF);
+      centeredLabel(124, topY + 16, 108, distStr, 2, uiFg());
     }
 
     // 1C. Duration Card (108x48)
     int durY = topY + 56;
     if (durY + 48 >= 68 && durY < 290) {
       display.fillRoundRect(124, durY, 108, 48, 10, uiCard());
-      display.drawRoundRect(124, durY, 108, 48, 10, darkTheme ? 0x2945 : 0xD69A);
+      if (!darkTheme) display.drawRoundRect(124, durY, 108, 48, 10, 0xD69A);
       String timeStr;
       if (sec >= 3600) timeStr = String(sec / 3600) + "hr " + String((sec % 3600) / 60) + "m";
       else if (sec > 0) timeStr = String(sec / 60) + "m " + String(sec % 60) + "s";
       else timeStr = "--";
-      centeredLabel(124, durY + 15, 108, timeStr, 2, 0xFFFF);
+      centeredLabel(124, durY + 16, 108, timeStr, 2, uiFg());
     }
 
     // --- ROW 2: Speed (Left) & Heart Rate (Right) ---
@@ -436,18 +436,18 @@ static void drawLibrary(){
     // 2A. Speed Card (108x68)
     if (row2Y + 68 >= 68 && row2Y < 290) {
       display.fillRoundRect(8, row2Y, 108, 68, 10, uiCard());
-      display.drawRoundRect(8, row2Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
-      // Cyan speedometer icon (20x20)
-      drawCustomIcon(display, 8 + (108 - 20) / 2, row2Y + 10, 0x475F, CustomIcon::speedometerIcon, 20, 20);
+      if (!darkTheme) display.drawRoundRect(8, row2Y, 108, 68, 10, 0xD69A);
+      // Cyan speedometer icon: Square 32x32 per user spec
+      drawCustomIcon(display, 8 + (108 - 32) / 2, row2Y + 8, 0x475F, CustomIcon::speedometerIcon, 32, 32);
       float avgSpd = archiveSummary["avgSpeedKmh"].is<float>() ? archiveSummary["avgSpeedKmh"].as<float>() : ((sec > 0) ? (previewKm / (sec / 3600.0f)) : 0);
       String spdStr = (avgSpd > 0) ? (String(avgSpd, 1) + "KMPH") : "--KMPH";
-      centeredLabel(8, row2Y + 38, 108, spdStr, 2, 0xFFFF);
+      centeredLabel(8, row2Y + 44, 108, spdStr, 2, uiFg());
     }
 
     // 2B. Heart Rate Card (108x68)
     if (row2Y + 68 >= 68 && row2Y < 290) {
       display.fillRoundRect(124, row2Y, 108, 68, 10, uiCard());
-      display.drawRoundRect(124, row2Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
+      if (!darkTheme) display.drawRoundRect(124, row2Y, 108, 68, 10, 0xD69A);
       float avgHr = archiveSummary["avgHeartRate"].is<float>() ? archiveSummary["avgHeartRate"].as<float>() : 0;
       int hrVal = (int)round(avgHr);
       int zone = 3;
@@ -458,12 +458,15 @@ static void drawLibrary(){
         else if (hrVal < 180) zone = 4;
         else zone = 5;
       }
-      // Red heart icon (16x16) + Zone number (size 2)
-      int hrIconX = 124 + (108 - 32) / 2;
-      drawCustomIcon(display, hrIconX, row2Y + 12, 0xF800, CustomIcon::heartRateIcon);
-      label(hrIconX + 20, row2Y + 10, String(zone), 2, 0xFFFF);
+      // Red heart icon (square 20x20) + Zone number (size 2), center aligned with each other
+      String zoneStr = String(zone);
+      int zw = textWidth(zoneStr, 2);
+      int totalTopW = 20 + 6 + zw;
+      int hrStartX = 124 + (108 - totalTopW) / 2;
+      drawCustomIcon(display, hrStartX, row2Y + 10, 0xF800, CustomIcon::heartRateIcon, 20, 20);
+      label(hrStartX + 20 + 6, row2Y + 12, zoneStr, 2, uiFg());
       String hrStr = (hrVal > 0) ? (String(hrVal) + " BPM") : "-- BPM";
-      centeredLabel(124, row2Y + 38, 108, hrStr, 2, 0xFFFF);
+      centeredLabel(124, row2Y + 44, 108, hrStr, 2, uiFg());
     }
 
     // --- ROW 3: Elevation Gain (Left) & Calories (Right) ---
@@ -471,20 +474,20 @@ static void drawLibrary(){
     // 3A. Elevation Gain Card (108x68)
     if (row3Y + 68 >= 68 && row3Y < 290) {
       display.fillRoundRect(8, row3Y, 108, 68, 10, uiCard());
-      display.drawRoundRect(8, row3Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
-      drawCustomIcon(display, 8 + (108 - 16) / 2, row3Y + 12, 0xFDC0, CustomIcon::elevationIcon);
+      if (!darkTheme) display.drawRoundRect(8, row3Y, 108, 68, 10, 0xD69A);
+      drawCustomIcon(display, 8 + (108 - 24) / 2, row3Y + 10, 0xFDC0, CustomIcon::elevationIcon, 24, 24);
       String elevStr = previewElevation ? (String((int)previewGain) + "M") : "--M";
-      centeredLabel(8, row3Y + 38, 108, elevStr, 2, 0xFFFF);
+      centeredLabel(8, row3Y + 44, 108, elevStr, 2, uiFg());
     }
 
     // 3B. Calories Card (108x68)
     if (row3Y + 68 >= 68 && row3Y < 290) {
       display.fillRoundRect(124, row3Y, 108, 68, 10, uiCard());
-      display.drawRoundRect(124, row3Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
-      drawCustomIcon(display, 124 + (108 - 16) / 2, row3Y + 12, 0xFA80, CustomIcon::caloriesIcon);
+      if (!darkTheme) display.drawRoundRect(124, row3Y, 108, 68, 10, 0xD69A);
+      drawCustomIcon(display, 124 + (108 - 24) / 2, row3Y + 10, 0xFA80, CustomIcon::caloriesIcon, 24, 24);
       float cal = archiveSummary["caloriesEstimate"].is<float>() ? archiveSummary["caloriesEstimate"].as<float>() : 0;
       String calStr = (cal > 0) ? (String((int)cal) + " KCAL") : "-- KCAL";
-      centeredLabel(124, row3Y + 38, 108, calStr, 2, 0xFFFF);
+      centeredLabel(124, row3Y + 44, 108, calStr, 2, uiFg());
     }
 
     // --- ROW 4: Heart Rate Graph Card (224x82) ---
@@ -502,9 +505,10 @@ static void drawLibrary(){
     // Fixed Top Header & Status Bar (repainted so scrolled cards never overlap)
     display.fillRect(0, 0, 240, 68, uiBg());
     statusBar(true, false);
-    drawCustomIcon(display, 14, 36, 0xFFFF, isRun ? CustomIcon::runIcon : CustomIcon::bikeIcon, 24, 20);
-    label(44, 34, titleStr, 2, 0xFFFF);
-    label(44, 52, completedText, 1, uiMuted());
+    // Square 32x32 icon, center aligned with the 2-line title & date text beside it
+    drawCustomIcon(display, 14, 32, uiFg(), isRun ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 32, 32);
+    label(52, 32, titleStr, 2, uiFg());
+    label(52, 49, completedText, 0, uiMuted());
 
     // Fixed Bottom Navigation Bar
     display.fillRect(0, 290, 240, 30, uiBg());
@@ -1786,15 +1790,14 @@ static void drawCountdownScreen() {
     }
     centeredLabel(0, cy - 10, DISP_W, "GO", 3, 0xFFFF);
 
-    int iconW = 28, iconH = runningMode ? 28 : 24, gap = 8;
+    int iconSize = 28, gap = 8;
     int textW = textWidth("GO", 3);
-    int totalW = iconW + gap + textW;
+    int totalW = iconSize + gap + textW;
     int startX = (DISP_W - totalW) / 2;
     int yBottom = 238;
 
-    if (runningMode) drawCustomIcon(display, startX, yBottom - 2, 0xFFFF, CustomIcon::runIcon, 28, 28);
-    else drawCustomIcon(display, startX, yBottom, 0xFFFF, CustomIcon::bikeIcon, 28, 24);
-    label(startX + iconW + gap, yBottom + 1, "GO", 3, uiFg());
+    drawCustomIcon(display, startX, yBottom - 2, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, iconSize, iconSize);
+    label(startX + iconSize + gap, yBottom + 1, "GO", 3, uiFg());
 
   } else {
     // COUNTDOWN PHASE
@@ -1815,15 +1818,14 @@ static void drawCountdownScreen() {
     drawCenteredBigNumber(cx, cy, remainingSec, uiFg());
 
     // Below dial (Frame 18): White activity icon + "Ready" text
-    int iconW = 28, iconH = runningMode ? 28 : 24, gap = 8;
+    int iconSize = 28, gap = 8;
     int textW = textWidth("Ready", 3);
-    int totalW = iconW + gap + textW;
+    int totalW = iconSize + gap + textW;
     int startX = (DISP_W - totalW) / 2;
     int yBottom = 238;
 
-    if (runningMode) drawCustomIcon(display, startX, yBottom - 2, 0xFFFF, CustomIcon::runIcon, 28, 28);
-    else drawCustomIcon(display, startX, yBottom, 0xFFFF, CustomIcon::bikeIcon, 28, 24);
-    label(startX + iconW + gap, yBottom + 1, "Ready", 3, uiFg());
+    drawCustomIcon(display, startX, yBottom - 2, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, iconSize, iconSize);
+    label(startX + iconSize + gap, yBottom + 1, "Ready", 3, uiFg());
   }
 
   drawGlobalNav();

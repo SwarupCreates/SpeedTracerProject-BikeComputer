@@ -416,8 +416,8 @@ static void drawLibrary(){
 
     // 1B. Distance Card (108x48)
     if (topY + 48 >= 68 && topY < 290) {
-      display.fillRoundRect(124, topY, 108, 48, 10, uiCard());
-      if (!darkTheme) display.drawRoundRect(124, topY, 108, 48, 10, 0xD69A);
+      display.fillRoundRect(124, topY, 108, 48, 24, uiCard());
+      if (!darkTheme) display.drawRoundRect(124, topY, 108, 48, 24, 0xD69A);
       String distStr = (previewKm > 0.001f) ? (String(previewKm, 2) + "KM") : "--KM";
       centeredLabel(124, topY + 16, 108, distStr, 2, uiFg());
     }
@@ -425,8 +425,8 @@ static void drawLibrary(){
     // 1C. Duration Card (108x48)
     int durY = topY + 56;
     if (durY + 48 >= 68 && durY < 290) {
-      display.fillRoundRect(124, durY, 108, 48, 10, uiCard());
-      if (!darkTheme) display.drawRoundRect(124, durY, 108, 48, 10, 0xD69A);
+      display.fillRoundRect(124, durY, 108, 48, 24, uiCard());
+      if (!darkTheme) display.drawRoundRect(124, durY, 108, 48, 24, 0xD69A);
       String timeStr;
       if (sec >= 3600) timeStr = String(sec / 3600) + "hr " + String((sec % 3600) / 60) + "m";
       else if (sec > 0) timeStr = String(sec / 60) + "m " + String(sec % 60) + "s";

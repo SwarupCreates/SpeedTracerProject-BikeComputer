@@ -1017,7 +1017,7 @@ static void drawActivityGraph(int x, int y, int w, int h, int col) {
 static void drawStravaSyncButton(int x, int y, int w, int h) {
   if (y + h <= 68 || y >= 290) return;
   const uint16_t stravaOrange = 0xFA80; // Vibrant Strava #FC5200
-  display.fillRoundRect(x, y, w, h, 10, stravaOrange);
+  display.fillRoundRect(x, y, w, h, h / 2, stravaOrange);
   // Center-aligned Strava Logo + "Sync to Strava" content
   const char* labelText = "Sync to Strava";
   int iconW = 18;

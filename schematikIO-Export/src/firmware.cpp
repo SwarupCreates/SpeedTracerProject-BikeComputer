@@ -941,8 +941,22 @@ static void drawMapScreen() {
   float metersPerUnit = (float)((40075016.686 * cos(latRad) / 16384.0) / 4096.0);
   float pxPerUnit = metersPerUnit * scale;
 
-  int maxDxU = (int)(130.0f / pxPerUnit) + 120;
-  int maxDyU = (int)(120.0f / pxPerUnit) + 120;
+  // Course-Up (default): counter-rotate map by -s_fusedHeading so travel direction is straight UP.
+  // North-Up: rotHeading = 0 (map locked to North at top).
+  float rotHeading = activityMapNorthUp ? 0.0f : s_fusedHeading;
+  float rad = radians(rotHeading);
+  float cosA = cosf(rad);
+  float sinA = sinf(rad);
+  float cosP = cosA * pxPerUnit;
+  float sinP = sinA * pxPerUnit;
+
+  // Rotation-invariant radial bound for culling
+  int maxDistU = (int)(160.0f / pxPerUnit) + 120;
+
+  auto projectTilePoint = [&](int du, int dv, int &outX, int &outY) {
+    outX = cardCenterX + (int)lroundf(du * cosP + dv * sinP);
+    outY = cardCenterY + (int)lroundf(-du * sinP + dv * cosP);
+  };
 
   static int s_mapPolyX[256];
   static int s_mapPolyY[256];
@@ -1039,8 +1053,8 @@ static void drawMapScreen() {
       int p0Y = tileDeltaY + pts[off].v;
       int pEndX = tileDeltaX + pts[off + cnt - 1].u;
       int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+      if ((p0X > maxDistU && pEndX > maxDistU) || (p0X < -maxDistU && pEndX < -maxDistU) ||
+          (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
 
       bool hasJump = false;
       for (uint8_t k = 1; k < cnt; k++) {
@@ -1053,8 +1067,7 @@ static void drawMapScreen() {
       bool isClosed = (cnt >= 3 && abs(pts[off].u - pts[off + cnt - 1].u) <= 35 &&
                                    abs(pts[off].v - pts[off + cnt - 1].v) <= 35);
       for (uint8_t k = 0; k < cnt; k++) {
-        s_mapPolyX[k] = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
-        s_mapPolyY[k] = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+        projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, s_mapPolyX[k], s_mapPolyY[k]);
       }
       if (ft == FEAT_PARK || isClosed) {
         uint16_t fCol = (ft == FEAT_PARK) ? parkFill : waterFill;
@@ -1100,24 +1113,23 @@ static void drawMapScreen() {
       int p0Y = tileDeltaY + pts[off].v;
       int pEndX = tileDeltaX + pts[off + cnt - 1].u;
       int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+      if ((p0X > maxDistU && pEndX > maxDistU) || (p0X < -maxDistU && pEndX < -maxDistU) ||
+          (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
 
       bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
       int w = isMajor ? majorCasingW : minorCasingW;
 
-      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
-      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      int sx0, sy0;
+      projectTilePoint(p0X, p0Y, sx0, sy0);
       for (uint8_t k = 1; k < cnt; k++) {
         if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
-          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
-          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx0, sy0);
           continue;
         }
         int pkX = tileDeltaX + pts[off + k].u;
         int pkY = tileDeltaY + pts[off + k].v;
-        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
-        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        int sx1, sy1;
+        projectTilePoint(pkX, pkY, sx1, sy1);
         clipAndDrawLine(sx0, sy0, sx1, sy1, roadCasing, w);
         sx0 = sx1;
         sy0 = sy1;
@@ -1151,24 +1163,23 @@ static void drawMapScreen() {
       int p0Y = tileDeltaY + pts[off].v;
       int pEndX = tileDeltaX + pts[off + cnt - 1].u;
       int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+      if ((p0X > maxDistU && pEndX > maxDistU) || (p0X < -maxDistU && pEndX < -maxDistU) ||
+          (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
 
       bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
       int w = isMajor ? majorFillW : minorFillW;
 
-      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
-      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      int sx0, sy0;
+      projectTilePoint(p0X, p0Y, sx0, sy0);
       for (uint8_t k = 1; k < cnt; k++) {
         if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
-          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
-          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx0, sy0);
           continue;
         }
         int pkX = tileDeltaX + pts[off + k].u;
         int pkY = tileDeltaY + pts[off + k].v;
-        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
-        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        int sx1, sy1;
+        projectTilePoint(pkX, pkY, sx1, sy1);
         clipAndDrawLine(sx0, sy0, sx1, sy1, roadFill, w);
         sx0 = sx1;
         sy0 = sy1;
@@ -1176,7 +1187,7 @@ static void drawMapScreen() {
     }
   }
 
-  // Fast Lat/Lon to pixel projection helper
+  // Fast Lat/Lon to pixel projection helper (with dynamic map counter-rotation)
   auto projectLatLon = [&](double pLat, double pLon, int &outX, int &outY) {
     int pTX, pTY;
     float pfx, pfy;
@@ -1185,8 +1196,7 @@ static void drawMapScreen() {
     int pV = (int)lround(pfy * 4096.0f);
     int dX = (pTX - centerTX) * 4096 + (pU - centerU);
     int dY = (pTY - centerTY) * 4096 + (pV - centerV);
-    outX = cardCenterX + (int)(dX * pxPerUnit);
-    outY = cardCenterY + (int)(dY * pxPerUnit);
+    projectTilePoint(dX, dY, outX, outY);
   };
 
   const uint16_t stravaOrange = 0xFA40; // Vibrant Strava Orange (#FC5200)
@@ -1228,10 +1238,15 @@ static void drawMapScreen() {
   }
 
   // Center Navigation Marker (Frame 8 & SVG: 36x36 Blue Circle with Crisp White Heading Chevron)
-  drawMapHeadingMarker(display, cardCenterX, cardCenterY, s_fusedHeading);
+  // In Course-Up mode (default): marker always renders straight UP (0.0f), while map below counter-rotates.
+  // In North-Up mode: map is locked to North (rotHeading = 0.0f), and marker rotates to s_fusedHeading.
+  float markerHeading = activityMapNorthUp ? s_fusedHeading : 0.0f;
+  drawMapHeadingMarker(display, cardCenterX, cardCenterY, markerHeading);
 
   // Top-Right Floating Compass Coin (Frame 8)
-  float compassH = (compass.ready && isfinite(compass.heading)) ? compass.heading : (ride.gpsFixed ? (float)ride.heading : 0.0f);
+  // In Course-Up mode: needle points to real Earth North (360 - s_fusedHeading).
+  // In North-Up mode: compass needle locks straight UP to North (0.0f).
+  float compassH = activityMapNorthUp ? 0.0f : fmodf(360.0f - s_fusedHeading + 360.0f, 360.0f);
   drawCompassCoin(display, 202, 54, compassH);
 
   // Re-stroke map border around viewport card
@@ -1593,6 +1608,7 @@ void setup() {
     cfg.countdownSec     = prefs.getInt("cntdownSec", 3);
     if (cfg.countdownSec != 3 && cfg.countdownSec != 5 && cfg.countdownSec != 10) cfg.countdownSec = 3;
     homeHeroClock        = prefs.getBool("heroClock", false);
+    activityMapNorthUp   = prefs.getBool("mapNorthUp", false);
   cfg.maxSpeedKmh      = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   cfg.maxPowerW        = prefs.getFloat("maxPower", cfg.maxPowerW);
   cfg.maxCadRpm        = prefs.getFloat("maxCad", cfg.maxCadRpm);

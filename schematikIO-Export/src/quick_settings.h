@@ -26,6 +26,7 @@ int settingsScroll=0;
 enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH };
 HomePage homePage=HOME_MAIN;
 bool homeHeroClock = false;
+bool activityMapNorthUp = false;
 int appsScroll = 0;
 const int MAX_APPS_SCROLL = 200;
 static int appsPage = 0;
@@ -734,6 +735,14 @@ static void globalBack(){
     }
   }
   uiRevision++;
+}
+
+static void saveMapNorthUpPref() {
+  Preferences p;
+  if (p.begin("cyclo", false)) {
+    p.putBool("mapNorthUp", activityMapNorthUp);
+    p.end();
+  }
 }
 
 static void saveHomeHeroPref() {
@@ -2207,9 +2216,20 @@ static void quickTap(int x, int y) {
       }
       return;
     }
-    if (currentScreen == SCR_MAP && y > 240) {
-      mapZoom = constrain((int)mapZoom + (x >= 120 ? 1 : -1), 1, 5);
-      uiRevision++;
+    if (currentScreen == SCR_MAP) {
+      // Tap on Top-Right Compass Coin (cx = 202, cy = 54) to toggle North-Up vs Course-Up
+      if (x >= 180 && x <= 226 && y >= 34 && y <= 76) {
+        activityMapNorthUp = !activityMapNorthUp;
+        saveMapNorthUpPref();
+        uiRevision++;
+        return;
+      }
+      if (y > 240) {
+        mapZoom = constrain((int)mapZoom + (x >= 120 ? 1 : -1), 1, 5);
+        uiRevision++;
+        return;
+      }
+      return;
     }
     return;
   }

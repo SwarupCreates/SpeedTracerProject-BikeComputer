@@ -63,6 +63,8 @@ struct Config {
   float wheelCircumM    = 2.096f;
   float riderMassKg     = 75.0f;
   float maxSpeedKmh     = 60.0f;
+  float maxSpeedRide    = 60.0f;
+  float maxSpeedRun     = 20.0f;
   float maxPowerW       = 400.0f;
   float maxCadRpm       = 120.0f;
   float vo2maxManual    = 0.0f;
@@ -97,7 +99,7 @@ struct Btn {
 struct RoutePoint { float lat, lon; };
 struct TrackPoint  { float lat, lon, alt; uint32_t sec; };
 
-enum Screen { SCR_DASH, SCR_MAP, SCR_METRICS, SCR_COUNT };
+enum Screen { SCR_DASH, SCR_METRICS, SCR_MAP, SCR_CONTROLS, SCR_COUNT };
 bool darkTheme=false;
 uint32_t uiRevision=0;
 
@@ -461,7 +463,7 @@ static uint16_t uiBg()   { return darkTheme ? 0x0000 : 0xFFFF; }
 static uint16_t uiCard() { return darkTheme ? 0x18C3 : 0xDEFB; }
 static uint16_t uiFg()   { return darkTheme ? 0xFFFF : 0x18C3; }
 static uint16_t uiMuted(){ return 0x8410; }
-static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60, RED = 0xF800;
+static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60, RED = 0xF800, GREEN = 0x07E0;
 
 // Native-resolution, 4-bit coverage glyphs, blended over the actual card background.
 // Use one shared baseline and measured advances; no enlarged 5x7 bitmap text.
@@ -581,9 +583,10 @@ uint32_t activityPoints = 0;
 #include "activity_fit.h"
 #include "activity_archive.h"
 static String paceText(float kmh){
-  if(kmh<=0.1f)return "--:--";
-  unsigned seconds=lroundf(3600.0f/kmh);
-  return String(seconds/60)+":"+(seconds%60<10?"0":"")+String(seconds%60);
+  if(kmh < 1.8f) return "--:--";
+  unsigned seconds = lroundf(3600.0f / kmh);
+  if(seconds > 1500) return "--:--";
+  return String(seconds / 60) + ":" + (seconds % 60 < 10 ? "0" : "") + String(seconds % 60);
 }
 static bool beginActivityFile() {
   activityPoints=0;
@@ -605,6 +608,7 @@ static void saveActivity() {
   rideStarted=false;
   uiRevision++;
 }
+static bool activityEndConfirm = false;
 #include "quick_settings.h"
 static bool activityRecording(){return rideStarted && !ridePaused;}
 
@@ -620,74 +624,80 @@ static void heartCard(int y, int h) {
   card(6, y, 228, h, cardBg);
 
   // AVG
-  label(16, y + 8, "AVG", 1, hrSub);
-  label(16, y + 18, (hrSamples?String(hrSum/hrSamples):String("--")), 2, hrFg);
+  label(16, y + 6, "AVG", 1, hrSub);
+  label(16, y + 16, (hrSamples?String(hrSum/hrSamples):String("--")), 2, hrFg);
 
   // Current HR & Zone
-  label(42, y + 18, bleHRReady ? "ZONE " + String(zone) : "NO DATA", 1, hrFg);
-  label(84, y + 10, (bleHRReady?String(hrVal):String("--")), 3, hrFg);
-  label(144, y + 18, "BPM", 1, hrFg);
-  drawHeartIcon(display, 168, y + 17, hrFg);
+  label(42, y + 16, bleHRReady ? "ZONE " + String(zone) : "NO DATA", 1, hrFg);
+  label(84, y + 8, (bleHRReady?String(hrVal):String("--")), 3, hrFg);
+  label(144, y + 16, "BPM", 1, hrFg);
+  drawHeartIcon(display, 168, y + 15, hrFg);
 
   // MAX
-  label(192, y + 8, "MAX", 1, hrSub);
-  label(192, y + 18, (hrSamples?String(hrMax):String("--")), 2, hrFg);
+  label(192, y + 6, "MAX", 1, hrSub);
+  label(192, y + 16, (hrSamples?String(hrMax):String("--")), 2, hrFg);
 
   // 5-Zone Bar with Active Indicator
-  if (bleHRReady) drawHRZoneBar(display, 16, y + 54, 208, zone);
+  if (bleHRReady) drawHRZoneBar(display, 16, y + 46, 208, zone);
 }
 
 static void drawDashScreen() {
   statusBar();
-  heartCard(29, 68);
 
-  // Hero Speed Card
-  int y = 101, h = 171;
+  // Hero Speed Card (Top)
+  int y = 29, h = 162;
   card(6, y, 228, h, uiCard());
   label(16, y + 8, "AVG", 1, uiMuted());
-  label(16, y + 18, (ride.elapsedSec?(runningMode?paceText(ride.avgSpeedKmh):String(ride.avgSpeedKmh,1)):String("--")), 2, uiFg());
+  label(16, y + 18, (ride.elapsedSec ? (runningMode ? (ride.avgSpeedKmh >= 1.8f ? paceText(ride.avgSpeedKmh) : String("--:--")) : String(ride.avgSpeedKmh, 1)) : String("--")), 2, uiFg());
   label(192, y + 8, "MAX", 1, uiMuted());
-  label(180, y + 18, (ride.elapsedSec?(runningMode?paceText(ride.maxSpeedKmh):String(ride.maxSpeedKmh,1)):String("--")), 2, uiFg());
+  label(180, y + 18, (ride.elapsedSec ? (runningMode ? (ride.maxSpeedKmh >= 1.8f ? paceText(ride.maxSpeedKmh) : String("--:--")) : String(ride.maxSpeedKmh, 1)) : String("--")), 2, uiFg());
 
   // Center Arc Gauge (270 degrees sweep)
-  int cx = 120, cy = y + 78;
+  int cx = 120, cy = y + 68;
   uint16_t arcBg = darkTheme ? 0x2945 : 0xCE79;
   for (int d = 135; d <= 405; d++) {
     float a = radians((float)d);
-    for (int r = 50; r <= 56; r++) {
+    for (int r = 48; r <= 54; r++) {
       display.drawPixel(cx + (int)(r * cosf(a)), cy + (int)(r * sinf(a)), arcBg);
     }
   }
 
   // Active Progress Arc
   float spVal = ride.speedKmh;
-  int fillSpan = (int)(270.0f * constrain(spVal / cfg.maxSpeedKmh, 0.0f, 1.0f));
+  float gaugeMax = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
+  int fillSpan = (int)(270.0f * constrain(spVal / gaugeMax, 0.0f, 1.0f));
   for (int d = 135; d <= 135 + fillSpan; d++) {
     float a = radians((float)d);
-    for (int r = 50; r <= 56; r++) {
+    for (int r = 48; r <= 54; r++) {
       display.drawPixel(cx + (int)(r * cosf(a)), cy + (int)(r * sinf(a)), TEAL);
     }
   }
 
-  // Bike Icon & Speed Readout inside Arc
-  if(runningMode)drawCustomIcon(display,111,cy-36,TEAL,CustomIcon::runIcon);
-  else drawBikeIcon(display, 111, cy - 36, TEAL);
-  String sp = speedAvailable()?(runningMode?paceText(ride.speedKmh):String(ride.speedKmh,1)):String("--");
-  centeredLabel(45, cy - 12, 150, sp, 3, uiFg());
-  label(96, cy + 18, (ride.gpsFixed || (!runningMode && (bleSpeedReady || (sensors.speedPhysical && millis()-externalSensorMs<5000)))) ? (runningMode?"MIN/KM":"KM/H") : "NO DATA", 1, uiMuted());
+  // Bike / Run Icon & Speed Readout inside Arc
+  if (runningMode) drawCustomIcon(display, 111, cy - 30, TEAL, CustomIcon::runIcon);
+  else drawBikeIcon(display, 111, cy - 30, TEAL);
 
-  // Bottom Complications Row
-  label(16, y + 128, (rideStarted||activityPoints?String(ride.distanceKm,2):String("--")), 2, uiFg());
-  label(16, y + 148, "DISTANCE (KM)", 1, uiMuted());
-  label(78, y + 128, durationText(), 2, uiFg());
-  label(86, y + 148, "TOTAL TIME", 1, uiMuted());
-  label(184, y + 128, (ride.gpsFixed&&trackLen>1?String(ride.gradePercent,0)+"%":String("--")), 2, uiFg());
-  label(180, y + 148, "GRADIENT", 1, uiMuted());
+  String sp = speedAvailable() ? (runningMode ? paceText(ride.speedKmh) : String(ride.speedKmh, 1)) : String("--");
+  centeredLabel(45, cy - 6, 150, sp, 3, uiFg());
+  label(runningMode ? 100 : 108, cy + 22, (ride.gpsFixed || (!runningMode && (bleSpeedReady || (sensors.speedPhysical && millis() - externalSensorMs < 5000)))) ? (runningMode ? "MIN/KM" : "KM/H") : "NO DATA", 1, uiMuted());
 
-  // Compact footer leaves the global tray unobstructed.
-  card(6,274,228,14,uiCard());
-  label(12,276,(calorieSeconds?"KCAL EST: "+String(calorieEstimate,0):String("KCAL EST: --")),1,uiMuted());
-  label(144,276,"SAT: "+(gps.satellites.isValid() && gps.satellites.age()<3000 ? String(gps.satellites.value()):String("--")),1,uiMuted());
+  // Bottom Complications Row inside Speed card
+  label(16, y + 120, (rideStarted || activityPoints ? String(ride.distanceKm, 2) : String("--")), 2, uiFg());
+  label(16, y + 140, "DISTANCE (KM)", 1, uiMuted());
+  label(82, y + 120, durationText(), 2, uiFg());
+  label(86, y + 140, "TOTAL TIME", 1, uiMuted());
+  label(184, y + 120, (ride.gpsFixed && trackLen > 1 ? String(ride.gradePercent, 0) + "%" : String("--")), 2, uiFg());
+  label(180, y + 140, "GRADIENT", 1, uiMuted());
+
+  // Heart Rate Card (Middle)
+  heartCard(195, 64);
+
+  // Calories & Satellites Footer Card (Bottom)
+  card(6, 263, 228, 22, uiCard());
+  drawFlameIcon(display, 14, 266, ORANGE);
+  label(30, 269, (calorieSeconds ? "CALORIES  " + String(calorieEstimate, 0) + " KCAL" : "CALORIES  -- KCAL"), 1, uiMuted());
+  String satStr = "SATELLITES  " + String(gps.satellites.isValid() && gps.satellites.age() < 3000 ? String(gps.satellites.value()) : String("--"));
+  label(140, 269, satStr, 1, uiMuted());
 }
 
 static void drawMetricsScreen() {
@@ -1067,6 +1077,67 @@ static void drawMapScreen() {
   label(135, hudY + 40, "DIRECTIONS", 1, uiMuted());
 }
 
+static void drawActivityControlsScreen() {
+  statusBar();
+
+  // Status Summary Card
+  int y = 32;
+  card(6, y, 228, 66, uiCard());
+  if (runningMode) drawCustomIcon(display, 18, y + 14, ORANGE, CustomIcon::runIcon);
+  else drawBikeIcon(display, 18, y + 14, TEAL);
+
+  label(48, y + 12, runningMode ? "OUTDOOR RUN" : "OUTDOOR RIDE", 2, uiFg());
+  
+  if (!rideStarted) {
+    label(48, y + 36, "READY TO START", 1, uiMuted());
+  } else if (ridePaused) {
+    label(48, y + 36, "PAUSED - " + durationText(), 1, ORANGE);
+  } else {
+    label(48, y + 36, "RECORDING - " + durationText(), 1, GREEN);
+  }
+
+  label(154, y + 36, String(ride.distanceKm, 2) + " KM", 1, uiFg());
+
+  // PAUSE / RESUME Button
+  y = 106;
+  uint16_t pauseBtnBg = !rideStarted ? TEAL : (ridePaused ? GREEN : (darkTheme ? 0x93C0 : 0xE580));
+  card(6, y, 228, 56, pauseBtnBg);
+  const char* pauseTxt = !rideStarted ? (runningMode ? "START RUN" : "START RIDE") : (ridePaused ? "RESUME ACTIVITY" : "PAUSE ACTIVITY");
+  centeredLabel(6, y + 18, 228, pauseTxt, 2, 0xFFFF);
+
+  // END ACTIVITY Button
+  y = 170;
+  card(6, y, 228, 56, rideStarted ? RED : (darkTheme ? 0x31A6 : 0xCE79));
+  centeredLabel(6, y + 18, 228, "END ACTIVITY", 2, 0xFFFF);
+
+  // SPORT MODE Toggle Tile
+  y = 234;
+  card(6, y, 228, 48, uiCard());
+  drawCustomIcon(display, 16, y + 12, uiFg(), runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon);
+  label(44, y + 10, runningMode ? "SPORT: RUNNING" : "SPORT: CYCLING", 1, uiFg());
+  label(44, y + 26, runningMode ? "Tap to switch to Cycling" : "Tap to switch to Running", 1, uiMuted());
+  display.fillRoundRect(160, y + 10, 60, 28, 14, runningMode ? ORANGE : TEAL);
+  centeredLabel(160, y + 17, 60, runningMode ? "RUN" : "RIDE", 1, 0xFFFF);
+
+  // Modal Dialog: End Activity Confirmation
+  if (activityEndConfirm) {
+    card(14, 76, 212, 148, uiCard());
+    display.drawRoundRect(14, 76, 212, 148, 8, RED);
+    display.drawRoundRect(15, 77, 210, 146, 7, RED);
+
+    centeredLabel(14, 92, 212, "END ACTIVITY?", 2, RED);
+    centeredLabel(14, 120, 212, "Save FIT & finish session?", 1, uiFg());
+
+    // Confirm button (Left)
+    card(26, 154, 90, 48, RED);
+    centeredLabel(26, 169, 90, "CONFIRM", 2, 0xFFFF);
+
+    // Cancel button (Right)
+    card(124, 154, 90, 48, darkTheme ? 0x39E7 : 0xBDD7);
+    centeredLabel(124, 169, 90, "CANCEL", 2, uiFg());
+  }
+}
+
 static void drawSplash() {
  display.showBrandLogo();
  delay(1800);
@@ -1332,7 +1403,9 @@ void setup() {
   cfg.gearRatio        = prefs.getFloat("gearRatio", cfg.gearRatio);
   cfg.wheelCircumM     = prefs.getFloat("wheelCircum", cfg.wheelCircumM);
   cfg.riderMassKg      = prefs.getFloat("riderMass", cfg.riderMassKg);
-  cfg.maxSpeedKmh      = prefs.getFloat("maxSpeed", cfg.maxSpeedKmh);
+  cfg.maxSpeedRide     = prefs.getFloat("maxSpdRide", 60.0f);
+  cfg.maxSpeedRun      = prefs.getFloat("maxSpdRun", 20.0f);
+  cfg.maxSpeedKmh      = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   cfg.maxPowerW        = prefs.getFloat("maxPower", cfg.maxPowerW);
   cfg.maxCadRpm        = prefs.getFloat("maxCad", cfg.maxCadRpm);
   cfg.vo2maxManual     = prefs.getFloat("vo2max", cfg.vo2maxManual);
@@ -1647,8 +1720,29 @@ void loop() {
     ride.gpsFixed = false;
   }
 
-  ride.gpsFixed=gps.location.isValid()&&gps.location.age()<3000;
-  ride.speedKmh=ride.gpsFixed && gps.speed.isValid()&&gps.speed.age()<3000?gps.speed.kmph():0;
+  ride.gpsFixed = gps.location.isValid() && gps.location.age() < 3000;
+  float rawGpsSpeed = (ride.gpsFixed && gps.speed.isValid() && gps.speed.age() < 3000) ? (float)gps.speed.kmph() : 0.0f;
+  
+  // GPS noise deadzones:
+  // In outdoor ride: variance 0.1-0.6 km/h, stationary jitter up to ~1.2 km/h
+  // In outdoor run: walking / stationary drift up to 1.8 km/h
+  float speedDeadzone = runningMode ? 1.8f : 1.2f;
+  if (rawGpsSpeed < speedDeadzone) {
+    rawGpsSpeed = 0.0f;
+  }
+
+  // Low-pass EMA filter on GPS speed to reject sudden 1-sample noise spikes
+  static float filteredGpsSpeed = 0.0f;
+  if (rawGpsSpeed <= 0.0f) {
+    filteredGpsSpeed = 0.0f;
+  } else {
+    if (filteredGpsSpeed <= 0.0f) {
+      filteredGpsSpeed = rawGpsSpeed;
+    } else {
+      filteredGpsSpeed = (0.65f * filteredGpsSpeed) + (0.35f * rawGpsSpeed);
+    }
+  }
+  ride.speedKmh = filteredGpsSpeed;
   if(bmpOk && millis()-sensorMs>500){sensorMs=millis();
     if(bmp.performReading()&&isfinite(bmp.pressure)&&bmp.pressure>=30000&&bmp.pressure<=125000)
       ride.altM=44330.0f*(1.0f-powf(bmp.pressure/101325.0f,0.1903f));
@@ -1704,7 +1798,10 @@ void loop() {
     if (ride.elapsedSec > 0)
       ride.avgSpeedKmh = (distAccum / (float)ride.elapsedSec) * 3600.0f;
   }
-  if (ride.speedKmh > ride.maxSpeedKmh) ride.maxSpeedKmh = ride.speedKmh;
+  float gaugeMax = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
+  if (ride.speedKmh > ride.maxSpeedKmh && ride.speedKmh <= (gaugeMax * 1.5f)) {
+    ride.maxSpeedKmh = ride.speedKmh;
+  }
   if (ride.powerW   > ride.maxPowerW)   ride.maxPowerW   = ride.powerW;
 
   // Compass
@@ -1731,9 +1828,9 @@ void loop() {
 
   // SEL (body) → switch screen
 
-  // Remote LEFT → dash, Remote RIGHT → map
-  if (rmtLt.pressed) { rmtLt.pressed = false; currentScreen = SCR_DASH; }
-  if (rmtRt.pressed) { rmtRt.pressed = false; currentScreen = (Screen)(((int)currentScreen+1)%SCR_COUNT);  }
+  // Remote LEFT → prev screen, Remote RIGHT → next screen
+  if (rmtLt.pressed) { rmtLt.pressed = false; currentScreen = (Screen)(((int)currentScreen - 1 + SCR_COUNT) % SCR_COUNT); }
+  if (rmtRt.pressed) { rmtRt.pressed = false; currentScreen = (Screen)(((int)currentScreen + 1) % SCR_COUNT); }
 
   // Remote UP/DN → zoom (map) or future use on dash
   if (rmtUp.pressed) {
@@ -1799,9 +1896,10 @@ void loop() {
     if(drawLifecycleScreen()){drawGlobalNav();drawAppRefresh();display.refresh();return;}
     if(quickOpen){drawQuickSettings();drawGlobalNav();drawAppRefresh();display.refresh();return;}
     switch (currentScreen) {
-      case SCR_DASH: drawDashScreen(); break;
-      case SCR_MAP:  drawMapScreen();  break;
-      case SCR_METRICS: drawMetricsScreen(); break;
+      case SCR_DASH:     drawDashScreen();             break;
+      case SCR_METRICS:  drawMetricsScreen();          break;
+      case SCR_MAP:      drawMapScreen();              break;
+      case SCR_CONTROLS: drawActivityControlsScreen(); break;
       default: break;
     }
     drawGlobalNav();

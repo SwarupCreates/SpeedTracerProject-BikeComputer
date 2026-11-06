@@ -21,7 +21,7 @@ bool gpsRadarInspector=false;
 int gpsScroll=0;
 int settingsScroll=0;
 // Home subpages stay independent of dashboard navigation and touch calibration.
-enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS };
+enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS };
 HomePage homePage=HOME_MAIN;
 String browserPath="/", browserError, selectedFile;
 String browserNames[4];
@@ -602,7 +602,8 @@ static void libraryTap(int x,int y){
 // Shared tray reserves y=290..319 on every interactive page.
 static bool globalHasNext(){
   if(gpsWaiting || gpsRadarInspector) return true;
-  if(!welcomeOpen || quickOpen || shutdownDialog || countdownStart)return false;
+  if(!welcomeOpen) return true;
+  if(quickOpen || shutdownDialog || countdownStart)return false;
   if(homePage==HOME_FILES && fileDetailOpen)return false;
   if(isLibrary()){
     if(homePage==HOME_ROUTES && librarySelection.length()) return false;
@@ -620,6 +621,11 @@ static void globalNext(){
   }
   if(gpsRadarInspector){
     gpsScroll = (gpsScroll == 0) ? 128 : 0;
+    uiRevision++;
+    return;
+  }
+  if(!welcomeOpen){
+    currentScreen = (Screen)(((int)currentScreen + 1) % SCR_COUNT);
     uiRevision++;
     return;
   }
@@ -650,6 +656,7 @@ static void drawGlobalNav(){
 }
 static void globalHome(){
   if(shutdownPending)return;
+  activityEndConfirm=false;
   fileDetailOpen=false;fileDeleteConfirm=false;
   shutdownDialog=false;gpsWaiting=false;gpsRadarInspector=false;countdownStart=0;
   quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;
@@ -663,7 +670,10 @@ static void globalBack(){
   else if(gpsRadarInspector){gpsRadarInspector=false;}
   else if(quickOpen){if(quickDetail)quickDetail=0;else quickOpen=false;}
   else if(welcomeOpen){
-    if(isLibrary()){
+    if(homePage == HOME_ACTIVITY_SETTINGS) {
+      homePage = HOME_APPS;
+    }
+    else if(isLibrary()){
       if(librarySelection.length()){
         if(prevActivitySelection.length()){
           drawLoadingScreen("Loading assets...", "Please wait!");
@@ -693,18 +703,128 @@ static void globalBack(){
       browserPage=0;loadBrowser();
     }else if(homePage==HOME_FILES)homePage=HOME_APPS;
     else homePage=HOME_MAIN;
-  }else if(currentScreen!=SCR_DASH)currentScreen=SCR_DASH;
-  else {welcomeOpen=true;homePage=HOME_MAIN;}
+  } else if(!welcomeOpen) {
+    if(activityEndConfirm) {
+      activityEndConfirm = false;
+    } else {
+      currentScreen = (Screen)(((int)currentScreen - 1 + SCR_COUNT) % SCR_COUNT);
+    }
+  }
   uiRevision++;
 }
+
+static void saveActivityConfig() {
+  cfg.maxSpeedKmh = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
+  Preferences p;
+  if (p.begin("cyclo", false)) {
+    p.putFloat("maxSpdRide", cfg.maxSpeedRide);
+    p.putFloat("maxSpdRun", cfg.maxSpeedRun);
+    p.end();
+  }
+}
+
+static void drawActivitySettingsApp() {
+  drawScreenHeader("ACTIVITY SETTINGS", CustomIcon::configureIcon, true);
+
+  // Tile 1: Ride Max Speed (Gauge limit)
+  int y = 68;
+  card(6, y, 228, 52, uiCard());
+  drawBikeIcon(display, 16, y + 14, TEAL);
+  label(44, y + 10, "RIDE MAX SPEED", 1, uiFg());
+  label(44, y + 26, String((int)cfg.maxSpeedRide) + " KM/H (Gauge)", 1, uiMuted());
+  
+  display.fillRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(148, y + 17, 32, "-", 2, uiFg());
+
+  display.fillRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(188, y + 17, 32, "+", 2, uiFg());
+
+  // Tile 2: Run Max Speed (Gauge limit)
+  y = 126;
+  card(6, y, 228, 52, uiCard());
+  drawCustomIcon(display, 16, y + 14, ORANGE, CustomIcon::runIcon);
+  label(44, y + 10, "RUN MAX SPEED", 1, uiFg());
+  label(44, y + 26, String((int)cfg.maxSpeedRun) + " KM/H (Gauge)", 1, uiMuted());
+
+  display.fillRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(148, y + 17, 32, "-", 2, uiFg());
+
+  display.fillRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(188, y + 17, 32, "+", 2, uiFg());
+
+  // Tile 3: Sport Mode Toggle
+  y = 184;
+  card(6, y, 228, 48, uiCard());
+  drawCustomIcon(display, 16, y + 12, uiFg(), runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon);
+  label(44, y + 10, "ACTIVE SPORT", 1, uiFg());
+  label(44, y + 26, runningMode ? "Running Mode" : "Cycling Mode", 1, uiMuted());
+  display.fillRoundRect(154, y + 10, 66, 28, 14, runningMode ? ORANGE : TEAL);
+  centeredLabel(154, y + 17, 66, runningMode ? "RUN" : "RIDE", 1, 0xFFFF);
+
+  // Tile 4: Speed Deadzone info
+  y = 238;
+  card(6, y, 228, 44, uiCard());
+  drawSatelliteIcon(display, 16, y + 12, uiFg());
+  label(44, y + 8, "GPS SPEED DEADZONE", 1, uiFg());
+  label(44, y + 24, runningMode ? "Run: < 1.8 km/h clamped to 0" : "Ride: < 1.2 km/h clamped to 0", 1, uiMuted());
+}
+
+static void tapActivitySettings(int x, int y) {
+  if (y < 56 && x < 48) {
+    homePage = HOME_APPS;
+    uiRevision++;
+    return;
+  }
+
+  // Tile 1: Ride Max Speed (y=68..120)
+  if (y >= 68 && y < 120) {
+    if (x >= 140 && x < 184) {
+      cfg.maxSpeedRide = max(20.0f, cfg.maxSpeedRide - 5.0f);
+      saveActivityConfig();
+      uiRevision++;
+    } else if (x >= 184 && x < 232) {
+      cfg.maxSpeedRide = min(120.0f, cfg.maxSpeedRide + 5.0f);
+      saveActivityConfig();
+      uiRevision++;
+    }
+    return;
+  }
+
+  // Tile 2: Run Max Speed (y=126..178)
+  if (y >= 126 && y < 178) {
+    if (x >= 140 && x < 184) {
+      cfg.maxSpeedRun = max(10.0f, cfg.maxSpeedRun - 2.0f);
+      saveActivityConfig();
+      uiRevision++;
+    } else if (x >= 184 && x < 232) {
+      cfg.maxSpeedRun = min(40.0f, cfg.maxSpeedRun + 2.0f);
+      saveActivityConfig();
+      uiRevision++;
+    }
+    return;
+  }
+
+  // Tile 3: Active Sport Toggle (y=184..232)
+  if (y >= 184 && y < 232) {
+    runningMode = !runningMode;
+    saveActivityConfig();
+    uiRevision++;
+    return;
+  }
+}
+
 static void drawHomeSubpage(){
 
   statusBar();
   if(isLibrary()){drawLibrary();return;}
   if(homePage==HOME_APPS){
     drawScreenHeader("ALL APPS", CustomIcon::allAppsIcon, false);
-    const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","MAP"};
-    CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::routeMapIcon};
+    const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","ACTIVITY"};
+    CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::configureIcon};
     const int btnW = 108, btnH = 64;
     for(int i = 0; i < 6; i++){
       int col = i % 2, row = i / 2;
@@ -717,6 +837,8 @@ static void drawHomeSubpage(){
     }
   }else if(homePage==HOME_SETTINGS){
     drawSettingsApp();
+  }else if(homePage==HOME_ACTIVITY_SETTINGS){
+    drawActivitySettingsApp();
   }else{
     if(fileDetailOpen){
       drawFileDetail();
@@ -1134,6 +1256,10 @@ static void quickTap(int x, int y) {
       }
       return;
     }
+    if(homePage==HOME_ACTIVITY_SETTINGS){
+      tapActivitySettings(x, y);
+      return;
+    }
     if(homePage==HOME_APPS){
       int col = (x >= 120 && x < 236) ? 1 : (x >= 4 && x < 120) ? 0 : -1;
       int row = -1;
@@ -1147,7 +1273,7 @@ static void quickTap(int x, int y) {
       else if(tile==2)openLibrary(HOME_ROUTES);
       else if(tile==3){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;settingsScroll=0;uiRevision++;}
       else if(tile==4)openBrowser("/");
-      else {welcomeOpen=false;currentScreen=SCR_MAP;uiRevision++;}
+      else {homePage=HOME_ACTIVITY_SETTINGS;uiRevision++;}
       return;
     }
     if(y>=140 && y<176 && x>=6 && x<190){
@@ -1181,6 +1307,52 @@ static void quickTap(int x, int y) {
     return;
   }
   if (!quickOpen) {
+    if (currentScreen == SCR_CONTROLS) {
+      if (activityEndConfirm) {
+        if (y >= 150 && y <= 210) {
+          if (x >= 24 && x <= 118) {
+            activityEndConfirm = false;
+            saveActivity();
+            ridePaused = false;
+            welcomeOpen = true;
+            homePage = HOME_MAIN;
+            currentScreen = SCR_DASH;
+            uiRevision++;
+            return;
+          } else if (x >= 122 && x <= 216) {
+            activityEndConfirm = false;
+            uiRevision++;
+            return;
+          }
+        }
+        activityEndConfirm = false;
+        uiRevision++;
+        return;
+      }
+
+      if (y >= 106 && y < 165 && x >= 6 && x < 234) {
+        if (!rideStarted) requestRideStart();
+        else toggleRide();
+        uiRevision++;
+        return;
+      }
+
+      if (y >= 170 && y < 228 && x >= 6 && x < 234) {
+        if (rideStarted) {
+          activityEndConfirm = true;
+          uiRevision++;
+        }
+        return;
+      }
+
+      if (y >= 234 && y < 285 && x >= 6 && x < 234) {
+        runningMode = !runningMode;
+        saveActivityConfig();
+        uiRevision++;
+        return;
+      }
+      return;
+    }
     if (currentScreen == SCR_MAP && y > 240) {
       mapZoom = constrain((int)mapZoom + (x >= 120 ? 1 : -1), 1, 5);
       uiRevision++;
@@ -1294,6 +1466,19 @@ static void pollQuickTouch() {
       rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
       return;
     }
+    if (!welcomeOpen && !quickOpen && moved) {
+      int dx = startX - endX;
+      int dy = startY - endY;
+      if (abs(dx) > 35 && abs(dx) > abs(dy) * 1.3f) {
+        if (dx > 0) {
+          globalNext();
+        } else {
+          globalBack();
+        }
+        rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
+        return;
+      }
+    }
     if(rootGesture && !sliderGesture && !moved)quickTap(endX,endY);
     rootGesture=false;sliderGesture=false;mapPanGesture=false;held=false;candidateX=-1;
   };
@@ -1398,7 +1583,7 @@ static void pollQuickTouch() {
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
         int offset=constrain(startScroll+startY-y,0,88);
         if(offset!=settingsScroll){settingsScroll=offset;uiRevision++;}
-      } else {
+      } else if (quickOpen) {
         int offset=constrain(startScroll+startY-y,0,140);
         if(offset!=quickScroll){quickScroll=offset;uiRevision++;}
       }
@@ -1445,6 +1630,9 @@ static void pollQuickTouch() {
       }
     } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 54 && y < 286){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;
+      sliderGesture=false;
+    } else if(!welcomeOpen && !quickOpen && y >= 29 && y < 290) {
+      rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
     } else quickTap(x, y);
   }

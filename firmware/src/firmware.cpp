@@ -644,8 +644,8 @@ static void heartCard(int y, int h) {
 static void drawDashScreen() {
   statusBar();
 
-  // Hero Speed Card (Top)
-  int y = 29, h = 162;
+  // Hero Speed Card (Expanded Top)
+  int y = 29, h = 186;
   card(6, y, 228, h, uiCard());
   label(16, y + 8, "AVG", 1, uiMuted());
   label(16, y + 18, (ride.elapsedSec ? (runningMode ? (ride.avgSpeedKmh >= 1.8f ? paceText(ride.avgSpeedKmh) : String("--:--")) : String(ride.avgSpeedKmh, 1)) : String("--")), 2, uiFg());
@@ -653,11 +653,11 @@ static void drawDashScreen() {
   label(180, y + 18, (ride.elapsedSec ? (runningMode ? (ride.maxSpeedKmh >= 1.8f ? paceText(ride.maxSpeedKmh) : String("--:--")) : String(ride.maxSpeedKmh, 1)) : String("--")), 2, uiFg());
 
   // Center Arc Gauge (270 degrees sweep)
-  int cx = 120, cy = y + 68;
+  int cx = 120, cy = y + 78;
   uint16_t arcBg = darkTheme ? 0x2945 : 0xCE79;
   for (int d = 135; d <= 405; d++) {
     float a = radians((float)d);
-    for (int r = 48; r <= 54; r++) {
+    for (int r = 50; r <= 56; r++) {
       display.drawPixel(cx + (int)(r * cosf(a)), cy + (int)(r * sinf(a)), arcBg);
     }
   }
@@ -668,36 +668,29 @@ static void drawDashScreen() {
   int fillSpan = (int)(270.0f * constrain(spVal / gaugeMax, 0.0f, 1.0f));
   for (int d = 135; d <= 135 + fillSpan; d++) {
     float a = radians((float)d);
-    for (int r = 48; r <= 54; r++) {
+    for (int r = 50; r <= 56; r++) {
       display.drawPixel(cx + (int)(r * cosf(a)), cy + (int)(r * sinf(a)), TEAL);
     }
   }
 
   // Bike / Run Icon & Speed Readout inside Arc
-  if (runningMode) drawCustomIcon(display, 111, cy - 30, TEAL, CustomIcon::runIcon);
-  else drawBikeIcon(display, 111, cy - 30, TEAL);
+  if (runningMode) drawCustomIcon(display, 111, cy - 32, TEAL, CustomIcon::runIcon);
+  else drawBikeIcon(display, 111, cy - 32, TEAL);
 
   String sp = speedAvailable() ? (runningMode ? paceText(ride.speedKmh) : String(ride.speedKmh, 1)) : String("--");
-  centeredLabel(45, cy - 6, 150, sp, 3, uiFg());
+  centeredLabel(45, cy - 8, 150, sp, 3, uiFg());
   label(runningMode ? 100 : 108, cy + 22, (ride.gpsFixed || (!runningMode && (bleSpeedReady || (sensors.speedPhysical && millis() - externalSensorMs < 5000)))) ? (runningMode ? "MIN/KM" : "KM/H") : "NO DATA", 1, uiMuted());
 
   // Bottom Complications Row inside Speed card
-  label(16, y + 120, (rideStarted || activityPoints ? String(ride.distanceKm, 2) : String("--")), 2, uiFg());
-  label(16, y + 140, "DISTANCE (KM)", 1, uiMuted());
-  label(82, y + 120, durationText(), 2, uiFg());
-  label(86, y + 140, "TOTAL TIME", 1, uiMuted());
-  label(184, y + 120, (ride.gpsFixed && trackLen > 1 ? String(ride.gradePercent, 0) + "%" : String("--")), 2, uiFg());
-  label(180, y + 140, "GRADIENT", 1, uiMuted());
+  label(16, y + 140, (rideStarted || activityPoints ? String(ride.distanceKm, 2) : String("--")), 2, uiFg());
+  label(16, y + 162, "DISTANCE (KM)", 1, uiMuted());
+  label(82, y + 140, durationText(), 2, uiFg());
+  label(86, y + 162, "TOTAL TIME", 1, uiMuted());
+  label(184, y + 140, (ride.gpsFixed && trackLen > 1 ? String(ride.gradePercent, 0) + "%" : String("--")), 2, uiFg());
+  label(180, y + 162, "GRADIENT", 1, uiMuted());
 
-  // Heart Rate Card (Middle)
-  heartCard(195, 64);
-
-  // Calories & Satellites Footer Card (Bottom)
-  card(6, 263, 228, 22, uiCard());
-  drawFlameIcon(display, 14, 266, ORANGE);
-  label(30, 269, (calorieSeconds ? "CALORIES  " + String(calorieEstimate, 0) + " KCAL" : "CALORIES  -- KCAL"), 1, uiMuted());
-  String satStr = "SATELLITES  " + String(gps.satellites.isValid() && gps.satellites.age() < 3000 ? String(gps.satellites.value()) : String("--"));
-  label(140, 269, satStr, 1, uiMuted());
+  // Heart Rate Card (Bottom)
+  heartCard(219, 66);
 }
 
 static void drawMetricsScreen() {

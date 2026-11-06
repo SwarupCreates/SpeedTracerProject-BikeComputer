@@ -757,7 +757,7 @@ static void drawDashScreen() {
   if (runningMode) drawCustomIcon(display, 111, cy - 32, TEAL, CustomIcon::runIcon);
   else drawBikeIcon(display, 111, cy - 32, TEAL);
 
-  String sp = speedAvailable() ? (runningMode ? paceText(ride.speedKmh) : String(ride.speedKmh, 1)) : String("--");
+  String sp = speedAvailable() ? (runningMode ? paceText(ride.speedKmh) : String(ride.speedKmh, 1)) : (runningMode ? String("0:00") : String("0.0"));
   centeredLabel(45, cy - 8, 150, sp, 3, uiFg());
   label(runningMode ? 100 : 108, cy + 22, (ride.gpsFixed || (!runningMode && (bleSpeedReady || (sensors.speedPhysical && millis() - externalSensorMs < 5000)))) ? (runningMode ? "MIN/KM" : "KM/H") : "NO DATA", 1, uiMuted());
 
@@ -823,7 +823,7 @@ static void drawMetricsScreen() {
   label(16, y + 38, (calorieSeconds?"KCAL EST: "+String(calorieEstimate,0):String("KCAL EST: --")), 1, uiMuted());
 
   card(123, y, 111, 57, uiCard());
-  label(135, y + 12, (speedAvailable()?String(ride.speedKmh,1):String("--")), 2, uiFg());
+  label(135, y + 12, (speedAvailable() ? String(ride.speedKmh, 1) : String("0.0")), 2, uiFg());
   label(185, y + 17, "KM/H", 1, uiMuted());
   label(155, y + 38, "SPEED", 1, uiMuted());
 
@@ -845,12 +845,12 @@ static const float zoomRadiusKm[] = {0, 4.0f, 1.5f, 0.5f, 0.2f, 0.08f};
 static void drawMapScreen() {
   statusBar();
 
-  // Outer Map Viewport Card
-  const int cardX = 6, cardY = 28, cardW = 228, cardH = 196, cardR = 10;
-  // Background: clean off-white terrain matching Figma Frame 5 & Frame 6
-  const uint16_t terrainBg = 0xF79D; // #F2F1EE (Strava light beige-grey base color)
+  // Outer Map Viewport Card (Frame 8)
+  const int cardX = 6, cardY = 30, cardW = 228, cardH = 190, cardR = 16;
+  const uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
+  const uint16_t mapBorder = darkTheme ? 0x2945 : 0xD69A;
   display.fillRoundRect(cardX, cardY, cardW, cardH, cardR, terrainBg);
-  display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, darkTheme ? 0x2945 : 0xD69A);
+  display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, mapBorder);
 
   // Clipping bounds inside the card
   const int clipX1 = cardX + 2;
@@ -859,38 +859,39 @@ static void drawMapScreen() {
   const int clipY2 = cardY + cardH - 3;
 
   // Center pin location on display
-  const int cx = 120, cy = 135;
+  const int cardCenterX = 120, cardCenterY = 125;
 
-  double lat = ride.gpsFixed ? ride.lat : (routeLen ? route[0].lat : 22.594637);
-  double lon = ride.gpsFixed ? ride.lon : (routeLen ? route[0].lon : 88.425853);
+  double centerLat = (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) ? ride.lat : (routeLen > 0 ? route[0].lat : 22.594637);
+  double centerLon = (ride.gpsFixed && isfinite(ride.lon) && ride.lon != 0.0) ? ride.lon : (routeLen > 0 ? route[0].lon : 88.425853);
 
-  // Update 3x3 sliding window in PSRAM
-  g_mapCache.updatePosition(lat, lon);
+  // Dynamic LRU 3x3 sliding window in PSRAM: load neighbouring chunks, automatically unload out-of-range chunks
+  g_mapCache.updatePosition(centerLat, centerLon);
 
-  // Heading-up rotation
-  float heading = (ride.speedKmh > 1.0f) ? (float)ride.heading : 0.0f;
-  float theta = radians(-heading);
-  float cosH = cosf(theta);
-  float sinH = sinf(theta);
+  // Fixed Max Zoom Level 4 for maximum performance, zero lag, and crisp street detail
+  const float scale = 0.85f;
 
-  // World projection metrics
-  double latRad = lat * (PI / 180.0);
-  double tileWMeters = 40075016.686 * cos(latRad) / 16384.0;
-  double tileHMeters = 40007863.0 / 16384.0;
-  double riderTileX = (lon + 180.0) / 360.0 * 16384.0;
-  double riderTileY = (1.0 - asinh(tan(latRad)) / PI) / 2.0 * 16384.0;
+  int centerTX, centerTY;
+  float cfx, cfy;
+  MapTileCache::latLonToTile(centerLat, centerLon, centerTX, centerTY, cfx, cfy);
+  int centerU = (int)lround(cfx * 4096.0f);
+  int centerV = (int)lround(cfy * 4096.0f);
 
-  float viewRadiusKm = (mapZoom >= 1 && mapZoom <= 5) ? zoomRadiusKm[mapZoom] : 0.5f;
-  float scale = 88.0f / (viewRadiusKm * 1000.0f); // pixels per meter
+  double latRad = centerLat * (PI / 180.0);
+  float metersPerUnit = (float)((40075016.686 * cos(latRad) / 16384.0) / 4096.0);
+  float pxPerUnit = metersPerUnit * scale;
 
-  auto projectTilePoint = [&](float globalTileX, float globalTileY, int &outX, int &outY) {
-    float dxM = (float)((globalTileX - riderTileX) * tileWMeters);
-    float dyM = (float)((riderTileY - globalTileY) * tileHMeters);
-    float rx = dxM * cosH - dyM * sinH;
-    float ry = dxM * sinH + dyM * cosH;
-    outX = cx + (int)(rx * scale);
-    outY = cy - (int)(ry * scale);
-  };
+  int maxDxU = (int)(130.0f / pxPerUnit) + 120;
+  int maxDyU = (int)(120.0f / pxPerUnit) + 120;
+
+  static int s_mapPolyX[256];
+  static int s_mapPolyY[256];
+
+  const uint16_t parkFill    = darkTheme ? 0x1A44 : 0xC673;
+  const uint16_t parkBorder  = darkTheme ? 0x1222 : 0xAE30;
+  const uint16_t waterFill   = darkTheme ? 0x1A36 : 0x9E5F;
+  const uint16_t waterBorder = darkTheme ? 0x1171 : 0x7CD8;
+  const uint16_t roadCasing  = darkTheme ? 0x3186 : 0xD69A;
+  const uint16_t roadFill    = darkTheme ? 0x52AA : 0xFFFF;
 
   auto clipAndDrawLine = [&](int x0, int y0, int x1, int y1, uint16_t color, int width) {
     if ((x0 < clipX1 && x1 < clipX1) || (x0 > clipX2 && x1 > clipX2) ||
@@ -940,10 +941,10 @@ static void drawMapScreen() {
           x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0))) : x0;
           y = clipY1;
         } else if (cOut & 2) {
-          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0;
+          x = (y1 != y0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0;
           x = clipX2;
         } else {
-          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0;
+          x = (y1 != y0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0;
           x = clipX1;
         }
         if (cOut == c0) { x0 = x; y0 = y; c0 = getCode(x0, y0); }
@@ -952,202 +953,267 @@ static void drawMapScreen() {
     }
   };
 
-  static int s_navPolyX[256];
-  static int s_navPolyY[256];
-
-  // Pass 1: Filled Water bodies (rivers, lakes, canals in soft pastel blue)
-  const uint16_t waterColor = 0x9E5F; // #90CAF9
-  const uint16_t waterBorder = 0x7CD8;
+  // PASS 1: FILLED POLYGONS (Parks & Water)
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    float baseU = (float)g_mapCache.tiles[s].tileX;
-    float baseV = (float)g_mapCache.tiles[s].tileY;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      if (g_mapCache.tiles[s].features[f].type == FEAT_WATER) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        if (cnt < 2) continue;
-        bool isClosed = (cnt >= 3 && abs(g_mapCache.tiles[s].points[off].u - g_mapCache.tiles[s].points[off + cnt - 1].u) <= 35 &&
-                                     abs(g_mapCache.tiles[s].points[off].v - g_mapCache.tiles[s].points[off + cnt - 1].v) <= 35);
-        if (isClosed && cnt <= 255) {
-          for (uint8_t i = 0; i < cnt; i++) {
-            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                             baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, s_navPolyX[i], s_navPolyY[i]);
-          }
-          fillPolygon(s_navPolyX, s_navPolyY, cnt, waterColor, clipX1, clipY1, clipX2, clipY2);
-          for (uint8_t i = 1; i < cnt; i++) {
-            clipAndDrawLine(s_navPolyX[i - 1], s_navPolyY[i - 1], s_navPolyX[i], s_navPolyY[i], waterBorder, 1);
-          }
-        } else {
-          for (uint8_t i = 1; i < cnt; i++) {
-            int x0, y0, x1, y1;
-            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                             baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                             baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-            clipAndDrawLine(x0, y0, x1, y1, waterColor, 3);
-          }
+    int tx = g_mapCache.tiles[s].tileX;
+    int ty = g_mapCache.tiles[s].tileY;
+    if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+    int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+    int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+    MapPoint12* pts = g_mapCache.tiles[s].points;
+    uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+    for (uint16_t f = 0; f < featCount; f++) {
+      uint8_t ft = feats[f].type;
+      if (ft != FEAT_WATER && ft != FEAT_PARK) continue;
+      uint8_t cnt = feats[f].pointCount;
+      uint16_t off = feats[f].pointOffset;
+      if (cnt < 2 || cnt > 255) continue;
+
+      int p0X = tileDeltaX + pts[off].u;
+      int p0Y = tileDeltaY + pts[off].v;
+      int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+      int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+      bool hasJump = false;
+      for (uint8_t k = 1; k < cnt; k++) {
+        if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+          hasJump = true; break;
+        }
+      }
+      if (hasJump) continue;
+
+      bool isClosed = (cnt >= 3 && abs(pts[off].u - pts[off + cnt - 1].u) <= 35 &&
+                                   abs(pts[off].v - pts[off + cnt - 1].v) <= 35);
+      for (uint8_t k = 0; k < cnt; k++) {
+        s_mapPolyX[k] = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+        s_mapPolyY[k] = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+      }
+      if (ft == FEAT_PARK || isClosed) {
+        uint16_t fCol = (ft == FEAT_PARK) ? parkFill : waterFill;
+        uint16_t bCol = (ft == FEAT_PARK) ? parkBorder : waterBorder;
+        fillPolygon(s_mapPolyX, s_mapPolyY, cnt, fCol, clipX1, clipY1, clipX2, clipY2);
+        for (uint8_t k = 1; k < cnt; k++) {
+          clipAndDrawLine(s_mapPolyX[k - 1], s_mapPolyY[k - 1], s_mapPolyX[k], s_mapPolyY[k], bCol, 1);
+        }
+      } else {
+        for (uint8_t k = 1; k < cnt; k++) {
+          clipAndDrawLine(s_mapPolyX[k - 1], s_mapPolyY[k - 1], s_mapPolyX[k], s_mapPolyY[k], waterFill, 3);
         }
       }
     }
   }
 
-  // Pass 2: Filled Parks & Green spaces
-  const uint16_t parkColor = 0xC673; // #CBE8BA / #C8E6C9
-  const uint16_t parkBorder = 0xAE30;
+  // PASS 2: Road Casings (seamless junction outlines)
+  const int minorCasingW = 5, minorFillW = 3;
+  const int majorCasingW = 7, majorFillW = 5;
+
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    float baseU = (float)g_mapCache.tiles[s].tileX;
-    float baseV = (float)g_mapCache.tiles[s].tileY;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      if (g_mapCache.tiles[s].features[f].type == FEAT_PARK) {
-        uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-        uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-        if (cnt >= 3 && cnt <= 255) {
-          for (uint8_t i = 0; i < cnt; i++) {
-            projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                             baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, s_navPolyX[i], s_navPolyY[i]);
-          }
-          fillPolygon(s_navPolyX, s_navPolyY, cnt, parkColor, clipX1, clipY1, clipX2, clipY2);
-          for (uint8_t i = 1; i < cnt; i++) {
-            clipAndDrawLine(s_navPolyX[i - 1], s_navPolyY[i - 1], s_navPolyX[i], s_navPolyY[i], parkBorder, 1);
-          }
+    int tx = g_mapCache.tiles[s].tileX;
+    int ty = g_mapCache.tiles[s].tileY;
+    if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+    int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+    int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+    MapPoint12* pts = g_mapCache.tiles[s].points;
+    uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+    for (uint16_t f = 0; f < featCount; f++) {
+      uint8_t ft = feats[f].type;
+      if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
+          ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+      uint8_t cnt = feats[f].pointCount;
+      uint16_t off = feats[f].pointOffset;
+      if (cnt < 2) continue;
+
+      int p0X = tileDeltaX + pts[off].u;
+      int p0Y = tileDeltaY + pts[off].v;
+      int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+      int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+      bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
+      int w = isMajor ? majorCasingW : minorCasingW;
+
+      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
+      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      for (uint8_t k = 1; k < cnt; k++) {
+        if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          continue;
         }
+        int pkX = tileDeltaX + pts[off + k].u;
+        int pkY = tileDeltaY + pts[off + k].v;
+        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
+        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        clipAndDrawLine(sx0, sy0, sx1, sy1, roadCasing, w);
+        sx0 = sx1;
+        sy0 = sy1;
       }
     }
   }
 
-  // Pass 3: All Road Casings in Grey #D1D3D6 (Seamless intersections)
-  const uint16_t roadCasing = 0xD69A; // #D1D3D6
-  const uint16_t roadFill   = 0xFFFF; // #FFFFFF
-  int navMajorCasingW = (mapZoom >= 4) ? 7 : (mapZoom >= 3) ? 5 : (mapZoom >= 2) ? 4 : 3;
-  int navMajorFillW   = (mapZoom >= 4) ? 5 : (mapZoom >= 3) ? 3 : (mapZoom >= 2) ? 2 : 1;
-  int navMinorCasingW = (mapZoom >= 4) ? 5 : (mapZoom >= 3) ? 4 : (mapZoom >= 2) ? 3 : 2;
-  int navMinorFillW   = (mapZoom >= 4) ? 3 : (mapZoom >= 3) ? 2 : 1;
-
+  // PASS 3: Road Inner Fills
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    float baseU = (float)g_mapCache.tiles[s].tileX;
-    float baseV = (float)g_mapCache.tiles[s].tileY;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      uint8_t ft = g_mapCache.tiles[s].features[f].type;
+    int tx = g_mapCache.tiles[s].tileX;
+    int ty = g_mapCache.tiles[s].tileY;
+    if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+    int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+    int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+    MapPoint12* pts = g_mapCache.tiles[s].points;
+    uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+    for (uint16_t f = 0; f < featCount; f++) {
+      uint8_t ft = feats[f].type;
       if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
           ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+      uint8_t cnt = feats[f].pointCount;
+      uint16_t off = feats[f].pointOffset;
+      if (cnt < 2) continue;
+
+      int p0X = tileDeltaX + pts[off].u;
+      int p0Y = tileDeltaY + pts[off].v;
+      int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+      int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
       bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
-      int w = isMajor ? navMajorCasingW : navMinorCasingW;
-      uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-      uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-      for (uint8_t i = 1; i < cnt; i++) {
-        if (abs(g_mapCache.tiles[s].points[off + i].u - g_mapCache.tiles[s].points[off + i - 1].u) > 500 ||
-            abs(g_mapCache.tiles[s].points[off + i].v - g_mapCache.tiles[s].points[off + i - 1].v) > 500) continue;
-        int x0, y0, x1, y1;
-        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                         baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                         baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-        clipAndDrawLine(x0, y0, x1, y1, roadCasing, w);
+      int w = isMajor ? majorFillW : minorFillW;
+
+      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
+      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      for (uint8_t k = 1; k < cnt; k++) {
+        if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          continue;
+        }
+        int pkX = tileDeltaX + pts[off + k].u;
+        int pkY = tileDeltaY + pts[off + k].v;
+        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
+        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        clipAndDrawLine(sx0, sy0, sx1, sy1, roadFill, w);
+        sx0 = sx1;
+        sy0 = sy1;
       }
     }
   }
 
-  // Pass 4: All Road Fills in Pure White #FFFFFF (Connects all junctions seamlessly!)
-  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
-    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    float baseU = (float)g_mapCache.tiles[s].tileX;
-    float baseV = (float)g_mapCache.tiles[s].tileY;
-    for (uint16_t f = 0; f < g_mapCache.tiles[s].header.featureCount; f++) {
-      uint8_t ft = g_mapCache.tiles[s].features[f].type;
-      if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
-          ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
-      bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
-      int w = isMajor ? navMajorFillW : navMinorFillW;
-      uint8_t cnt = g_mapCache.tiles[s].features[f].pointCount;
-      uint16_t off = g_mapCache.tiles[s].features[f].pointOffset;
-      for (uint8_t i = 1; i < cnt; i++) {
-        if (abs(g_mapCache.tiles[s].points[off + i].u - g_mapCache.tiles[s].points[off + i - 1].u) > 500 ||
-            abs(g_mapCache.tiles[s].points[off + i].v - g_mapCache.tiles[s].points[off + i - 1].v) > 500) continue;
-        int x0, y0, x1, y1;
-        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i - 1].u / 4096.0f,
-                         baseV + (float)g_mapCache.tiles[s].points[off + i - 1].v / 4096.0f, x0, y0);
-        projectTilePoint(baseU + (float)g_mapCache.tiles[s].points[off + i].u / 4096.0f,
-                         baseV + (float)g_mapCache.tiles[s].points[off + i].v / 4096.0f, x1, y1);
-        clipAndDrawLine(x0, y0, x1, y1, roadFill, w);
-      }
-    }
-  }
+  // Fast Lat/Lon to pixel projection helper
+  auto projectLatLon = [&](double pLat, double pLon, int &outX, int &outY) {
+    int pTX, pTY;
+    float pfx, pfy;
+    MapTileCache::latLonToTile(pLat, pLon, pTX, pTY, pfx, pfy);
+    int pU = (int)lround(pfx * 4096.0f);
+    int pV = (int)lround(pfy * 4096.0f);
+    int dX = (pTX - centerTX) * 4096 + (pU - centerU);
+    int dY = (pTY - centerTY) * 4096 + (pV - centerV);
+    outX = cardCenterX + (int)(dX * pxPerUnit);
+    outY = cardCenterY + (int)(dY * pxPerUnit);
+  };
 
-  // Render Planned GPX Route// Render Planned GPX Route (Snapped to Road Vector in Vibrant Orange)
-  const uint16_t routeOrange = 0xFD00; // #FF7A00
-  if (routeLen > 1) {
+  const uint16_t stravaOrange = 0xFA40; // Vibrant Strava Orange (#FC5200)
+  bool isNavigating = (nav.hasDestination || routeLen > 1);
+
+  if (isNavigating && routeLen > 1) {
+    int sx0, sy0;
+    projectLatLon(route[0].lat, route[0].lon, sx0, sy0);
     for (int i = 1; i < routeLen; i++) {
-      int tx0, ty0, tx1, ty1;
-      float fx0, fy0, fx1, fy1;
-      MapTileCache::latLonToTile(route[i - 1].lat, route[i - 1].lon, tx0, ty0, fx0, fy0);
-      MapTileCache::latLonToTile(route[i].lat, route[i].lon, tx1, ty1, fx1, fy1);
-      int x0, y0, x1, y1;
-      projectTilePoint((float)tx0 + fx0, (float)ty0 + fy0, x0, y0);
-      projectTilePoint((float)tx1 + fx1, (float)ty1 + fy1, x1, y1);
-      clipAndDrawLine(x0, y0, x1, y1, routeOrange, 3);
+      int sx1, sy1;
+      projectLatLon(route[i].lat, route[i].lon, sx1, sy1);
+      clipAndDrawLine(sx0, sy0, sx1, sy1, stravaOrange, 3);
+      sx0 = sx1;
+      sy0 = sy1;
     }
-    // Start (Green) & Finish (Checkered) Markers
     int sx, sy, ex, ey;
-    int stx, sty, etx, ety;
-    float sfx, sfy, efx, efy;
-    MapTileCache::latLonToTile(route[0].lat, route[0].lon, stx, sty, sfx, sfy);
-    MapTileCache::latLonToTile(route[routeLen - 1].lat, route[routeLen - 1].lon, etx, ety, efx, efy);
-    projectTilePoint((float)stx + sfx, (float)sty + sfy, sx, sy);
-    projectTilePoint((float)etx + efx, (float)ety + efy, ex, ey);
-    if (sx >= -10 && sx <= 250 && sy >= -10 && sy <= 230) {
-      drawStartNodeIcon(display, sx - 10, sy - 10);
-    }
-    if (ex >= -10 && ex <= 250 && ey >= -10 && ey <= 230) {
-      drawFinishNodeIcon(display, ex - 10, ey - 10);
+    projectLatLon(route[0].lat, route[0].lon, sx, sy);
+    projectLatLon(route[routeLen - 1].lat, route[routeLen - 1].lon, ex, ey);
+    if (sx >= clipX1 - 10 && sx <= clipX2 + 10 && sy >= clipY1 - 10 && sy <= clipY2 + 10) drawStartNodeIcon(display, sx - 10, sy - 10);
+    if (ex >= clipX1 - 10 && ex <= clipX2 + 10 && ey >= clipY1 - 10 && ey <= clipY2 + 10) drawFinishNodeIcon(display, ex - 10, ey - 10);
+  } else {
+    // If NOT navigating: livestream recorded breadcrumbs behind rider in Strava Orange (#FC5200)
+    if (trackLen > 0) {
+      int tx0, ty0;
+      projectLatLon(track[0].lat, track[0].lon, tx0, ty0);
+      for (int i = 1; i < trackLen; i++) {
+        int tx1, ty1;
+        projectLatLon(track[i].lat, track[i].lon, tx1, ty1);
+        clipAndDrawLine(tx0, ty0, tx1, ty1, stravaOrange, 3);
+        tx0 = tx1;
+        ty0 = ty1;
+      }
+      if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
+        int cx1, cy1;
+        projectLatLon(ride.lat, ride.lon, cx1, cy1);
+        clipAndDrawLine(tx0, ty0, cx1, cy1, stravaOrange, 3);
+      }
     }
   }
 
-  // Render Live Breadcrumb Trail in Teal
-  for (int i = 1; i < trackLen; i++) {
-    int tx0, ty0, tx1, ty1;
-    float fx0, fy0, fx1, fy1;
-    MapTileCache::latLonToTile(track[i - 1].lat, track[i - 1].lon, tx0, ty0, fx0, fy0);
-    MapTileCache::latLonToTile(track[i].lat, track[i].lon, tx1, ty1, fx1, fy1);
-    int x0, y0, x1, y1;
-    projectTilePoint((float)tx0 + fx0, (float)ty0 + fy0, x0, y0);
-    projectTilePoint((float)tx1 + fx1, (float)ty1 + fy1, x1, y1);
-    clipAndDrawLine(x0, y0, x1, y1, TEAL, 1);
-  }
+  // Center Navigation Pin (Frame 8: Blue Circle with Crisp White Heading Chevron)
+  display.fillCircle(cardCenterX, cardCenterY, 14, 0x2CD9);
+  display.drawCircle(cardCenterX, cardCenterY, 14, 0xFFFF);
+  float dirH = (ride.speedKmh > 1.0f) ? (float)ride.heading : ((compass.ready && isfinite(compass.heading)) ? compass.heading : (float)ride.heading);
+  float dirRad = radians(dirH);
+  float fx = sinf(dirRad), fy = -cosf(dirRad);
+  float px = -fy, py = fx;
+  int tipX = cardCenterX + (int)lround(7.5f * fx);
+  int tipY = cardCenterY + (int)lround(7.5f * fy);
+  int lX   = cardCenterX - (int)lround(6.0f * fx - 5.0f * px);
+  int lY   = cardCenterY - (int)lround(6.0f * fy - 5.0f * py);
+  int rX   = cardCenterX - (int)lround(6.0f * fx + 5.0f * px);
+  int rY   = cardCenterY - (int)lround(6.0f * fy + 5.0f * py);
+  int nX   = cardCenterX - (int)lround(3.0f * fx);
+  int nY   = cardCenterY - (int)lround(3.0f * fy);
+  display.fillTriangle(tipX, tipY, lX, lY, nX, nY, 0xFFFF);
+  display.fillTriangle(tipX, tipY, rX, rY, nX, nY, 0xFFFF);
 
-  // Rider Center Pin Badge (Royal Blue circle with crisp white chevron)
-  display.fillCircle(cx, cy, 12, 0x2CD9);
-  display.drawCircle(cx, cy, 12, 0xFFFF);
-  display.fillTriangle(cx, cy - 7, cx - 5, cy + 5, cx, cy + 2, 0xFFFF);
-  display.fillTriangle(cx, cy - 7, cx + 5, cy + 5, cx, cy + 2, 0xFFFF);
+  // Top-Right Floating Compass Coin (Frame 8)
+  float compassH = (compass.ready && isfinite(compass.heading)) ? compass.heading : (ride.gpsFixed ? (float)ride.heading : 0.0f);
+  drawCompassCoin(display, 202, 54, compassH);
 
-  // Top-Right Compass Coin Badge
-  drawCompassCoin(display, 205, 46, (float)ride.heading);
+  // Re-stroke map border around viewport card
+  display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, mapBorder);
 
-  // Bottom Split HUD
-  const int hudY = 228, hudH = 58;
+  // Bottom Split HUD (Frame 8: SPEED & DISTANCE dual cards)
+  const int hudY = 226, hudH = 60;
+
+  // Left Card: SPEED
   card(6, hudY, 111, hudH, uiCard());
-  display.drawRoundRect(6, hudY, 111, hudH, 8, darkTheme ? 0x2945 : 0xD6BA);
-  String spd = speedAvailable() ? String(ride.speedKmh, 1) : "--.-";
-  label(14, hudY + 8, spd, 3, uiFg());
-  label(80, hudY + 16, "KM/H", 1, uiMuted());
-  label(16, hudY + 40, "SPEED", 1, uiMuted());
+  display.drawRoundRect(6, hudY, 111, hudH, 10, darkTheme ? 0x2945 : 0xD6BA);
+  float curSpeed = speedAvailable() ? ride.speedKmh : 0.0f;
+  if (curSpeed < 0.1f) curSpeed = 0.0f;
+  String spdStr = String(curSpeed, 1);
+  int spdW = textWidth(spdStr, 3);
+  int spdStartX = 14;
+  label(spdStartX, hudY + 8, spdStr, 3, uiFg());
+  label(spdStartX + spdW + 3, hudY + 16, "KM/H", 0, uiMuted());
+  centeredLabel(6, hudY + 42, 111, "SPEED", 1, uiMuted());
 
+  // Right Card: DISTANCE
   card(123, hudY, 111, hudH, uiCard());
-  display.drawRoundRect(123, hudY, 111, hudH, 8, darkTheme ? 0x2945 : 0xD6BA);
-  display.drawLine(134, hudY + 22, 134, hudY + 12, uiFg());
-  display.drawLine(135, hudY + 22, 135, hudY + 12, uiFg());
-  display.drawLine(134, hudY + 12, 142, hudY + 12, uiFg());
-  display.drawLine(134, hudY + 11, 142, hudY + 11, uiFg());
-  display.fillTriangle(130, hudY + 16, 135, hudY + 8, 140, hudY + 16, uiFg());
-
-  String distStr = (nav.hasDestination && ride.gpsFixed)
-                     ? (nav.remainDistKm < 1.0f ? String((int)(nav.remainDistKm * 1000.0f)) + "m" : String(nav.remainDistKm, 1) + "km")
-                     : (routeLen > 1 ? "220m" : "--");
-  label(148, hudY + 8, distStr, 3, uiFg());
-  label(135, hudY + 40, "DIRECTIONS", 1, uiMuted());
+  display.drawRoundRect(123, hudY, 111, hudH, 10, darkTheme ? 0x2945 : 0xD6BA);
+  String distStr = (ride.distanceKm >= 10.0f) ? (String(ride.distanceKm, 1) + "km") :
+                   (ride.distanceKm >= 1.0f)  ? (String(ride.distanceKm, 1) + "km") :
+                   (ride.distanceKm > 0.01f)  ? (String((int)(ride.distanceKm * 1000.0f)) + "m") : "0.0km";
+  centeredLabel(123, hudY + 8, 111, distStr, 3, uiFg());
+  centeredLabel(123, hudY + 42, 111, "DISTANCE", 1, uiMuted());
 }
 
 static void drawActivityControlsScreen() {

@@ -404,7 +404,7 @@ static void fillPolygon(const int* polyX, const int* polyY, int n, uint16_t colo
 static void previewDraw(int y, int h, bool showControls = true) {
   if (y + h <= 28 || y >= 290) return;
   const int cardX = 6, cardW = 228;
-  const uint16_t terrainBg = 0xF79D; // #F2F1EE (Strava light beige-grey base color)
+  const uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
   display.fillRoundRect(cardX, y, cardW, h, 8, terrainBg);
   display.drawRoundRect(cardX, y, cardW, h, 8, darkTheme ? 0x2945 : 0xD69A);
 
@@ -556,12 +556,12 @@ static void previewDraw(int y, int h, bool showControls = true) {
     static int s_polyY[256];
 
     // Colors matching Strava (#F2F1EE base, #D1D3D6 casings, #FFFFFF fills)
-    const uint16_t parkFill = 0xC673;    // Soft pale green (#CBE8BA / #C8E6C9)
-    const uint16_t parkBorder = 0xAE30;  // Subtle dark green outline
-    const uint16_t waterFill = 0x9E5F;   // Soft sky blue (#90CAF9)
-    const uint16_t waterBorder = 0x7CD8; // Subtle deeper blue outline
-    const uint16_t roadCasing = 0xD69A;  // Grey road outlines (#D1D3D6)
-    const uint16_t roadFill   = 0xFFFF;  // Pure white road fill (#FFFFFF)
+    const uint16_t parkFill    = darkTheme ? 0x1A44 : 0xC673;
+    const uint16_t parkBorder  = darkTheme ? 0x1222 : 0xAE30;
+    const uint16_t waterFill   = darkTheme ? 0x1A36 : 0x9E5F;
+    const uint16_t waterBorder = darkTheme ? 0x1171 : 0x7CD8;
+    const uint16_t roadCasing  = darkTheme ? 0x3186 : 0xD69A;
+    const uint16_t roadFill    = darkTheme ? 0x52AA : 0xFFFF;
 
     // -----------------------------------------------------------------
     // PASS 1: FILLED POLYGONS (Parks & Water Bodies)
@@ -738,7 +738,7 @@ static void previewDraw(int y, int h, bool showControls = true) {
   }
 
   // --- DRAW GPX ROUTE VECTOR// --- DRAW GPX ROUTE VECTOR// --- DRAW GPX ROUTE VECTOR (Vibrant Orange, 3px or 4px) ---
-  const uint16_t routeOrange = 0xFD00; // #FF7A00
+  const uint16_t routeOrange = 0xFA40; // #FF7A00
   int routeW = (previewZoomLevel >= 2) ? 4 : 3;
   for (int i = 1; i < previewLen; i++) {
     int sx0, sy0, sx1, sy1;

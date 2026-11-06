@@ -24,7 +24,7 @@ int settingsScroll=0;
 enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH };
 HomePage homePage=HOME_MAIN;
 int appsScroll = 0;
-const int MAX_APPS_SCROLL = 190;
+const int MAX_APPS_SCROLL = 200;
 static int appsPage = 0;
 static double mapViewerLat = 22.594637;
 static double mapViewerLon = 88.425853;
@@ -1283,21 +1283,21 @@ static void drawHomeSubpage(){
       {"My Files", CustomIcon::folderIcon, 0x0CA1}         // Teal (#0D9488)
     };
     const int kNumApps = 7;
-    const int R = 32;
-    const int rowPitch = 106;
+    const int R = 36;
+    const int rowPitch = 108;
 
     for (int i = 0; i < kNumApps; i++) {
       int col = i % 2;
       int row = i / 2;
-      int cx = (col == 0) ? 66 : 174;
-      int cy = 96 + row * rowPitch - appsScroll;
+      int cx = (col == 0) ? 68 : 172;
+      int cy = 100 + row * rowPitch - appsScroll;
 
       // Cull items completely offscreen
-      if (cy + R + 20 < 56 || cy - R > 290) continue;
+      if (cy + R + 22 < 56 || cy - R > 290) continue;
 
       display.fillCircle(cx, cy, R, kApps[i].color);
-      drawCustomIcon(display, cx - 14, cy - 14, 0xFFFF, kApps[i].icon, 28, 28);
-      centeredLabel(cx - 58, cy + R + 7, 116, kApps[i].name, 1, uiFg());
+      drawCustomIcon(display, cx - 17, cy - 17, 0xFFFF, kApps[i].icon, 34, 34);
+      centeredLabel(cx - 58, cy + R + 7, 116, kApps[i].name, 0, uiFg());
     }
 
     // Scrollbar indicator
@@ -1857,12 +1857,12 @@ static void quickTap(int x, int y) {
       for(int i = 0; i < 7; i++){
         int col = i % 2;
         int row = i / 2;
-        int cx = (col == 0) ? 66 : 174;
-        int cy = 96 + row * 106 - appsScroll;
+        int cx = (col == 0) ? 68 : 172;
+        int cy = 100 + row * 108 - appsScroll;
         int dx = x - cx;
         int dy = y - cy;
-        bool inCircle = (dx * dx + dy * dy <= 38 * 38);
-        bool inLabel = (abs(dx) <= 52 && (y >= cy + 30 && y <= cy + 56));
+        bool inCircle = (dx * dx + dy * dy <= 42 * 42);
+        bool inLabel = (abs(dx) <= 56 && (y >= cy + 32 && y <= cy + 62));
         if (inCircle || inLabel) {
           if(i == 0){ // Maps
             if(ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0){

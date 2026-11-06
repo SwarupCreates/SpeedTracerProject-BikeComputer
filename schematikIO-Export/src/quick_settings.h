@@ -517,16 +517,16 @@ static void drawLibrary(){
     return;
   }
 
-    drawScreenHeader(routes ? "SAVED ROUTES" : "MY ACTIVITIES", routes ? CustomIcon::routeMapIcon : CustomIcon::historyIcon, true);
+  statusBar();
 
   if(!libraryCount){
-    card(6,76,228,150,uiCard());
-    drawCustomIcon(display,108,105,uiMuted(),routes?CustomIcon::routeMapIcon:CustomIcon::historyIcon);
-    centeredLabel(6,140,228,libraryMessage.length()?libraryMessage:routes?"No saved routes":"No saved activities",1,uiMuted());
-    centeredLabel(6,168,228,routes?"Add routes to SD /routes":"Finish and save an activity",1,uiMuted());
+    card(6,42,228,150,uiCard());
+    drawCustomIcon(display,108,71,uiMuted(),routes?CustomIcon::routeMapIcon:CustomIcon::historyIcon);
+    centeredLabel(6,106,228,libraryMessage.length()?libraryMessage:routes?"No saved routes":"No saved activities",1,uiMuted());
+    centeredLabel(6,134,228,routes?"Add routes to SD /routes":"Finish and save an activity",1,uiMuted());
   }
   for(int i=0;i<libraryCount;i++){
-    int y=68+i*44;card(6,y,228,40,uiCard());
+    int y=34+i*44;card(6,y,228,40,uiCard());
     drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:CustomIcon::historyIcon);
     String title=libraryNames[i];title.replace(".fit","");title.replace(".json","");title.replace(".gpx","");
     label(38,y+5,fitBrowserText(title,184),1);
@@ -632,8 +632,8 @@ static void libraryTap(int x,int y){
     }
     return;
   }
-  int row=(y-68)/44;
-  if(y>=68 && row>=0 && row<libraryCount && y<68+row*44+40){
+  int row=(y-34)/44;
+  if(y>=34 && row>=0 && row<libraryCount && y<34+row*44+40){
     drawLoadingScreen("Loading assets...", "Please wait!");
     prevActivitySelection = "";
     prevActivityPage = HOME_APPS;
@@ -735,6 +735,18 @@ static void globalBack(){
       homePage = HOME_MAIN;
       appsScroll = 0;
     }
+    else if(homePage == HOME_SETTINGS) {
+      if (settingsPage != SET_MAIN) {
+        if (settingChangePin) { settingChangePin = false; pinInput = ""; secMessage = ""; }
+        else if (settingFormatConfirm) { settingFormatConfirm = false; }
+        else if (settingsPage == SET_FONT) { settingsPage = SET_THEME; }
+        else if (settingsPage == SET_THEME) { settingsPage = SET_MAIN; settingsScroll = 0; }
+        else { settingsPage = SET_MAIN; settingsScroll = 0; }
+      } else {
+        homePage = HOME_APPS;
+        settingsScroll = 0;
+      }
+    }
     else if(isLibrary()){
       if(librarySelection.length()){
         if(prevActivitySelection.length()){
@@ -803,10 +815,10 @@ static void saveActivityConfig() {
 }
 
 static void drawActivitySettingsApp() {
-  drawScreenHeader("ACTIVITY SETTINGS", CustomIcon::configureIcon, true);
+  statusBar();
 
   // Tile 1: Ride Max Speed (Gauge limit)
-  int y = 62;
+  int y = 34;
   card(6, y, 228, 42, uiCard());
   drawBikeIcon(display, 16, y + 10, TEAL);
   label(44, y + 6, "RIDE MAX SPEED", 1, uiFg());
@@ -819,7 +831,7 @@ static void drawActivitySettingsApp() {
   centeredLabel(190, y + 13, 30, "+", 2, uiFg());
 
   // Tile 2: Run Max Speed (Gauge limit)
-  y = 108;
+  y = 82;
   card(6, y, 228, 42, uiCard());
   drawCustomIcon(display, 16, y + 10, ORANGE, CustomIcon::runIcon);
   label(44, y + 6, "RUN MAX SPEED", 1, uiFg());
@@ -832,7 +844,7 @@ static void drawActivitySettingsApp() {
   centeredLabel(190, y + 13, 30, "+", 2, uiFg());
 
   // Tile 3: Sport Mode Toggle
-  y = 154;
+  y = 130;
   card(6, y, 228, 42, uiCard());
   drawCustomIcon(display, 16, y + 10, uiFg(), runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon);
   label(44, y + 6, "ACTIVE SPORT", 1, uiFg());
@@ -841,7 +853,7 @@ static void drawActivitySettingsApp() {
   centeredLabel(152, y + 14, 68, runningMode ? "RUN" : "RIDE", 1, 0xFFFF);
 
   // Tile 4: Countdown Timer (3s / 5s / 10s)
-  y = 200;
+  y = 178;
   card(6, y, 228, 42, uiCard());
   drawCustomIcon(display, 16, y + 10, 0xFA40, CustomIcon::routeMapIcon);
   label(44, y + 6, "START COUNTDOWN", 1, uiFg());
@@ -850,7 +862,7 @@ static void drawActivitySettingsApp() {
   centeredLabel(152, y + 14, 68, String(cfg.countdownSec) + " SEC", 1, 0xFFFF);
 
   // Tile 5: Speed Deadzone info
-  y = 246;
+  y = 226;
   card(6, y, 228, 38, uiCard());
   drawSatelliteIcon(display, 16, y + 10, uiFg());
   label(44, y + 6, "GPS SPEED DEADZONE", 1, uiFg());
@@ -858,14 +870,8 @@ static void drawActivitySettingsApp() {
 }
 
 static void tapActivitySettings(int x, int y) {
-  if (y < 56 && x < 48) {
-    homePage = HOME_APPS;
-    uiRevision++;
-    return;
-  }
-
-  // Tile 1: Ride Max Speed (y=68..120)
-  if (y >= 68 && y < 120) {
+  // Tile 1: Ride Max Speed (y=34..78)
+  if (y >= 34 && y < 78) {
     if (x >= 140 && x < 184) {
       cfg.maxSpeedRide = max(20.0f, cfg.maxSpeedRide - 5.0f);
       saveActivityConfig();
@@ -878,8 +884,8 @@ static void tapActivitySettings(int x, int y) {
     return;
   }
 
-  // Tile 2: Run Max Speed (y=126..178)
-  if (y >= 126 && y < 178) {
+  // Tile 2: Run Max Speed (y=82..126)
+  if (y >= 82 && y < 126) {
     if (x >= 140 && x < 184) {
       cfg.maxSpeedRun = max(10.0f, cfg.maxSpeedRun - 2.0f);
       saveActivityConfig();
@@ -892,16 +898,16 @@ static void tapActivitySettings(int x, int y) {
     return;
   }
 
-  // Tile 3: Active Sport Toggle (y=154..196)
-  if (y >= 154 && y < 196) {
+  // Tile 3: Active Sport Toggle (y=130..174)
+  if (y >= 130 && y < 174) {
     runningMode = !runningMode;
     saveActivityConfig();
     uiRevision++;
     return;
   }
 
-  // Tile 4: Countdown Timer (y=200..242)
-  if (y >= 200 && y < 242) {
+  // Tile 4: Start Countdown Toggle (y=178..222)
+  if (y >= 178 && y < 222) {
     if (cfg.countdownSec == 3) cfg.countdownSec = 5;
     else if (cfg.countdownSec == 5) cfg.countdownSec = 10;
     else cfg.countdownSec = 3;
@@ -1292,16 +1298,16 @@ static void drawMapViewerApp() {
 }
 
 static void drawMapSearchApp() {
-  drawScreenHeader("SEARCH COORD", CustomIcon::locationPinIcon, true);
+  statusBar();
 
   // Input boxes
-  display.fillRoundRect(12, 68, 216, 26, 6, uiCard());
-  display.drawRoundRect(12, 68, 216, 26, 6, mapSearchField == 0 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
-  label(18, 74, "LAT: " + mapSearchLat + (mapSearchField == 0 ? "_" : ""), 1, uiFg());
+  display.fillRoundRect(12, 34, 216, 26, 6, uiCard());
+  display.drawRoundRect(12, 34, 216, 26, 6, mapSearchField == 0 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
+  label(18, 40, "LAT: " + mapSearchLat + (mapSearchField == 0 ? "_" : ""), 1, uiFg());
 
-  display.fillRoundRect(12, 98, 216, 26, 6, uiCard());
-  display.drawRoundRect(12, 98, 216, 26, 6, mapSearchField == 1 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
-  label(18, 104, "LON: " + mapSearchLon + (mapSearchField == 1 ? "_" : ""), 1, uiFg());
+  display.fillRoundRect(12, 64, 216, 26, 6, uiCard());
+  display.drawRoundRect(12, 64, 216, 26, 6, mapSearchField == 1 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
+  label(18, 70, "LON: " + mapSearchLon + (mapSearchField == 1 ? "_" : ""), 1, uiFg());
 
   // Keypad: 4 rows x 3 columns
   const char* keys[4][3] = {
@@ -1313,28 +1319,31 @@ static void drawMapSearchApp() {
   for (int r = 0; r < 4; r++) {
     for (int c = 0; c < 3; c++) {
       int kx = 14 + c * 72;
-      int ky = 130 + r * 30;
-      display.fillRoundRect(kx, ky, 68, 26, 6, uiCard());
-      display.drawRoundRect(kx, ky, 68, 26, 6, darkTheme ? 0x2945 : 0xD6BA);
-      centeredLabel(kx, ky + 6, 68, keys[r][c], 1, (r == 3 && c == 2) ? 0xFA08 : uiFg());
+      int ky = 96 + r * 32;
+      display.fillRoundRect(kx, ky, 68, 28, 6, uiCard());
+      display.drawRoundRect(kx, ky, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
+      centeredLabel(kx, ky + 7, 68, keys[r][c], 1, (r == 3 && c == 2) ? 0xFA08 : uiFg());
     }
   }
 
-  // Action Buttons row at y = 254
+  // Action Buttons row at y = 232
   // CLEAR
-  display.fillRoundRect(14, 254, 68, 28, 6, uiCard());
-  display.drawRoundRect(14, 254, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(14, 262, 68, "CLEAR", 1, uiMuted());
+  display.fillRoundRect(14, 232, 68, 28, 6, uiCard());
+  display.drawRoundRect(14, 232, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(14, 240, 68, "CLEAR", 1, uiMuted());
 
   // MY LOC
-  display.fillRoundRect(86, 254, 68, 28, 6, uiCard());
-  display.drawRoundRect(86, 254, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(86, 262, 68, "MY LOC", 1, uiFg());
+  display.fillRoundRect(86, 232, 68, 28, 6, uiCard());
+  display.drawRoundRect(86, 232, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(86, 240, 68, "MY LOC", 1, uiFg());
 
   // SEARCH
-  display.fillRoundRect(158, 254, 68, 28, 6, TEAL);
-  display.drawRoundRect(158, 254, 68, 28, 6, TEAL);
-  centeredLabel(158, 262, 68, "SEARCH", 1, 0xFFFF);
+  display.fillRoundRect(158, 232, 68, 28, 6, TEAL);
+  display.drawRoundRect(158, 232, 68, 28, 6, TEAL);
+  centeredLabel(158, 240, 68, "SEARCH", 1, 0xFFFF);
+
+  display.fillRect(0, 286, 240, 34, uiBg());
+  drawGlobalNav();
 }
 
 static void drawHomeSubpage(){
@@ -1366,8 +1375,8 @@ static void drawHomeSubpage(){
       const int btnCx = gutterX + btnR; // 44
 
       for (int i = 0; i < kNumApps; i++) {
-        int cardY = 66 + i * rowPitch - appsScroll;
-        if (cardY + rowH < 56 || cardY > 290) continue;
+        int cardY = 34 + i * rowPitch - appsScroll;
+        if (cardY + rowH < 26 || cardY > 290) continue;
 
         // Circular colored app button on the left (R = 24, diameter 48)
         int btnCy = cardY + rowH / 2;
@@ -1386,10 +1395,10 @@ static void drawHomeSubpage(){
         int col = i % 2;
         int row = i / 2;
         int cx = (col == 0) ? 68 : 172;
-        int cy = 102 + row * rowPitch - appsScroll;
+        int cy = 68 + row * rowPitch - appsScroll;
 
         // Cull items completely offscreen
-        if (cy + R + 24 < 56 || cy - R > 290) continue;
+        if (cy + R + 24 < 26 || cy - R > 290) continue;
 
         display.fillCircle(cx, cy, R, kApps[i].color);
         drawCustomIcon(display, cx - 20, cy - 20, 0xFFFF, kApps[i].icon);
@@ -1397,10 +1406,9 @@ static void drawHomeSubpage(){
       }
     }
 
-    // Re-draw fixed header and status bar to cleanly clip top scroll
-    display.fillRect(0, 0, DISP_W, 56, uiBg());
+    // Re-draw status bar to cleanly clip top scroll
+    display.fillRect(0, 0, DISP_W, 26, uiBg());
     statusBar(true, false);
-    drawScreenHeader("All Apps", CustomIcon::allAppsIcon, false);
 
     // Re-draw fixed bottom nav bar to cleanly clip bottom scroll
     display.fillRect(0, 290, DISP_W, 30, uiBg());
@@ -1420,17 +1428,11 @@ static void drawHomeSubpage(){
       drawFileDetail();
       return;
     }
-    String folderName = (browserPath == "/") ? "MY FILES" : browserPath;
-    if (folderName.length() > 1 && folderName.startsWith("/")) folderName = folderName.substring(1);
-    drawScreenHeader(truncateHeading(folderName, 16).c_str(), CustomIcon::folderIcon, browserPath != "/");
-
-
-
-
-    if(!sdOk)label(10,100,"SD card unavailable",1,0xFA08);
-    else if(browserError.length())label(10,100,browserError,1,0xFA08);
-    else if(!browserCount)label(10,100,"This folder is empty",1,uiMuted());
-    for(int i=0;i<browserCount;i++){int y=68+i*44;
+    statusBar();
+    if(!sdOk)label(10,48,"SD card unavailable",1,0xFA08);
+    else if(browserError.length())label(10,48,browserError,1,0xFA08);
+    else if(!browserCount)label(10,48,"This folder is empty",1,uiMuted());
+    for(int i=0;i<browserCount;i++){int y=34+i*44;
       card(6,y,228,40,uiCard());
       String low=browserNames[i];low.toLowerCase();
       CustomIcon icon = browserDirs[i] ? CustomIcon::folderIcon :
@@ -1878,15 +1880,9 @@ static void drawHomeClockWidget() {
     dateStr = "Friday 6 Nov, 2026";
   }
 
-  if (activeFontId == FONT_GOOGLE_SANS) {
-    // Large 56px smooth Google Sans digits centered at Y = 44 (height 44px)
-    drawSmoothClock56(44, local.tm_hour, local.tm_min, fg);
-    centeredLabel(0, 96, DISP_W, dateStr, 0, fg);
-  } else {
-    // Enlarged smooth digits with active theme font (height 28px) at Y = 48
-    centeredLabel(0, 48, DISP_W, timeBuf, 3, fg);
-    centeredLabel(0, 90, DISP_W, dateStr, 0, fg);
-  }
+  // Large 56px smooth digits centered at Y = 38 (height 44px)
+  drawSmoothClock56(38, local.tm_hour, local.tm_min, fg);
+  centeredLabel(0, 90, DISP_W, dateStr, 0, fg);
 }
 
 
@@ -1947,18 +1943,20 @@ bool drawLifecycleScreen() {
     // Row 1 Left: GPS Status Pill
     display.fillRoundRect(8, 126, 108, 54, 27, gpsBg);
     String satStr = (countValid && sats > 0) ? String(sats) : (gpsDataReady ? "0" : "--");
-    int satNumW = textWidth(satStr, 2);
-    int totalGpsW = 26 + 8 + satNumW;
+    int satNumW = textWidth(satStr, 3);
+    int iconW = 28;
+    int gap = 8;
+    int totalGpsW = iconW + gap + satNumW;
     int gpsStartX = 8 + (108 - totalGpsW) / 2;
-    drawCustomIcon(display, gpsStartX, 126 + 14, gpsFg, CustomIcon::satelliteIconLarge, 26, 26);
-    label(gpsStartX + 26 + 8, 126 + 18, satStr, 2, gpsFg);
+    drawCustomIcon(display, gpsStartX, 126 + 13, gpsFg, CustomIcon::satelliteIconLarge, iconW, iconW);
+    label(gpsStartX + iconW + gap, 126 + 17, satStr, 3, gpsFg);
 
     // Row 1 Right: Sport Switcher Pill (108x54, R=27)
     display.fillRoundRect(124, 126, 108, 54, 27, uiCard());
     int switchStartX = 124 + (108 - (24 + 12 + 24)) / 2;
     uint16_t sportAltColor = darkTheme ? 0x475F : 0x034E;
     drawCustomIcon(display, switchStartX, 126 + 15, sportAltColor, runningMode ? CustomIcon::bikeIcon : CustomIcon::runIcon, 24, 24);
-    drawCustomIcon(display, switchStartX + 24 + 12, 126 + 15, uiFg(), CustomIcon::switchIcon, 24, 24);
+    drawCustomIcon(display, switchStartX + 24 + 12, 126 + 15, uiMuted(), CustomIcon::switchIcon, 24, 24);
 
     // Row 2: Slide-to-Start Slider (224x54, R=27, Y=190..244)
     display.fillRoundRect(8, 190, 224, 54, 27, uiCard());
@@ -2063,8 +2061,8 @@ static void quickTap(int x, int y) {
         uiRevision++;
         return;
       }
-      int row=(y-68)/44;
-      if(y>=68 && row>=0 && row<browserCount && y<68+row*44+40){
+      int row=(y-34)/44;
+      if(y>=34 && row>=0 && row<browserCount && y<34+row*44+40){
         if(browserDirs[row])openBrowser((browserPath=="/"?String(""):browserPath)+"/"+browserNames[row]);
         else openFileDetail(row);
       }
@@ -2108,21 +2106,21 @@ static void quickTap(int x, int y) {
       return;
     }
     if(homePage==HOME_MAP_SEARCH){
-      // LAT input box (y=68..94)
-      if (x >= 12 && x <= 228 && y >= 68 && y <= 94) {
+      // LAT input box (y=34..60)
+      if (x >= 12 && x <= 228 && y >= 34 && y <= 60) {
         mapSearchField = 0;
         uiRevision++;
         return;
       }
-      // LON input box (y=98..124)
-      if (x >= 12 && x <= 228 && y >= 98 && y <= 124) {
+      // LON input box (y=64..90)
+      if (x >= 12 && x <= 228 && y >= 64 && y <= 90) {
         mapSearchField = 1;
         uiRevision++;
         return;
       }
-      // Keypad area (y=130..250)
-      if (x >= 14 && x <= 230 && y >= 130 && y <= 250) {
-        int kr = (y - 130) / 30;
+      // Keypad area (y=96..224)
+      if (x >= 14 && x <= 230 && y >= 96 && y <= 224) {
+        int kr = (y - 96) / 32;
         int kc = (x - 14) / 72;
         if (kr >= 0 && kr < 4 && kc >= 0 && kc < 3) {
           const char* keys[4][3] = {
@@ -2141,8 +2139,8 @@ static void quickTap(int x, int y) {
           return;
         }
       }
-      // Action row (y=254..284)
-      if (y >= 252 && y <= 286) {
+      // Action row (y=230..264)
+      if (y >= 230 && y <= 264) {
         // CLEAR (x=14..82)
         if (x >= 12 && x <= 84) {
           if (mapSearchField == 0) mapSearchLat = "";
@@ -2179,13 +2177,13 @@ static void quickTap(int x, int y) {
       return;
     }
     if(homePage==HOME_APPS){
-      if(y < 56 || y >= 290) return;
+      if(y < 26 || y >= 290) return;
       int hitApp = -1;
       if (appsListView) {
         const int rowH = 56;
         const int rowPitch = 64;
         for (int i = 0; i < 7; i++) {
-          int cardY = 66 + i * rowPitch - appsScroll;
+          int cardY = 34 + i * rowPitch - appsScroll;
           if (x >= 10 && x <= 235 && y >= cardY && y <= cardY + rowH) {
             hitApp = i;
             break;
@@ -2196,7 +2194,7 @@ static void quickTap(int x, int y) {
           int col = i % 2;
           int row = i / 2;
           int cx = (col == 0) ? 68 : 172;
-          int cy = 102 + row * 114 - appsScroll;
+          int cy = 68 + row * 114 - appsScroll;
           int dx = x - cx;
           int dy = y - cy;
           bool inCircle = (dx * dx + dy * dy <= 44 * 44);

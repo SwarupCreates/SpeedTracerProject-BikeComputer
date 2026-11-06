@@ -554,71 +554,58 @@ static void drawSettingsApp() {
       CustomIcon::powerIcon
     };
 
-    display.fillRect(0, 29, 240, 261, uiBg());
+    display.fillRect(0, 26, 240, 264, uiBg());
     for (int i = 0; i < 6; i++) {
-      int y = 56 - settingsScroll + i * 54;
-      if (y + 48 <= 56 || y >= 286) continue;
+      int y = 34 - settingsScroll + i * 54;
+      if (y + 48 <= 26 || y >= 286) continue;
       display.fillRoundRect(6, y, 228, 48, 12, uiCard());
       drawCustomIcon(display, 16, y + 13, uiFg(), icons[i], 22, 22);
       label(46, y + 18, titles[i], 1, uiFg());
       drawCustomIcon(display, 212, y + 16, uiMuted(), CustomIcon::goNextIcon, 16, 16);
     }
-
-    // Fixed header overlay (covers y = 29..55, clean transition)
-    display.fillRect(0, 29, 240, 27, uiBg());
-    drawScreenHeader("SETTINGS", CustomIcon::configureIcon, true);
-
-    // Redraw fixed status bar and navigation bar to prevent any bleed
-    statusBar(true, false);
-    display.fillRect(0, 286, 240, 34, uiBg());
-    drawGlobalNav();
   }
   else if (settingsPage == SET_THEME) {
-    drawScreenHeader("THEME", CustomIcon::themeSwitcherIcon, true);
-
-    // 1. Dark Mode Toggle Card (y = 66, h = 48)
-    display.fillRoundRect(6, 66, 228, 48, 12, uiCard());
-    drawCustomIcon(display, 16, 79, uiFg(), CustomIcon::themeSwitcherIcon, 22, 22);
-    label(46, 74, "Dark Mode", 1, uiFg());
-    label(46, 90, darkTheme ? "AMOLED black background" : "Clean light background", 0, uiMuted());
+    // 1. Dark Mode Toggle Card (y = 34, h = 48)
+    display.fillRoundRect(6, 34, 228, 48, 12, uiCard());
+    drawCustomIcon(display, 16, 47, uiFg(), CustomIcon::themeSwitcherIcon, 22, 22);
+    label(46, 42, "Dark Mode", 1, uiFg());
+    label(46, 58, darkTheme ? "AMOLED black background" : "Clean light background", 0, uiMuted());
 
     // Toggle pill
-    int tx = 166, ty = 77, tw = 56, th = 26;
+    int tx = 166, ty = 45, tw = 56, th = 26;
     uint16_t toggleBg = darkTheme ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
     display.fillRoundRect(tx, ty, tw, th, 13, toggleBg);
     int circleX = darkTheme ? (tx + tw - 13) : (tx + 13);
     display.fillCircle(circleX, ty + 13, 10, 0xFFFF);
     label(darkTheme ? (tx + 7) : (tx + 27), ty + 8, darkTheme ? "ON" : "OFF", 0, 0xFFFF);
 
-    // 2. System Font Card (y = 120, h = 48)
-    display.fillRoundRect(6, 120, 228, 48, 12, uiCard());
-    drawCustomIcon(display, 16, 133, uiFg(), CustomIcon::fontIcon, 22, 22);
-    label(46, 128, "System Font", 1, uiFg());
-    label(46, 144, SYSTEM_FONT_NAMES[activeFontId], 0, 0x34C2);
-    drawCustomIcon(display, 212, 136, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+    // 2. System Font Card (y = 88, h = 48)
+    display.fillRoundRect(6, 88, 228, 48, 12, uiCard());
+    drawCustomIcon(display, 16, 101, uiFg(), CustomIcon::fontIcon, 22, 22);
+    label(46, 96, "System Font", 1, uiFg());
+    label(46, 112, SYSTEM_FONT_NAMES[activeFontId], 0, 0x34C2);
+    drawCustomIcon(display, 212, 104, uiMuted(), CustomIcon::goNextIcon, 16, 16);
 
-    // 3. Apps Screen Layout Card (y = 174, h = 48)
-    display.fillRoundRect(6, 174, 228, 48, 12, uiCard());
-    drawCustomIcon(display, 16, 187, uiFg(), CustomIcon::allAppsIcon, 22, 22);
-    label(46, 182, "Apps Layout", 1, uiFg());
-    label(46, 198, appsListView ? "Single column list" : "2-column icon grid", 0, uiMuted());
+    // 3. Apps Screen Layout Card (y = 142, h = 48)
+    display.fillRoundRect(6, 142, 228, 48, 12, uiCard());
+    drawCustomIcon(display, 16, 155, uiFg(), CustomIcon::allAppsIcon, 22, 22);
+    label(46, 150, "Apps Layout", 1, uiFg());
+    label(46, 166, appsListView ? "Single column list" : "2-column icon grid", 0, uiMuted());
 
     // Toggle pill for Apps Layout (Grid / List)
-    int tx2 = 166, ty2 = 185, tw2 = 56, th2 = 26;
+    int tx2 = 166, ty2 = 153, tw2 = 56, th2 = 26;
     uint16_t toggleBg2 = appsListView ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
     display.fillRoundRect(tx2, ty2, tw2, th2, 13, toggleBg2);
     int circleX2 = appsListView ? (tx2 + tw2 - 13) : (tx2 + 13);
     display.fillCircle(circleX2, ty2 + 13, 10, 0xFFFF);
     label(appsListView ? (tx2 + 6) : (tx2 + 25), ty2 + 8, appsListView ? "LIST" : "GRID", 0, 0xFFFF);
 
-    // 4. Info Note Card (y = 228, h = 48)
-    display.fillRoundRect(6, 228, 228, 48, 12, uiCard());
-    label(16, 236, "Theme & Appearance", 1, uiFg());
-    label(16, 252, "Customize look, typography & launcher.", 0, uiMuted());
+    // 4. Info Note Card (y = 196, h = 48)
+    display.fillRoundRect(6, 196, 228, 48, 12, uiCard());
+    label(16, 204, "Theme & Appearance", 1, uiFg());
+    label(16, 220, "Customize look, typography & launcher.", 0, uiMuted());
   }
   else if (settingsPage == SET_FONT) {
-    drawScreenHeader("SYSTEM FONT", CustomIcon::fontIcon, true);
-
     const char* fontDescs[] = {
       "Modern Geometric Sans",
       "Clean Balanced Sans",
@@ -629,7 +616,7 @@ static void drawSettingsApp() {
     };
 
     for (int i = 0; i < 6; i++) {
-      int y = 58 + i * 38;
+      int y = 34 + i * 38;
       bool sel = (activeFontId == i);
       display.fillRoundRect(6, y, 228, 34, 10, uiCard());
       if (sel) display.drawRoundRect(6, y, 228, 34, 10, 0x34C2);
@@ -643,27 +630,23 @@ static void drawSettingsApp() {
     }
   }
   else if (settingsPage == SET_LANGUAGE) {
-    drawScreenHeader("LANGUAGE", CustomIcon::languageIcon, true);
-
-    display.fillRoundRect(6, 68, 228, 54, 12, uiCard());
+    display.fillRoundRect(6, 34, 228, 54, 12, uiCard());
 
     // Selected radio circle
-    display.drawCircle(24, 95, 8, 0x34C2);
-    display.fillCircle(24, 95, 4, 0x34C2);
+    display.drawCircle(24, 61, 8, 0x34C2);
+    display.fillCircle(24, 61, 4, 0x34C2);
 
-    label(44, 80, "English (United States)", 1, uiFg());
-    label(44, 98, "Active system language", 1, uiMuted());
+    label(44, 46, "English (United States)", 1, uiFg());
+    label(44, 64, "Active system language", 1, uiMuted());
 
-    display.fillRoundRect(6, 130, 228, 64, 12, uiCard());
+    display.fillRoundRect(6, 96, 228, 64, 12, uiCard());
     label(16, 144, "System Language", 1, uiFg());
     label(16, 160, "English (US) is the sole active", 1, uiMuted());
     label(16, 174, "language supported by firmware.", 1, uiMuted());
   }
   else if (settingsPage == SET_TIME_REGION) {
-    drawScreenHeader("TIME & REGION", CustomIcon::historyIcon, true);
-
     // Live Clock Hero Card
-    display.fillRoundRect(6, 64, 228, 66, 12, uiCard());
+    display.fillRoundRect(6, 34, 228, 66, 12, uiCard());
 
     time_t now = time(nullptr);
     char timeBuf[16] = "--:-- --";
@@ -673,176 +656,159 @@ static void drawSettingsApp() {
       int h12 = local.tm_hour % 12 == 0 ? 12 : local.tm_hour % 12;
       snprintf(timeBuf, sizeof(timeBuf), "%d:%02d %s", h12, local.tm_min, local.tm_hour < 12 ? "AM" : "PM");
     }
-    label(18, 74, timeBuf, 3, darkTheme ? 0x07FF : 0x0419);
-    label(18, 106, "India Standard Time (IST)", 1, uiMuted());
+    label(18, 44, timeBuf, 3, darkTheme ? 0x07FF : 0x0419);
+    label(18, 76, "India Standard Time (IST)", 1, uiMuted());
 
     // Details Card
-    display.fillRoundRect(6, 138, 228, 80, 12, uiCard());
-    label(16, 148, "Region: Asia / Kolkata", 1, uiFg());
-    label(16, 164, "Timezone: UTC+05:30 (No DST)", 1, uiFg());
-    label(16, 180, "Auto-Sync: Phone BLE (CTS) / GPS", 1, uiMuted());
-    label(16, 196, now >= 1704067200 ? "Sync Status: Locked" : "Sync Status: Searching for fix", 1, now >= 1704067200 ? 0x2564 : 0xFA08);
+    display.fillRoundRect(6, 108, 228, 80, 12, uiCard());
+    label(16, 118, "Region: Asia / Kolkata", 1, uiFg());
+    label(16, 134, "Timezone: UTC+05:30 (No DST)", 1, uiFg());
+    label(16, 150, "Auto-Sync: Phone BLE (CTS) / GPS", 1, uiMuted());
+    label(16, 166, now >= 1704067200 ? "Sync Status: Locked" : "Sync Status: Searching for fix", 1, now >= 1704067200 ? 0x2564 : 0xFA08);
 
     // Info Note
-    display.fillRoundRect(6, 226, 228, 48, 12, uiCard());
+    display.fillRoundRect(6, 196, 228, 48, 12, uiCard());
     label(16, 236, "Clock syncs automatically via", 1, uiMuted());
     label(16, 250, "BLE phone link or GPS satellite.", 1, uiMuted());
   }
   else if (settingsPage == SET_SECURITY) {
-    drawScreenHeader("SECURITY", CustomIcon::lockIcon, true);
-
     if (settingChangePin) {
-      display.fillRoundRect(6, 68, 228, 66, 12, uiCard());
-      label(16, 78, "SET NEW 4-DIGIT PIN", 1, uiFg());
-      label(16, 92, "Enter 4 numbers below:", 1, uiMuted());
+      display.fillRoundRect(6, 34, 228, 66, 12, uiCard());
+      label(16, 44, "SET NEW 4-DIGIT PIN", 1, uiFg());
+      label(16, 58, "Enter 4 numbers below:", 1, uiMuted());
 
       int dotStartX = 87;
       for (int i = 0; i < 4; i++) {
         int dx = dotStartX + i * 22;
-        if (i < (int)pinInput.length()) display.fillCircle(dx, 116, 5, uiFg());
-        else display.drawCircle(dx, 116, 5, uiMuted());
+        if (i < (int)pinInput.length()) display.fillCircle(dx, 82, 5, uiFg());
+        else display.drawCircle(dx, 82, 5, uiMuted());
       }
-      drawKeypad(146);
+      drawKeypad(112);
     } else {
-      // 1. Screen Lock Toggle Card (y = 62, h = 40)
-      display.fillRoundRect(6, 62, 228, 40, 10, uiCard());
-      label(16, 69, "Screen Lock", 1, uiFg());
-      label(16, 84, screenLockEnabled ? "PIN required on wake" : "Direct access (no PIN)", 1, uiMuted());
+      // 1. Screen Lock Toggle Card (y = 34, h = 40)
+      display.fillRoundRect(6, 34, 228, 40, 10, uiCard());
+      label(16, 41, "Screen Lock", 1, uiFg());
+      label(16, 56, screenLockEnabled ? "PIN required on wake" : "Direct access (no PIN)", 1, uiMuted());
       // Toggle Pill
-      int tx = 168, ty = 69, tw = 54, th = 26;
+      int tx = 168, ty = 41, tw = 54, th = 26;
       uint16_t toggleBg = screenLockEnabled ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
       display.fillRoundRect(tx, ty, tw, th, 13, toggleBg);
       int circleX = screenLockEnabled ? (tx + tw - 13) : (tx + 13);
       display.fillCircle(circleX, ty + 13, 10, 0xFFFF);
       label(screenLockEnabled ? (tx + 7) : (tx + 27), ty + 8, screenLockEnabled ? "ON" : "OFF", 1, 0xFFFF);
 
-      // 2. Change PIN Card (y = 108, h = 40)
-      display.fillRoundRect(6, 108, 228, 40, 10, uiCard());
-      label(16, 115, "Change Password / PIN", 1, uiFg());
-      label(16, 130, String("Current PIN: ") + (screenLockPin.length() ? "****" : "None"), 1, uiMuted());
-      drawCustomIcon(display, 212, 120, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+      // 2. Change PIN Card (y = 80, h = 40)
+      display.fillRoundRect(6, 80, 228, 40, 10, uiCard());
+      label(16, 87, "Change Password / PIN", 1, uiFg());
+      label(16, 102, String("Current PIN: ") + (screenLockPin.length() ? "****" : "None"), 1, uiMuted());
+      drawCustomIcon(display, 212, 92, uiMuted(), CustomIcon::goNextIcon, 16, 16);
 
-      // 3. Screen Timeout Card (y = 154, h = 40)
-      display.fillRoundRect(6, 154, 228, 40, 10, uiCard());
-      label(16, 161, "Screen Timeout", 1, uiFg());
+      // 3. Screen Timeout Card (y = 126, h = 40)
+      display.fillRoundRect(6, 126, 228, 40, 10, uiCard());
+      label(16, 133, "Screen Timeout", 1, uiFg());
       const char* tLabel = "1 min";
       for (int i = 0; i < NUM_TIMEOUT_PRESETS; i++) {
         if (TIMEOUT_PRESETS[i] == screenTimeoutSec) { tLabel = TIMEOUT_LABELS[i]; break; }
       }
-      label(16, 176, String("Auto-off: ") + tLabel + " (tap to cycle)", 1, uiMuted());
-      label(170, 168, tLabel, 1, 0x34C2);
+      label(16, 148, String("Auto-off: ") + tLabel + " (tap to cycle)", 1, uiMuted());
+      label(170, 140, tLabel, 1, 0x34C2);
 
-      // 4. Lockscreen Dark Mode Toggle (y = 200, h = 40)
-      display.fillRoundRect(6, 200, 228, 40, 10, uiCard());
-      label(16, 207, "Lockscreen Dark Mode", 1, uiFg());
-      label(16, 222, lockscreenDarkOnly ? "Always AMOLED black" : "Follows active theme", 1, uiMuted());
+      // 4. Lockscreen Dark Mode Toggle (y = 172, h = 40)
+      display.fillRoundRect(6, 172, 228, 40, 10, uiCard());
+      label(16, 179, "Lockscreen Dark Mode", 1, uiFg());
+      label(16, 194, lockscreenDarkOnly ? "Always AMOLED black" : "Follows active theme", 1, uiMuted());
       // Toggle Pill
-      int tx2 = 168, ty2 = 207, tw2 = 54, th2 = 26;
+      int tx2 = 168, ty2 = 179, tw2 = 54, th2 = 26;
       uint16_t toggleBg2 = lockscreenDarkOnly ? 0x34C2 : (darkTheme ? 0x3A4B : 0xBDD7);
       display.fillRoundRect(tx2, ty2, tw2, th2, 13, toggleBg2);
       int circleX2 = lockscreenDarkOnly ? (tx2 + tw2 - 13) : (tx2 + 13);
       display.fillCircle(circleX2, ty2 + 13, 10, 0xFFFF);
       label(lockscreenDarkOnly ? (tx2 + 7) : (tx2 + 27), ty2 + 8, lockscreenDarkOnly ? "ON" : "OFF", 1, 0xFFFF);
 
-      // 5. Lock Device Now Button (y = 246, h = 38)
-      display.fillRoundRect(6, 246, 228, 38, 12, uiCard());
-      drawCustomIcon(display, 16, 254, uiFg(), CustomIcon::lockIcon, 22, 22);
-      label(46, 258, "Lock Device Now", 1, uiFg());
-      drawCustomIcon(display, 212, 257, uiFg(), CustomIcon::goNextIcon, 16, 16);
+      // 5. Lock Device Now Button (y = 218, h = 38)
+      display.fillRoundRect(6, 218, 228, 38, 12, uiCard());
+      drawCustomIcon(display, 16, 226, uiFg(), CustomIcon::lockIcon, 22, 22);
+      label(46, 230, "Lock Device Now", 1, uiFg());
+      drawCustomIcon(display, 212, 229, uiFg(), CustomIcon::goNextIcon, 16, 16);
 
       // Status Note
-      label(12, 276, secMessage.length() ? secMessage : "Protects settings & device with PIN lock.", 1, uiMuted());
+      label(12, 264, secMessage.length() ? secMessage : "Protects settings & device with PIN lock.", 1, uiMuted());
     }
   }
   else if (settingsPage == SET_RESET) {
-    drawScreenHeader("RESET", CustomIcon::refreshIcon, true);
-
     if (settingFormatConfirm) {
-      display.fillRoundRect(6, 72, 228, 178, 12, uiCard());
-      display.drawRoundRect(6, 72, 228, 178, 12, 0xF800);
+      display.fillRoundRect(6, 38, 228, 178, 12, uiCard());
+      display.drawRoundRect(6, 38, 228, 178, 12, 0xF800);
 
-      drawCustomIcon(display, 110, 80, 0xF800, CustomIcon::warningIcon, 20, 20);
-      centeredLabel(6, 104, 228, "FORMAT SD CARD?", 2, 0xF800);
-      label(18, 128, "All saved GPX routes, FIT", 1, uiFg());
-      label(18, 144, "activities, and offline map tiles", 1, uiFg());
-      label(18, 160, "will be permanently erased!", 1, 0xF800);
+      drawCustomIcon(display, 110, 46, 0xF800, CustomIcon::warningIcon, 20, 20);
+      centeredLabel(6, 70, 228, "FORMAT SD CARD?", 2, 0xF800);
+      label(18, 94, "All saved GPX routes, FIT", 1, uiFg());
+      label(18, 110, "activities, and offline map tiles", 1, uiFg());
+      label(18, 126, "will be permanently erased!", 1, 0xF800);
 
       // Cancel button
-      display.fillRoundRect(16, 186, 96, 42, 21, uiCard());
-      centeredLabel(16, 202, 96, "CANCEL", 1, uiFg());
+      display.fillRoundRect(16, 152, 96, 42, 21, uiCard());
+      centeredLabel(16, 168, 96, "CANCEL", 1, uiFg());
 
       // Confirm button
-      display.fillRoundRect(124, 186, 96, 42, 21, 0xF800);
-      centeredLabel(124, 202, 96, "WIPE SD", 1, 0xFFFF);
+      display.fillRoundRect(124, 152, 96, 42, 21, 0xF800);
+      centeredLabel(124, 168, 96, "WIPE SD", 1, 0xFFFF);
     } else {
       // 1. Soft Reset Card
-      display.fillRoundRect(6, 68, 228, 76, 12, uiCard());
-      label(16, 78, "Soft Reset", 2, uiFg());
-      label(16, 98, "Reboot system (same as reset button)", 1, uiMuted());
+      display.fillRoundRect(6, 34, 228, 76, 12, uiCard());
+      label(16, 44, "Soft Reset", 2, uiFg());
+      label(16, 64, "Reboot system (same as reset button)", 1, uiMuted());
 
-      display.fillRoundRect(16, 114, 204, 24, 12, 0x2564);
-      centeredLabel(16, 121, 204, "RESTART DEVICE", 1, 0xFFFF);
+      display.fillRoundRect(16, 80, 204, 24, 12, 0x2564);
+      centeredLabel(16, 87, 204, "RESTART DEVICE", 1, 0xFFFF);
 
       // 2. Format SD Card
-      display.fillRoundRect(6, 152, 228, 76, 12, uiCard());
-      label(16, 162, "Format MicroSD", 2, uiFg());
-      label(16, 182, "Wipes tracks, maps & resets folders", 1, uiMuted());
+      display.fillRoundRect(6, 118, 228, 76, 12, uiCard());
+      label(16, 128, "Format MicroSD", 2, uiFg());
+      label(16, 148, "Wipes tracks, maps & resets folders", 1, uiMuted());
 
-      display.fillRoundRect(16, 198, 204, 24, 12, 0xF800);
-      centeredLabel(16, 205, 204, "FORMAT SD CARD", 1, 0xFFFF);
+      display.fillRoundRect(16, 164, 204, 24, 12, 0xF800);
+      centeredLabel(16, 171, 204, "FORMAT SD CARD", 1, 0xFFFF);
 
       // Status Note
-      label(12, 240, resetMessage.length() ? resetMessage : (sdOk ? ("SD: " + sdStatus) : "SD Card unavailable"), 1, uiMuted());
+      label(12, 206, resetMessage.length() ? resetMessage : (sdOk ? ("SD: " + sdStatus) : "SD Card unavailable"), 1, uiMuted());
     }
   }
   else if (settingsPage == SET_POWER) {
-    drawScreenHeader("POWER", CustomIcon::powerIcon, true);
-
     // Battery / Hardware Details Card
-    display.fillRoundRect(6, 64, 228, 88, 12, uiCard());
-    label(16, 74, "Power System Details", 2, uiFg());
-    label(16, 96, "Power Source: USB 5V / LiPo Battery", 1, uiFg());
-    label(16, 112, "Power Latch: GPIO 7 (SYS_EN Active)", 1, 0x34C2);
-    label(16, 126, "Onboard PMIC: ETA6003 Power-Path", 1, uiMuted());
-    label(16, 140, "Hardware Key: GPIO 6 (Active Low)", 1, uiMuted());
+    display.fillRoundRect(6, 34, 228, 88, 12, uiCard());
+    label(16, 44, "Power System Details", 2, uiFg());
+    label(16, 66, "Power Source: USB 5V / LiPo Battery", 1, uiFg());
+    label(16, 82, "Power Latch: GPIO 7 (SYS_EN Active)", 1, 0x34C2);
+    label(16, 96, "Onboard PMIC: ETA6003 Power-Path", 1, uiMuted());
+    label(16, 110, "Hardware Key: GPIO 6 (Active Low)", 1, uiMuted());
 
     // Restart Button
-    display.fillRoundRect(6, 160, 228, 48, 14, uiCard());
-    drawCustomIcon(display, 18, 173, uiFg(), CustomIcon::refreshIcon, 22, 22);
-    label(48, 175, "Restart Device", 2, uiFg());
+    display.fillRoundRect(6, 130, 228, 48, 14, uiCard());
+    drawCustomIcon(display, 18, 143, uiFg(), CustomIcon::refreshIcon, 22, 22);
+    label(48, 145, "Restart Device", 2, uiFg());
 
     // Shut Down Button
-    display.fillRoundRect(6, 216, 228, 48, 14, 0xF800);
-    drawCustomIcon(display, 44, 229, 0xFFFF, CustomIcon::powerIcon, 22, 22);
-    label(76, 230, "Shut Down", 2, 0xFFFF);
+    display.fillRoundRect(6, 186, 228, 48, 14, 0xF800);
+    drawCustomIcon(display, 44, 199, 0xFFFF, CustomIcon::powerIcon, 22, 22);
+    label(76, 200, "Shut Down", 2, 0xFFFF);
 
-    label(12, 272, "To turn back on: press power key or plug USB.", 1, uiMuted());
+    label(12, 242, "To turn back on: press power key or plug USB.", 1, uiMuted());
   }
+
+  // Redraw fixed status bar and navigation bar for all settings pages
+  statusBar(true, false);
+  display.fillRect(0, 286, 240, 34, uiBg());
+  drawGlobalNav();
 }
 
 static void tapSettings(int x, int y) {
-  // Back button tap in header: y < 54 && x < 60
-  if (y < 54 && x < 60) {
-    if (settingsPage != SET_MAIN) {
-      if (settingChangePin) { settingChangePin = false; pinInput = ""; secMessage = ""; }
-      else if (settingFormatConfirm) { settingFormatConfirm = false; }
-      else if (settingsPage == SET_FONT) { settingsPage = SET_THEME; }
-      else if (settingsPage == SET_THEME) { settingsPage = SET_MAIN; settingsScroll = 0; }
-      else { settingsPage = SET_MAIN; settingsScroll = 0; }
-    } else {
-      homePage = HOME_APPS;
-      settingsScroll = 0;
-    }
-    uiRevision++;
-    return;
-  }
-
   if (settingsPage == SET_MAIN) {
-    if (x >= 6 && x < 234 && y >= 56 && y < 286) {
+    if (x >= 6 && x < 234 && y >= 26 && y < 286) {
       int yScrolled = y + settingsScroll;
       int item = -1;
       for (int i = 0; i < 6; i++) {
-        int iy = 56 + i * 54;
+        int iy = 34 + i * 54;
         if (yScrolled >= iy && yScrolled < iy + 48) { item = i; break; }
       }
       if (item == 0) { settingsPage = SET_THEME; uiRevision++; }
@@ -854,13 +820,13 @@ static void tapSettings(int x, int y) {
     }
   }
   else if (settingsPage == SET_THEME) {
-    if (x >= 6 && x < 234 && y >= 66 && y < 114) {
+    if (x >= 6 && x < 234 && y >= 34 && y < 82) {
       setDarkTheme(!darkTheme);
       uiRevision++;
-    } else if (x >= 6 && x < 234 && y >= 120 && y < 168) {
+    } else if (x >= 6 && x < 234 && y >= 88 && y < 136) {
       settingsPage = SET_FONT;
       uiRevision++;
-    } else if (x >= 6 && x < 234 && y >= 174 && y < 222) {
+    } else if (x >= 6 && x < 234 && y >= 142 && y < 190) {
       setAppsListView(!appsListView);
       uiRevision++;
     }
@@ -868,7 +834,7 @@ static void tapSettings(int x, int y) {
   else if (settingsPage == SET_FONT) {
     if (x >= 6 && x < 234) {
       for (int i = 0; i < 6; i++) {
-        int iy = 58 + i * 38;
+        int iy = 34 + i * 38;
         if (y >= iy && y < iy + 34) {
           setActiveFont(i);
           uiRevision++;
@@ -879,24 +845,24 @@ static void tapSettings(int x, int y) {
   }
   else if (settingsPage == SET_SECURITY) {
     if (settingChangePin) {
-      tapKeypad(x, y, 146, true);
+      tapKeypad(x, y, 112, true);
     } else {
-      // 1. Toggle Screen Lock (y: 62 to 102)
-      if (x >= 6 && x < 234 && y >= 62 && y < 102) {
+      // 1. Toggle Screen Lock (y: 34 to 74)
+      if (x >= 6 && x < 234 && y >= 34 && y < 74) {
         screenLockEnabled = !screenLockEnabled;
         saveSecuritySettings();
         secMessage = screenLockEnabled ? "Screen Lock enabled!" : "Screen Lock disabled.";
         uiRevision++;
       }
-      // 2. Change PIN (y: 108 to 148)
-      else if (x >= 6 && x < 234 && y >= 108 && y < 148) {
+      // 2. Change PIN (y: 80 to 120)
+      else if (x >= 6 && x < 234 && y >= 80 && y < 120) {
         settingChangePin = true;
         pinInput = "";
         secMessage = "";
         uiRevision++;
       }
-      // 3. Screen Timeout cycle (y: 154 to 194)
-      else if (x >= 6 && x < 234 && y >= 154 && y < 194) {
+      // 3. Screen Timeout cycle (y: 126 to 166)
+      else if (x >= 6 && x < 234 && y >= 126 && y < 166) {
         int curIdx = 2;
         for (int i = 0; i < NUM_TIMEOUT_PRESETS; i++) {
           if (TIMEOUT_PRESETS[i] == screenTimeoutSec) { curIdx = i; break; }
@@ -907,15 +873,15 @@ static void tapSettings(int x, int y) {
         secMessage = String("Timeout set: ") + TIMEOUT_LABELS[curIdx];
         uiRevision++;
       }
-      // 4. Lockscreen Dark Mode toggle (y: 200 to 240)
-      else if (x >= 6 && x < 234 && y >= 200 && y < 240) {
+      // 4. Lockscreen Dark Mode toggle (y: 172 to 212)
+      else if (x >= 6 && x < 234 && y >= 172 && y < 212) {
         lockscreenDarkOnly = !lockscreenDarkOnly;
         saveSecuritySettings();
         secMessage = lockscreenDarkOnly ? "Lockscreen: Dark Mode ON" : "Lockscreen: Follows theme";
         uiRevision++;
       }
-      // 5. Lock Now (y: 246 to 284)
-      else if (x >= 6 && x < 234 && y >= 246 && y < 284) {
+      // 5. Lock Now (y: 218 to 256)
+      else if (x >= 6 && x < 234 && y >= 218 && y < 256) {
         screenLocked = true;
         lockScreenMode = LOCK_HERO;
         pinInput = "";
@@ -926,7 +892,7 @@ static void tapSettings(int x, int y) {
   }
   else if (settingsPage == SET_RESET) {
     if (settingFormatConfirm) {
-      if (y >= 186 && y < 228) {
+      if (y >= 152 && y < 194) {
         if (x >= 16 && x < 112) { // Cancel
           settingFormatConfirm = false;
           uiRevision++;
@@ -938,11 +904,11 @@ static void tapSettings(int x, int y) {
       }
     } else {
       // Soft reset
-      if (x >= 16 && x < 220 && y >= 114 && y < 138) {
+      if (x >= 16 && x < 220 && y >= 80 && y < 104) {
         executeSoftReset();
       }
       // Format SD button
-      else if (x >= 16 && x < 220 && y >= 198 && y < 222) {
+      else if (x >= 16 && x < 220 && y >= 164 && y < 188) {
         settingFormatConfirm = true;
         uiRevision++;
       }
@@ -950,11 +916,11 @@ static void tapSettings(int x, int y) {
   }
   else if (settingsPage == SET_POWER) {
     // Restart
-    if (x >= 6 && x < 234 && y >= 160 && y < 208) {
+    if (x >= 6 && x < 234 && y >= 130 && y < 178) {
       executeSoftReset();
     }
     // Shut Down
-    else if (x >= 6 && x < 234 && y >= 216 && y < 264) {
+    else if (x >= 6 && x < 234 && y >= 186 && y < 234) {
       drawLoadingScreen("Shutting down...", "Saving data");
       delay(400);
       enterPowerOff();

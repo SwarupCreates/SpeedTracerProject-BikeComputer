@@ -888,7 +888,7 @@ static const char* getCardinalDirection(float deg) {
 static void drawCompassApp() {
   display.fillRect(0, 28, 240, 262, uiBg());
 
-  const int cx = 120, cy = 135, r = 78;
+  const int cx = 120, cy = 120, r = 88;
 
   // Outer circular dial
   display.drawCircle(cx, cy, r, uiFg());
@@ -906,7 +906,7 @@ static void drawCompassApp() {
   float dx = sinf(rad), dy = -cosf(rad);
   float px = -dy, py = dx;
 
-  float L = 58.0f;
+  float L = 66.0f;
   float hw = 6.0f;
 
   int ntx = lroundf((float)cx + L * dx);
@@ -1569,7 +1569,7 @@ static void drawBigNumber(int rightX, int y, int value, uint16_t fg = 0xFFFF) {
 
 static void drawGpsRadarScreen() {
   const int cx = 120;
-  const int cy = 135 - gpsScroll;
+  const int cy = 120 - gpsScroll;
   const uint32_t t = millis();
 
   // Theme-aware color palette
@@ -1586,31 +1586,31 @@ static void drawGpsRadarScreen() {
     centerDiscColor = 0x24C0;  // rich green center disc
   }
 
-  // Outer ring (R=78): unified size & position with Compass and Countdown dials
-  display.fillCircle(cx, cy, 78, outerFill);
-  display.drawCircle(cx, cy, 78, radarLineColor);
+  // Outer ring (R=88): increased dial size shifted upward to comfortably fit all satellite dots
+  display.fillCircle(cx, cy, 88, outerFill);
+  display.drawCircle(cx, cy, 88, radarLineColor);
 
-  // Middle ring (R=50): fill (no inner outline, matches Figma)
-  display.fillCircle(cx, cy, 50, middleFill);
+  // Middle ring (R=55): proportional concentric division
+  display.fillCircle(cx, cy, 55, middleFill);
 
-  // Single Rotating Radar Sweep Line (radius 22 to 78)
+  // Single Rotating Radar Sweep Line (radius 22 to 88)
   int deg = (t / 8) % 360;
   float rad = radians((float)deg);
   int x1 = cx + (int)(22.0f * cosf(rad));
   int y1 = cy + (int)(22.0f * sinf(rad));
-  int x2 = cx + (int)(78.0f * cosf(rad));
-  int y2 = cy + (int)(78.0f * sinf(rad));
+  int x2 = cx + (int)(88.0f * cosf(rad));
+  int y2 = cy + (int)(88.0f * sinf(rad));
   display.drawLine(x1, y1, x2, y2, radarLineColor);
 
-  // Satellite Dots
+  // Satellite Dots (calibrated radii 36..76 to stay comfortably within the R=88 boundary)
   struct SatPoint { uint8_t r; uint16_t deg; };
   static const SatPoint satPoints[24] = {
-    {42, 60},   {74, 25},   {82, 0},    {46, 160},
-    {68, 235},  {76, 120},  {50, 310},  {78, 280},
-    {40, 85},   {72, 195},  {62, 345},  {48, 215},
-    {70, 30},   {52, 140},  {82, 95},   {44, 275},
-    {75, 160},  {60, 45},   {78, 220},  {45, 15},
-    {70, 180},  {55, 105},  {80, 320},  {72, 240}
+    {38, 60},   {66, 25},   {76, 0},    {42, 160},
+    {62, 235},  {72, 120},  {46, 310},  {74, 280},
+    {36, 85},   {68, 195},  {58, 345},  {44, 215},
+    {65, 30},   {48, 140},  {75, 95},   {40, 275},
+    {70, 160},  {54, 45},   {74, 220},  {42, 15},
+    {65, 180},  {50, 105},  {76, 320},  {68, 240}
   };
   int sats = startSatellites();
   int numDots = constrain(sats, 0, 24);
@@ -1734,7 +1734,7 @@ static void drawColoredArc(int cx, int cy, int r, float startDeg, float spanDeg,
 static void drawCountdownScreen() {
   statusBar(true, false);
 
-  const int cx = 120, cy = 135, r = 78, thicc = 5;
+  const int cx = 120, cy = 120, r = 88, thicc = 5;
   const uint16_t orangeCol = 0xFA40; // Vibrant Strava Orange (#FC5200)
   const uint16_t trackBg   = darkTheme ? 0x2104 : 0xCE79; // Dark/muted base ring
 

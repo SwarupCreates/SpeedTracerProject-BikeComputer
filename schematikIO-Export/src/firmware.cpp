@@ -65,6 +65,7 @@ struct Config {
   float maxSpeedKmh     = 60.0f;
   float maxSpeedRide    = 60.0f;
   float maxSpeedRun     = 20.0f;
+  int   countdownSec    = 3;
   float maxPowerW       = 400.0f;
   float maxCadRpm       = 120.0f;
   float vo2maxManual    = 0.0f;
@@ -1589,6 +1590,8 @@ void setup() {
   cfg.riderMassKg      = prefs.getFloat("riderMass", cfg.riderMassKg);
   cfg.maxSpeedRide     = prefs.getFloat("maxSpdRide", 60.0f);
   cfg.maxSpeedRun      = prefs.getFloat("maxSpdRun", 20.0f);
+    cfg.countdownSec     = prefs.getInt("cntdownSec", 3);
+    if (cfg.countdownSec != 3 && cfg.countdownSec != 5 && cfg.countdownSec != 10) cfg.countdownSec = 3;
   cfg.maxSpeedKmh      = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   cfg.maxPowerW        = prefs.getFloat("maxPower", cfg.maxPowerW);
   cfg.maxCadRpm        = prefs.getFloat("maxCad", cfg.maxCadRpm);
@@ -2088,7 +2091,7 @@ void loop() {
     };
     int cHeading = (compass.ready && isfinite(compass.heading)) ? (int)roundf(compass.heading) : ride.heading;
     UIState curState = {
-      (uint32_t)((gpsWaiting || gpsRadarInspector || (welcomeOpen && homePage == HOME_COMPASS)) ? (millis() / 80) : 0),
+      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || (welcomeOpen && homePage == HOME_COMPASS)) ? (millis() / 80) : 0),
       (uint32_t)(millis() / 500),
       uiRevision,
       ride.elapsedSec / 60,

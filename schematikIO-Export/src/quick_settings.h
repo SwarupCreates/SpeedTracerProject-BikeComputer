@@ -16,6 +16,8 @@ static void setBrightnessFromTouch(int x){
 }
 bool welcomeOpen=true, shutdownDialog=false, shutdownPending=false;
 uint32_t countdownStart=0;
+uint32_t countdownGoStart=0;
+uint32_t gpsWaitStartMs=0;
 bool gpsWaiting=false;
 bool gpsRadarInspector=false;
 int gpsScroll=0;
@@ -612,7 +614,7 @@ static void libraryTap(int x,int y){
 static bool globalHasNext(){
   if(gpsWaiting || gpsRadarInspector) return true;
   if(!welcomeOpen) return true;
-  if(quickOpen || shutdownDialog || countdownStart)return false;
+  if(quickOpen || shutdownDialog || countdownStart || countdownGoStart)return false;
   if(homePage==HOME_FILES && fileDetailOpen)return false;
   if(homePage==HOME_APPS) return false;
   if(isLibrary()){
@@ -652,7 +654,7 @@ static void globalNext(){
 }
 static bool globalHasBack(){
   if(screenLocked) return false;
-  if(shutdownDialog || gpsWaiting || gpsRadarInspector || countdownStart || quickOpen) return true;
+  if(shutdownDialog || gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || quickOpen) return true;
   if(!welcomeOpen) return true;
   if(homePage != HOME_MAIN) return true;
   return false;
@@ -668,7 +670,7 @@ static void globalHome(){
   if(shutdownPending)return;
   activityEndConfirm=false;
   fileDetailOpen=false;fileDeleteConfirm=false;
-  shutdownDialog=false;gpsWaiting=false;gpsRadarInspector=false;countdownStart=0;
+  shutdownDialog=false;gpsWaiting=false;gpsRadarInspector=false;countdownStart=0;countdownGoStart=0;
   quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;appsPage=0;appsScroll=0;
   settingsPage=SET_MAIN;settingsScroll=0;settingChangePin=false;settingFormatConfirm=false;pinInput="";
   uiRevision++;
@@ -676,7 +678,7 @@ static void globalHome(){
 static void globalBack(){
   if(shutdownPending)return;
   if(shutdownDialog){shutdownDialog=false;}
-  else if(gpsWaiting || countdownStart){gpsWaiting=false;countdownStart=0;}
+  else if(gpsWaiting || countdownStart || countdownGoStart){gpsWaiting=false;countdownStart=0;countdownGoStart=0;}
   else if(gpsRadarInspector){gpsRadarInspector=false;}
   else if(quickOpen){if(quickDetail)quickDetail=0;else quickOpen=false;}
   else if(welcomeOpen){
@@ -739,6 +741,7 @@ static void saveActivityConfig() {
   if (p.begin("cyclo", false)) {
     p.putFloat("maxSpdRide", cfg.maxSpeedRide);
     p.putFloat("maxSpdRun", cfg.maxSpeedRun);
+    p.putInt("cntdownSec", cfg.countdownSec);
     p.end();
   }
 }
@@ -747,50 +750,55 @@ static void drawActivitySettingsApp() {
   drawScreenHeader("ACTIVITY SETTINGS", CustomIcon::configureIcon, true);
 
   // Tile 1: Ride Max Speed (Gauge limit)
-  int y = 68;
-  card(6, y, 228, 52, uiCard());
-  drawBikeIcon(display, 16, y + 14, TEAL);
-  label(44, y + 10, "RIDE MAX SPEED", 1, uiFg());
-  label(44, y + 26, String((int)cfg.maxSpeedRide) + " KM/H (Gauge)", 1, uiMuted());
-  
-  display.fillRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
-  display.drawRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
-  centeredLabel(148, y + 17, 32, "-", 2, uiFg());
-
-  display.fillRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
-  display.drawRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
-  centeredLabel(188, y + 17, 32, "+", 2, uiFg());
+  int y = 62;
+  card(6, y, 228, 42, uiCard());
+  drawBikeIcon(display, 16, y + 10, TEAL);
+  label(44, y + 6, "RIDE MAX SPEED", 1, uiFg());
+  label(44, y + 22, String((int)cfg.maxSpeedRide) + " KM/H (Gauge)", 1, uiMuted());
+  display.fillRoundRect(152, y + 7, 30, 28, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(152, y + 7, 30, 28, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(152, y + 13, 30, "-", 2, uiFg());
+  display.fillRoundRect(190, y + 7, 30, 28, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(190, y + 7, 30, 28, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(190, y + 13, 30, "+", 2, uiFg());
 
   // Tile 2: Run Max Speed (Gauge limit)
-  y = 126;
-  card(6, y, 228, 52, uiCard());
-  drawCustomIcon(display, 16, y + 14, ORANGE, CustomIcon::runIcon);
-  label(44, y + 10, "RUN MAX SPEED", 1, uiFg());
-  label(44, y + 26, String((int)cfg.maxSpeedRun) + " KM/H (Gauge)", 1, uiMuted());
-
-  display.fillRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
-  display.drawRoundRect(148, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
-  centeredLabel(148, y + 17, 32, "-", 2, uiFg());
-
-  display.fillRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2124 : 0xCE79);
-  display.drawRoundRect(188, y + 10, 32, 32, 6, darkTheme ? 0x2945 : 0xB596);
-  centeredLabel(188, y + 17, 32, "+", 2, uiFg());
+  y = 108;
+  card(6, y, 228, 42, uiCard());
+  drawCustomIcon(display, 16, y + 10, ORANGE, CustomIcon::runIcon);
+  label(44, y + 6, "RUN MAX SPEED", 1, uiFg());
+  label(44, y + 22, String((int)cfg.maxSpeedRun) + " KM/H (Gauge)", 1, uiMuted());
+  display.fillRoundRect(152, y + 7, 30, 28, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(152, y + 7, 30, 28, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(152, y + 13, 30, "-", 2, uiFg());
+  display.fillRoundRect(190, y + 7, 30, 28, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(190, y + 7, 30, 28, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(190, y + 13, 30, "+", 2, uiFg());
 
   // Tile 3: Sport Mode Toggle
-  y = 184;
-  card(6, y, 228, 48, uiCard());
-  drawCustomIcon(display, 16, y + 12, uiFg(), runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon);
-  label(44, y + 10, "ACTIVE SPORT", 1, uiFg());
-  label(44, y + 26, runningMode ? "Running Mode" : "Cycling Mode", 1, uiMuted());
-  display.fillRoundRect(154, y + 10, 66, 28, 14, runningMode ? ORANGE : TEAL);
-  centeredLabel(154, y + 17, 66, runningMode ? "RUN" : "RIDE", 1, 0xFFFF);
+  y = 154;
+  card(6, y, 228, 42, uiCard());
+  drawCustomIcon(display, 16, y + 10, uiFg(), runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon);
+  label(44, y + 6, "ACTIVE SPORT", 1, uiFg());
+  label(44, y + 22, runningMode ? "Running Mode" : "Cycling Mode", 1, uiMuted());
+  display.fillRoundRect(152, y + 7, 68, 28, 14, runningMode ? ORANGE : TEAL);
+  centeredLabel(152, y + 14, 68, runningMode ? "RUN" : "RIDE", 1, 0xFFFF);
 
-  // Tile 4: Speed Deadzone info
-  y = 238;
-  card(6, y, 228, 44, uiCard());
-  drawSatelliteIcon(display, 16, y + 12, uiFg());
-  label(44, y + 8, "GPS SPEED DEADZONE", 1, uiFg());
-  label(44, y + 24, runningMode ? "Run: < 1.8 km/h clamped to 0" : "Ride: < 1.2 km/h clamped to 0", 1, uiMuted());
+  // Tile 4: Countdown Timer (3s / 5s / 10s)
+  y = 200;
+  card(6, y, 228, 42, uiCard());
+  drawCustomIcon(display, 16, y + 10, 0xFA40, CustomIcon::routeMapIcon);
+  label(44, y + 6, "START COUNTDOWN", 1, uiFg());
+  label(44, y + 22, "Timer before activity starts", 1, uiMuted());
+  display.fillRoundRect(152, y + 7, 68, 28, 14, 0xFA40);
+  centeredLabel(152, y + 14, 68, String(cfg.countdownSec) + " SEC", 1, 0xFFFF);
+
+  // Tile 5: Speed Deadzone info
+  y = 246;
+  card(6, y, 228, 38, uiCard());
+  drawSatelliteIcon(display, 16, y + 10, uiFg());
+  label(44, y + 6, "GPS SPEED DEADZONE", 1, uiFg());
+  label(44, y + 20, runningMode ? "Run: < 1.8 km/h clamped to 0" : "Ride: < 1.2 km/h clamped to 0", 1, uiMuted());
 }
 
 static void tapActivitySettings(int x, int y) {
@@ -828,9 +836,19 @@ static void tapActivitySettings(int x, int y) {
     return;
   }
 
-  // Tile 3: Active Sport Toggle (y=184..232)
-  if (y >= 184 && y < 232) {
+  // Tile 3: Active Sport Toggle (y=154..196)
+  if (y >= 154 && y < 196) {
     runningMode = !runningMode;
+    saveActivityConfig();
+    uiRevision++;
+    return;
+  }
+
+  // Tile 4: Countdown Timer (y=200..242)
+  if (y >= 200 && y < 242) {
+    if (cfg.countdownSec == 3) cfg.countdownSec = 5;
+    else if (cfg.countdownSec == 5) cfg.countdownSec = 10;
+    else cfg.countdownSec = 3;
     saveActivityConfig();
     uiRevision++;
     return;
@@ -852,7 +870,7 @@ static const char* getCardinalDirection(float deg) {
 static void drawCompassApp() {
   display.fillRect(0, 28, 240, 262, uiBg());
 
-  const int cx = 120, cy = 145, r = 78;
+  const int cx = 120, cy = 135, r = 78;
 
   // Outer circular dial
   display.drawCircle(cx, cy, r, uiFg());
@@ -1367,7 +1385,7 @@ static unsigned startSatellites(){
 static bool gpsStartReady(){return gpsDataReady && ride.gpsFixed && startSatellites()>=6;}
 static void requestRideStart() {
   if(rideStarted || countdownStart || gpsWaiting)return;
-  gpsWaiting=true;gpsRadarInspector=false;gpsScroll=0;quickOpen=false;uiRevision++;
+  gpsWaiting=true;gpsWaitStartMs=millis();gpsRadarInspector=false;gpsScroll=0;quickOpen=false;uiRevision++;
 }
 static void openGpsInspector() {
   gpsRadarInspector=true;gpsWaiting=false;gpsScroll=0;quickOpen=false;quickDetail=0;uiRevision++;
@@ -1458,16 +1476,46 @@ static void toggleRide() {
 }
 
 static void updateRideCountdown() {
-  if(gpsWaiting && !shutdownDialog && gpsStartReady()){
-    gpsWaiting=false;countdownStart=millis();uiRevision++;
+  // 1. GPS waiting: MUST show GPS status for at least 2000 ms, then check gpsStartReady()
+  if (gpsWaiting && !shutdownDialog) {
+    if (millis() - gpsWaitStartMs >= 2000 && gpsStartReady()) {
+      gpsWaiting = false;
+      countdownStart = millis();
+      countdownGoStart = 0;
+      uiRevision++;
+    }
   }
-  if(countdownStart && !gpsStartReady()){
-    countdownStart=0;gpsWaiting=true;uiRevision++;
-  }
-  if(countdownStart && !shutdownDialog && millis()-countdownStart>=3000) {
-    countdownStart=0; toggleRide();
-    if(rideStarted){welcomeOpen=false;currentScreen=nav.hasDestination&&routeLen>1?SCR_MAP:SCR_DASH;}
+
+  // If GPS lost during countdown before GO, revert to GPS status
+  if (countdownStart && !countdownGoStart && !gpsStartReady()) {
+    countdownStart = 0;
+    gpsWaiting = true;
+    gpsWaitStartMs = millis();
     uiRevision++;
+  }
+
+  // 2. Countdown phase: run for cfg.countdownSec seconds
+  uint32_t totalCountdownMs = (uint32_t)cfg.countdownSec * 1000UL;
+  if (countdownStart && !countdownGoStart && !shutdownDialog) {
+    if (millis() - countdownStart >= totalCountdownMs) {
+      // Countdown finished -> Show big "GO" screen!
+      countdownGoStart = millis();
+      uiRevision++;
+    }
+  }
+
+  // 3. "GO" screen phase: display for 700ms before launching activity panes
+  if (countdownGoStart && !shutdownDialog) {
+    if (millis() - countdownGoStart >= 700) {
+      countdownStart = 0;
+      countdownGoStart = 0;
+      toggleRide();
+      if (rideStarted) {
+        welcomeOpen = false;
+        currentScreen = (nav.hasDestination && routeLen > 1) ? SCR_MAP : SCR_DASH;
+      }
+      uiRevision++;
+    }
   }
 }
 static void drawBigNumber(int rightX, int y, int value, uint16_t fg = 0xFFFF) {
@@ -1503,7 +1551,7 @@ static void drawBigNumber(int rightX, int y, int value, uint16_t fg = 0xFFFF) {
 
 static void drawGpsRadarScreen() {
   const int cx = 120;
-  const int cy = 120 - gpsScroll;
+  const int cy = 135 - gpsScroll;
   const uint32_t t = millis();
 
   // Theme-aware color palette
@@ -1520,20 +1568,20 @@ static void drawGpsRadarScreen() {
     centerDiscColor = 0x24C0;  // rich green center disc
   }
 
-  // Outer ring (R=88): fill + boundary outline
-  display.fillCircle(cx, cy, 88, outerFill);
-  display.drawCircle(cx, cy, 88, radarLineColor);
+  // Outer ring (R=78): unified size & position with Compass and Countdown dials
+  display.fillCircle(cx, cy, 78, outerFill);
+  display.drawCircle(cx, cy, 78, radarLineColor);
 
-  // Middle ring (R=56): fill (no inner outline, matches Figma)
-  display.fillCircle(cx, cy, 56, middleFill);
+  // Middle ring (R=50): fill (no inner outline, matches Figma)
+  display.fillCircle(cx, cy, 50, middleFill);
 
-  // Single Rotating Radar Sweep Line (radius 26 to 88)
+  // Single Rotating Radar Sweep Line (radius 22 to 78)
   int deg = (t / 8) % 360;
   float rad = radians((float)deg);
-  int x1 = cx + (int)(26.0f * cosf(rad));
-  int y1 = cy + (int)(26.0f * sinf(rad));
-  int x2 = cx + (int)(88.0f * cosf(rad));
-  int y2 = cy + (int)(88.0f * sinf(rad));
+  int x1 = cx + (int)(22.0f * cosf(rad));
+  int y1 = cy + (int)(22.0f * sinf(rad));
+  int x2 = cx + (int)(78.0f * cosf(rad));
+  int y2 = cy + (int)(78.0f * sinf(rad));
   display.drawLine(x1, y1, x2, y2, radarLineColor);
 
   // Satellite Dots
@@ -1555,10 +1603,10 @@ static void drawGpsRadarScreen() {
     display.fillCircle(sx, sy, 3, radarLineColor);
   }
 
-  // Center Disc: solid vibrant green disc (R=26)
-  display.fillCircle(cx, cy, 26, centerDiscColor);
-  // Center White Satellite Icon (native 32x32 high resolution)
-  drawCustomIcon(display, cx - 16, cy - 16, 0xFFFF, CustomIcon::satelliteIconLarge);
+  // Center Disc: solid vibrant green disc (R=22)
+  display.fillCircle(cx, cy, 22, centerDiscColor);
+  // Center White Satellite Icon
+  drawCustomIcon(display, cx - 14, cy - 14, 0xFFFF, CustomIcon::satelliteIconLarge, 28, 28);
 
   // Content Below Radar: Lowered sat count row for balanced progress bar gap
   int textY = 217 - gpsScroll;
@@ -1611,7 +1659,123 @@ static void drawGpsRadarScreen() {
   statusBar(true, false);
   drawGlobalNav();
 }
- static bool drawLifecycleScreen() {
+ static void drawCenteredBigNumber(int cx, int cy, int value, uint16_t fg = 0xFFFF) {
+  String s = String(value);
+  int totalAdvance = 0;
+  for (unsigned int k = 0; k < s.length(); k++) {
+    char ch = s[k];
+    if (ch >= '0' && ch <= '9') {
+      totalAdvance += smoothDigitGlyphs48[ch - '0'].advance;
+    }
+  }
+  int totalW = (totalAdvance + 8) / 16;
+  int startX = cx - totalW / 2;
+  int pen = startX * 16;
+  int startY = cy - 17; // vertical center around cy for 34px glyph height
+  for (unsigned int k = 0; k < s.length(); k++) {
+    char ch = s[k];
+    if (ch < '0' || ch > '9') continue;
+    const auto& g = smoothDigitGlyphs48[ch - '0'];
+    int gx = (pen + 8) / 16 + g.x;
+    int gy = startY + g.y;
+    for (int row = 0; row < g.h; row++) {
+      for (int col = 0; col < g.w; col++) {
+        int i = row * g.w + col;
+        uint8_t bits = pgm_read_byte(&smoothDigitBits48[g.offset + i / 2]);
+        int a = (bits >> ((i & 1) ? 0 : 4)) & 15;
+        if (a) {
+          uint16_t bg = display.backgroundPixel(gx + col, gy + row);
+          display.drawPixel(gx + col, gy + row, blendText(fg, bg, a));
+        }
+      }
+    }
+    pen += g.advance;
+  }
+}
+
+static void drawColoredArc(int cx, int cy, int r, float startDeg, float spanDeg, int thickness, uint16_t color) {
+  if (spanDeg <= 0) return;
+  if (spanDeg > 360.0f) spanDeg = 360.0f;
+  float step = 0.5f;
+  int steps = (int)(spanDeg / step);
+  for (int i = 0; i <= steps; i++) {
+    float deg = startDeg + (float)i * step;
+    float rad = radians(deg);
+    float c = cosf(rad);
+    float s = sinf(rad);
+    for (int t = 0; t < thickness; t++) {
+      int px = cx + (int)lroundf((r - t) * c);
+      int py = cy + (int)lroundf((r - t) * s);
+      if (px >= 0 && px < DISP_W && py >= 0 && py < DISP_H) {
+        display.drawPixel(px, py, color);
+      }
+    }
+  }
+}
+
+static void drawCountdownScreen() {
+  statusBar(true, false);
+
+  const int cx = 120, cy = 135, r = 78, thicc = 5;
+  const uint16_t orangeCol = 0xFA40; // Vibrant Strava Orange (#FC5200)
+  const uint16_t trackBg   = darkTheme ? 0x2104 : 0xCE79; // Dark/muted base ring
+
+  // 1. Base Ring (Full circle, thickness 5px)
+  for (int t = 0; t < thicc; t++) {
+    display.drawCircle(cx, cy, r - t, trackBg);
+  }
+
+  if (countdownGoStart) {
+    // "GO" PHASE: Full circle in orange, big GO text!
+    for (int t = 0; t < thicc; t++) {
+      display.drawCircle(cx, cy, r - t, orangeCol);
+    }
+    centeredLabel(0, cy - 10, DISP_W, "GO", 3, 0xFFFF);
+
+    int iconW = 28, iconH = runningMode ? 28 : 24, gap = 8;
+    int textW = textWidth("GO", 3);
+    int totalW = iconW + gap + textW;
+    int startX = (DISP_W - totalW) / 2;
+    int yBottom = 238;
+
+    if (runningMode) drawCustomIcon(display, startX, yBottom - 2, 0xFFFF, CustomIcon::runIcon, 28, 28);
+    else drawCustomIcon(display, startX, yBottom, 0xFFFF, CustomIcon::bikeIcon, 28, 24);
+    label(startX + iconW + gap, yBottom + 1, "GO", 3, uiFg());
+
+  } else {
+    // COUNTDOWN PHASE
+    uint32_t totalMs = (uint32_t)cfg.countdownSec * 1000UL;
+    uint32_t elapsedMs = millis() - countdownStart;
+    if (elapsedMs > totalMs) elapsedMs = totalMs;
+
+    int remainingSec = (int)ceil((float)(totalMs - elapsedMs) / 1000.0f);
+    if (remainingSec < 1) remainingSec = 1;
+
+    float frac = (float)elapsedMs / (float)totalMs;
+    float spanDeg = frac * 360.0f;
+
+    // Active animated orange progress arc starting at 12 o'clock (-90 deg)
+    drawColoredArc(cx, cy, r, -90.0f, spanDeg, thicc, orangeCol);
+
+    // Big central number (Montserrat 48px anti-aliased digits)
+    drawCenteredBigNumber(cx, cy, remainingSec, uiFg());
+
+    // Below dial (Frame 18): White activity icon + "Ready" text
+    int iconW = 28, iconH = runningMode ? 28 : 24, gap = 8;
+    int textW = textWidth("Ready", 3);
+    int totalW = iconW + gap + textW;
+    int startX = (DISP_W - totalW) / 2;
+    int yBottom = 238;
+
+    if (runningMode) drawCustomIcon(display, startX, yBottom - 2, 0xFFFF, CustomIcon::runIcon, 28, 28);
+    else drawCustomIcon(display, startX, yBottom, 0xFFFF, CustomIcon::bikeIcon, 28, 24);
+    label(startX + iconW + gap, yBottom + 1, "Ready", 3, uiFg());
+  }
+
+  drawGlobalNav();
+}
+
+static bool drawLifecycleScreen() {
   static String previous;
   String state;
   if(screenLocked) {
@@ -1626,9 +1790,10 @@ static void drawGpsRadarScreen() {
   }
   else if(shutdownDialog) state=shutdownPending?"release":"shutdown";
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
-  else if(countdownStart) state="count"+String(3-min(2UL,(millis()-countdownStart)/1000));
+  else if(countdownGoStart) state="countGo:"+String((millis()-countdownGoStart)/40);
+  else if(countdownStart) state="count:"+String((millis()-countdownStart)/40);
   else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
-  if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart){previous="";return false;}
+  if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart && !countdownGoStart){previous="";return false;}
   if(state.isEmpty()){previous="";return false;}
   if(state==previous)return true;
   previous=state;
@@ -1646,10 +1811,8 @@ static void drawGpsRadarScreen() {
     card(126,205,102,48,0xF800);label(147,222,"CONFIRM",1,0xFFFF);
   } else if(gpsWaiting || gpsRadarInspector) {
     drawGpsRadarScreen();
-  } else if(countdownStart) {
-    int n=3-min(2UL,(millis()-countdownStart)/1000);
-    label(96,124,String(n),8,0xFFFF);
-    label(54,240,"Tap to cancel",1,0x8410);
+  } else if(countdownStart || countdownGoStart) {
+    drawCountdownScreen();
   } else {
     if(homePage!=HOME_MAIN){drawHomeSubpage();return true;}
     statusBar();
@@ -1692,10 +1855,20 @@ static void quickTap(int x, int y) {
     }
     return;
   }
-  if(gpsWaiting || gpsRadarInspector){
+  if(gpsWaiting){
+    gpsWaiting = false;
+    uiRevision++;
     return;
   }
-  if(countdownStart){countdownStart=0;uiRevision++;return;}
+  if(gpsRadarInspector){
+    return;
+  }
+  if(countdownStart || countdownGoStart){
+    countdownStart = 0;
+    countdownGoStart = 0;
+    uiRevision++;
+    return;
+  }
   if(welcomeOpen && !quickOpen && y>=29) {
     if(isLibrary()){libraryTap(x,y);return;}
     if(homePage==HOME_SETTINGS){tapSettings(x,y);return;}

@@ -64,6 +64,42 @@ static inline void drawCompassCoin(Adafruit_GFX &gfx,int cx,int cy,float heading
   gfx.fillTriangle(ntx,nty,bx1,by1,bx2,by2,0xF9A7); gfx.fillTriangle(stx,sty,bx1,by1,bx2,by2,0xCE79); gfx.fillCircle(cx,cy,2,0x3186);
 }
 
+// 36x36 Map Heading Navigation Marker (#326BF9 Royal Blue Circle with Crisp White Heading Chevron from SVG)
+static inline void drawMapHeadingMarker(Adafruit_GFX &gfx, int cx, int cy, float headingDeg) {
+  const int R = 18;
+  const uint16_t blueCircleColor = 0x335F; // #326BF9 Figma royal blue
+
+  // Outer Blue Circle (diameter 36px)
+  gfx.fillCircle(cx, cy, R, blueCircleColor);
+  gfx.drawCircle(cx, cy, R, 0xFFFF); // 1px clean white rim
+
+  // Inner White Arrowhead Polygon from SVG (36x36 viewBox):
+  float rad = radians(headingDeg);
+  float fx = sinf(rad), fy = -cosf(rad);
+  float rx = cosf(rad), ry = sinf(rad);
+
+  auto getX = [&](float r, float f) -> int { return cx + (int)lroundf(r * rx + f * fx); };
+  auto getY = [&](float r, float f) -> int { return cy + (int)lroundf(r * ry + f * fy); };
+
+  int pTipX = getX(0.0f, 10.82f),    pTipY = getY(0.0f, 10.82f);
+  int pRwtX = getX(10.36f, -6.13f),  pRwtY = getY(10.36f, -6.13f);
+  int pRicX = getX(9.05f, -7.52f),   pRicY = getY(9.05f, -7.52f);
+  int pNotX = getX(0.0f, -3.22f),    pNotY = getY(0.0f, -3.22f);
+  int pLicX = getX(-9.05f, -7.52f),  pLicY = getY(-9.05f, -7.52f);
+  int pLwtX = getX(-10.36f, -6.13f), pLwtY = getY(-10.36f, -6.13f);
+
+  // Decompose concave 6-vertex polygon into 4 convex triangles in pure white (0xFFFF):
+  gfx.fillTriangle(pTipX, pTipY, pRwtX, pRwtY, pNotX, pNotY, 0xFFFF);
+  gfx.fillTriangle(pRwtX, pRwtY, pRicX, pRicY, pNotX, pNotY, 0xFFFF);
+  gfx.fillTriangle(pTipX, pTipY, pNotX, pNotY, pLwtX, pLwtY, 0xFFFF);
+  gfx.fillTriangle(pLwtX, pLwtY, pNotX, pNotY, pLicX, pLicY, 0xFFFF);
+
+  // Solidify internal seams
+  gfx.drawLine(pTipX, pTipY, pNotX, pNotY, 0xFFFF);
+  gfx.drawLine(pRwtX, pRwtY, pNotX, pNotY, 0xFFFF);
+  gfx.drawLine(pLwtX, pLwtY, pNotX, pNotY, 0xFFFF);
+}
+
 static inline void drawBluetoothStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected, int targetW = 0, int targetH = 0){drawCustomIcon(g,x,y,c,connected?CustomIcon::bluetoothConnectedIcon:CustomIcon::bluetoothDisconnectedIcon, targetW, targetH);}
 static inline void drawWifiStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected){drawCustomIcon(g,x,y,c,connected?CustomIcon::wifiConnectedIcon:CustomIcon::wifiDisconnectedIcon);}
 static inline void drawHistoryIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color){drawCustomIcon(gfx,x,y,color,CustomIcon::historyIcon);}

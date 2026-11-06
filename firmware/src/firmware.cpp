@@ -616,6 +616,65 @@ static void resetMaxSpeedTracker() {
 }
 
 extern bool ridePaused;
+// ═══════════════════════════════════════════════════════════════════════════════
+//  INTELLIGENT HEADING FUSION (Compass & GPS Course Over Ground)
+// ═══════════════════════════════════════════════════════════════════════════════
+static float s_fusedHeading = 0.0f;
+static bool  s_fusedHeadingInit = false;
+static uint32_t s_gpsMovingStartMs = 0;
+static bool  s_gpsHeadingLocked = false;
+static float s_lastStableMovingHeading = 0.0f;
+
+static void resetFusedHeading() {
+  s_gpsHeadingLocked = false;
+  s_gpsMovingStartMs = 0;
+}
+
+static void updateFusedHeading() {
+  // GPS course is valid and speed exceeds moving threshold
+  bool gpsMoving = (ride.gpsFixed && ride.speedKmh >= 2.0f && gps.course.isValid() && gps.course.age() < 2500);
+
+  float targetHeading = s_fusedHeading;
+  float filterAlpha = 0.15f;
+
+  if (gpsMoving) {
+    if (s_gpsMovingStartMs == 0) s_gpsMovingStartMs = millis();
+    // After moving with valid GPS course for ~1.5s, lock onto GPS heading
+    if (millis() - s_gpsMovingStartMs >= 1500) {
+      s_gpsHeadingLocked = true;
+      targetHeading = (float)gps.course.deg();
+      s_lastStableMovingHeading = targetHeading;
+      filterAlpha = 0.25f; // Responsive tracking while moving
+    }
+  } else {
+    s_gpsMovingStartMs = 0;
+    if (s_gpsHeadingLocked) {
+      // Stopped / stationary: HOLD last stable moving heading!
+      // Eliminates stationary EMF noise and spinning arrow completely.
+      targetHeading = s_lastStableMovingHeading;
+      filterAlpha = 0.20f;
+    } else {
+      // Prior to first movement: show filtered compass heading if available
+      if (compass.ready && isfinite(compass.heading) && (millis() - compass.lastSample < 1500)) {
+        targetHeading = compass.heading;
+        filterAlpha = 0.10f; // Heavy low-pass to absorb magnetic EMF noise
+      }
+    }
+  }
+
+  if (!s_fusedHeadingInit) {
+    s_fusedHeading = targetHeading;
+    s_fusedHeadingInit = true;
+  } else {
+    float diff = targetHeading - s_fusedHeading;
+    while (diff < -180.0f) diff += 360.0f;
+    while (diff > 180.0f)  diff -= 360.0f;
+    s_fusedHeading = fmodf(s_fusedHeading + diff * filterAlpha + 360.0f, 360.0f);
+  }
+
+  ride.heading = (int)lroundf(s_fusedHeading) % 360;
+}
+
 static void updateMaxSpeed(float currentSpeed) {
   if (!rideStarted || ridePaused) return;
 
@@ -686,6 +745,7 @@ static void saveActivity() {
   else activityMessage="No open activity to save";
   rideStarted=false;
   resetMaxSpeedTracker();
+  resetFusedHeading();
   uiRevision++;
 }
 static bool activityEndConfirm = false;
@@ -1166,23 +1226,8 @@ static void drawMapScreen() {
     }
   }
 
-  // Center Navigation Pin (Frame 8: Blue Circle with Crisp White Heading Chevron)
-  display.fillCircle(cardCenterX, cardCenterY, 14, 0x2CD9);
-  display.drawCircle(cardCenterX, cardCenterY, 14, 0xFFFF);
-  float dirH = (ride.speedKmh > 1.0f) ? (float)ride.heading : ((compass.ready && isfinite(compass.heading)) ? compass.heading : (float)ride.heading);
-  float dirRad = radians(dirH);
-  float fx = sinf(dirRad), fy = -cosf(dirRad);
-  float px = -fy, py = fx;
-  int tipX = cardCenterX + (int)lround(7.5f * fx);
-  int tipY = cardCenterY + (int)lround(7.5f * fy);
-  int lX   = cardCenterX - (int)lround(6.0f * fx - 5.0f * px);
-  int lY   = cardCenterY - (int)lround(6.0f * fy - 5.0f * py);
-  int rX   = cardCenterX - (int)lround(6.0f * fx + 5.0f * px);
-  int rY   = cardCenterY - (int)lround(6.0f * fy + 5.0f * py);
-  int nX   = cardCenterX - (int)lround(3.0f * fx);
-  int nY   = cardCenterY - (int)lround(3.0f * fy);
-  display.fillTriangle(tipX, tipY, lX, lY, nX, nY, 0xFFFF);
-  display.fillTriangle(tipX, tipY, rX, rY, nX, nY, 0xFFFF);
+  // Center Navigation Marker (Frame 8 & SVG: 36x36 Blue Circle with Crisp White Heading Chevron)
+  drawMapHeadingMarker(display, cardCenterX, cardCenterY, s_fusedHeading);
 
   // Top-Right Floating Compass Coin (Frame 8)
   float compassH = (compass.ready && isfinite(compass.heading)) ? compass.heading : (ride.gpsFixed ? (float)ride.heading : 0.0f);
@@ -1967,10 +2012,8 @@ void loop() {
   }
   if (ride.powerW   > ride.maxPowerW)   ride.maxPowerW   = ride.powerW;
 
-  // Compass
-  // Calibrated compass heading is level-only; IMU tilt compensation remains pending.
-  if(ride.gpsFixed && ride.speedKmh>3 && gps.course.isValid())ride.heading=gps.course.deg();
-  if(compass.usable())ride.heading=lroundf(compass.heading)%360;
+  // Intelligent Heading Fusion (Filtered Compass -> Locked GPS Course Over Ground)
+  updateFusedHeading();
 
   // ── Buttons ───────────────────────────────────────────────────────────────
 

@@ -1467,19 +1467,6 @@ static void pollQuickTouch() {
       rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
       return;
     }
-    if (!welcomeOpen && !quickOpen && moved) {
-      int dx = startX - endX;
-      int dy = startY - endY;
-      if (abs(dx) > 35 && abs(dx) > abs(dy) * 1.3f) {
-        if (dx > 0) {
-          globalNext();
-        } else {
-          globalBack();
-        }
-        rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
-        return;
-      }
-    }
     if(rootGesture && !sliderGesture && !moved)quickTap(endX,endY);
     rootGesture=false;sliderGesture=false;mapPanGesture=false;held=false;candidateX=-1;
   };
@@ -1631,9 +1618,6 @@ static void pollQuickTouch() {
       }
     } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 54 && y < 286){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;
-      sliderGesture=false;
-    } else if(!welcomeOpen && !quickOpen && y >= 29 && y < 290) {
-      rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
     } else quickTap(x, y);
   }

@@ -1571,6 +1571,8 @@ static void handleSerialTransfer() {
     Serial.printf("TINYGPS_FAILED:%lu\n", (unsigned long)gps.failedChecksum());
     Serial.printf("COMPASS_READY:%d\n", (int)compass.ready);
     Serial.printf("COMPASS_HEADING:%.1f\n", compass.heading);
+    Serial.printf("BUTTONS_OK:%d\n", (int)buttonsOk);
+    Serial.printf("CURRENT_SCREEN:%d\n", (int)currentScreen);
     Serial.printf("FREE_HEAP:%lu\n", (unsigned long)ESP.getFreeHeap());
     Serial.printf("FREE_PSRAM:%lu\n", (unsigned long)ESP.getFreePsram());
     return;
@@ -1899,8 +1901,12 @@ void loop() {
   // SEL (body) → switch screen
 
   // Remote LEFT → prev screen, Remote RIGHT → next screen
-  if (rmtLt.pressed) { rmtLt.pressed = false; currentScreen = (Screen)(((int)currentScreen - 1 + SCR_COUNT) % SCR_COUNT); }
-  if (rmtRt.pressed) { rmtRt.pressed = false; currentScreen = (Screen)(((int)currentScreen + 1) % SCR_COUNT); }
+  if (buttonsOk) {
+    if (rmtLt.pressed) { rmtLt.pressed = false; currentScreen = (Screen)(((int)currentScreen - 1 + SCR_COUNT) % SCR_COUNT); }
+    if (rmtRt.pressed) { rmtRt.pressed = false; currentScreen = (Screen)(((int)currentScreen + 1) % SCR_COUNT); }
+  } else {
+    rmtLt.pressed = rmtRt.pressed = false;
+  }
 
   // Remote UP/DN → zoom (map) or future use on dash
   if (rmtUp.pressed) {

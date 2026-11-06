@@ -368,17 +368,17 @@ static void drawLockHeroScreen() {
   // Date subtitle centered at Y = 112 (size 0 = 12px smooth font, 8px below clock)
   centeredLabel(0, 112, 240, dateStr.c_str(), 0, fg);
 
-  // Inverted downArrow chevron (up-arrow ^) above lock button centered at X = 108 (w = 24), Y = 178
-  drawCustomIconFlippedV(display, 108, 178, muted, CustomIcon::downArrowIcon);
+  // Inverted downArrow chevron (up-arrow ^) above lock button centered at X = 108 (w = 24), Y = 200
+  drawCustomIconFlippedV(display, 108, 200, muted, CustomIcon::downArrowIcon);
 
-  // Circular lock button at X = 120, Y = 224, Radius = 26
-  display.fillCircle(120, 224, 26, cardBg);
-  display.drawCircle(120, 224, 26, darkTheme ? 0x2945 : 0xD6BA);
-  // High-resolution unscaled 24x24 lock icon centered at (108, 212)
-  drawCustomIcon(display, 108, 212, fg, CustomIcon::lockIconLarge);
+  // Circular lock button at X = 120, Y = 246, Radius = 26
+  display.fillCircle(120, 246, 26, cardBg);
+  display.drawCircle(120, 246, 26, darkTheme ? 0x2945 : 0xD6BA);
+  // High-resolution unscaled 24x24 lock icon centered at (108, 234)
+  drawCustomIcon(display, 108, 234, fg, CustomIcon::lockIconLarge);
 
-  // Centered label at Y = 264 (increased font size: size 0 = 12px smooth anti-aliased font)
-  centeredLabel(0, 264, 240, "Swipe up to unlock", 0, fg);
+  // Centered label at Y = 286 (increased font size: size 0 = 12px smooth anti-aliased font)
+  centeredLabel(0, 286, 240, "Swipe up to unlock", 0, fg);
 }
 
 // Frame 15: Lock Screen Keypad (Status Bar, 4 PIN Dots, 3x4 Keypad, Universal Nav Bar)
@@ -474,8 +474,8 @@ static void tapLockScreen(int x, int y) {
   }
 
   if (lockScreenMode == LOCK_HERO) {
-    // Only taps on circular lock button (cx = 120, cy = 224, radius = 36)
-    int dx = x - 120, dy = y - 224;
+    // Only taps on circular lock button (cx = 120, cy = 246, radius = 36)
+    int dx = x - 120, dy = y - 246;
     if (dx * dx + dy * dy <= 36 * 36) {
       if (screenLockEnabled) {
         lockScreenMode = LOCK_KEYPAD;

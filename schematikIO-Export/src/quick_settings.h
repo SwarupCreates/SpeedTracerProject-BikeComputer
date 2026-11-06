@@ -2246,9 +2246,9 @@ static void pollQuickTouch() {
           }
           uiRevision++;
         }
-        // Tap on circular lock button (cx = 120, cy = 224, radius = 36)
+        // Tap on circular lock button (cx = 120, cy = 246, radius = 36)
         else {
-          int dx = endX - 120, dy = endY - 224;
+          int dx = endX - 120, dy = endY - 246;
           if (dx * dx + dy * dy <= 36 * 36) {
             if (screenLockEnabled) {
               lockScreenMode = LOCK_KEYPAD;
@@ -2544,9 +2544,9 @@ static void drawQuickSettings() {
   {
     int x = 6, y = 161-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::hotSpotIcon, 20, 20);
+    drawCustomIcon(display, x + 45, y + 14, uiFg(), CustomIcon::hotSpotIcon, 20, 20);
     bool wifiOn = (WiFi.getMode() != WIFI_OFF);
-    centeredLabel(x, y + 38, 111, wifiOn ? "HOTSPOT ACTIVE" : "NOT CONNECTED", 1, wifiOn ? 0x2564 : 0xFA08);
+    centeredLabel(x, y + 42, 111, wifiOn ? "HOTSPOT ACTIVE" : "NOT CONNECTED", 1, wifiOn ? 0x2564 : 0xFA08);
   }
 
   // Tile 1: Bluetooth
@@ -2556,9 +2556,9 @@ static void drawQuickSettings() {
     bool active = (bCount > 0);
     card(x, y, 111, 62, active ? (darkTheme ? 0x0940 : 0xD753) : uiCard());
     uint16_t fg = active ? (darkTheme ? 0x7FE0 : 0x2400) : uiFg();
-    drawBluetoothStateIcon(display, x + 36, y + 10, fg, active, 20, 20);
-    label(x + 62, y + 12, String(bCount), 2, fg);
-    centeredLabel(x, y + 38, 111, String(bCount) + " CONNECTED", 1, fg);
+    drawBluetoothStateIcon(display, x + 36, y + 14, fg, active, 20, 20);
+    label(x + 62, y + 16, String(bCount), 2, fg);
+    centeredLabel(x, y + 42, 111, String(bCount) + " CONNECTED", 1, fg);
   }
 
   // Tile 2: GPS
@@ -2567,49 +2567,49 @@ static void drawQuickSettings() {
     bool locked = ride.gpsFixed;
     card(x, y, 111, 62, locked ? (darkTheme ? 0x0940 : 0xD753) : uiCard());
     uint16_t fg = locked ? (darkTheme ? 0x7FE0 : 0x2400) : uiFg();
-    drawSatelliteIcon(display, x + 36, y + 10, fg, 20, 20);
-    label(x + 62, y + 12, String(startSatellites()), 2, fg);
-    centeredLabel(x, y + 38, 111, locked ? "SAT LOCKED" : "SEARCHING", 1, fg);
+    drawSatelliteIcon(display, x + 36, y + 14, fg, 20, 20);
+    label(x + 62, y + 16, String(startSatellites()), 2, fg);
+    centeredLabel(x, y + 42, 111, locked ? "SAT LOCKED" : "SEARCHING", 1, fg);
   }
 
   // Tile 3: Theme Toggle
   {
     int x = 123, y = 229-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::themeSwitcherIcon, 20, 20);
-    centeredLabel(x, y + 38, 111, darkTheme ? "DARK MODE" : "LIGHT MODE", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 14, uiFg(), CustomIcon::themeSwitcherIcon, 20, 20);
+    centeredLabel(x, y + 42, 111, darkTheme ? "DARK MODE" : "LIGHT MODE", 1, uiFg());
   }
 
   // Tile 4: System Diagnostics
   {
     int x = 6, y = 297-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::systemIcon, 20, 20);
-    centeredLabel(x, y + 38, 111, "SYSTEM", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 14, uiFg(), CustomIcon::systemIcon, 20, 20);
+    centeredLabel(x, y + 42, 111, "SYSTEM", 1, uiFg());
   }
 
   // Tile 5: Configuration
   {
     int x = 123, y = 297-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::configureIcon, 20, 20);
-    centeredLabel(x, y + 38, 111, "CONFIGURE", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 14, uiFg(), CustomIcon::configureIcon, 20, 20);
+    centeredLabel(x, y + 42, 111, "CONFIGURE", 1, uiFg());
   }
 
   // Tile 6: Lock Screen
   {
     int x = 6, y = 365-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 45, y + 10, uiFg(), CustomIcon::lockIcon, 20, 20);
-    centeredLabel(x, y + 38, 111, "LOCK SCREEN", 1, uiFg());
+    drawCustomIcon(display, x + 45, y + 14, uiFg(), CustomIcon::lockIcon, 20, 20);
+    centeredLabel(x, y + 42, 111, "LOCK SCREEN", 1, uiFg());
   }
 
   // Tile 7: Power Off
   {
     int x = 123, y = 365-offset;
     card(x, y, 111, 62, uiCard());
-    drawCustomIcon(display, x + 45, y + 10, 0xF800, CustomIcon::powerIcon, 20, 20);
-    centeredLabel(x, y + 38, 111, "POWER OFF", 1, 0xF800);
+    drawCustomIcon(display, x + 45, y + 14, 0xF800, CustomIcon::powerIcon, 20, 20);
+    centeredLabel(x, y + 42, 111, "POWER OFF", 1, 0xF800);
   }
   // Scrolled content can overlap the header. Repaint only its strip,
   // not the whole page: a full clear here erases every settings tile.

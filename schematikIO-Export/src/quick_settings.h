@@ -2487,7 +2487,7 @@ static void drawQuickSettings() {
     }
     if (quickDetail == 3) {
       label(16, 88, ride.gpsFixed ? "POSITION LOCKED" : "SEARCHING FOR FIX");
-      label(16, 110, String(gps.satellites.value()) + " satellites reported");
+      label(16, 110, String(startSatellites()) + " satellites reported");
       label(16, 136, "Lat: " + String(ride.lat,6));
       label(16, 154, "Lon: " + String(ride.lon,6));
       label(16, 178, String(ride.speedKmh,1)+" km/h",2);
@@ -2568,7 +2568,7 @@ static void drawQuickSettings() {
     card(x, y, 111, 62, locked ? (darkTheme ? 0x0940 : 0xD753) : uiCard());
     uint16_t fg = locked ? (darkTheme ? 0x7FE0 : 0x2400) : uiFg();
     drawSatelliteIcon(display, x + 36, y + 10, fg, 20, 20);
-    label(x + 62, y + 12, gps.satellites.isValid() && gps.satellites.age()<3000 ? String(gps.satellites.value()) : "0", 2, fg);
+    label(x + 62, y + 12, String(startSatellites()), 2, fg);
     centeredLabel(x, y + 38, 111, locked ? "SAT LOCKED" : "SEARCHING", 1, fg);
   }
 

@@ -2085,7 +2085,7 @@ void loop() {
       float distanceKm;
       float lat, lon, altM;
       int cadence, power, heading;
-      uint8_t screen, zoom, theme, ble, wifiMode, wifiStatus, gpsFixed, gpsReady;
+      uint8_t screen, zoom, theme, ble, wifiMode, wifiStatus, gpsFixed, gpsReady, sats;
       int routeL, trackL;
       float destLat, destLon;
     };
@@ -2100,7 +2100,7 @@ void loop() {
       ride.lat, ride.lon, ride.altM,
       ride.cadenceRpm, ride.powerW, cHeading,
       (uint8_t)(welcomeOpen ? (int)homePage : (int)currentScreen), (uint8_t)mapZoom, (uint8_t)darkTheme, (uint8_t)bleCount(),
-      (uint8_t)WiFi.getMode(), (uint8_t)WiFi.status(), (uint8_t)ride.gpsFixed, (uint8_t)gpsDataReady,
+      (uint8_t)WiFi.getMode(), (uint8_t)WiFi.status(), (uint8_t)ride.gpsFixed, (uint8_t)gpsDataReady, (uint8_t)startSatellites(),
       routeLen, trackLen,
       nav.destLat, nav.destLon
     };

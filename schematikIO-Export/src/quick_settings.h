@@ -23,6 +23,8 @@ int settingsScroll=0;
 // Home subpages stay independent of dashboard navigation and touch calibration.
 enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH };
 HomePage homePage=HOME_MAIN;
+int appsScroll = 0;
+const int MAX_APPS_SCROLL = 190;
 static int appsPage = 0;
 static double mapViewerLat = 22.594637;
 static double mapViewerLon = 88.425853;
@@ -612,7 +614,7 @@ static bool globalHasNext(){
   if(!welcomeOpen) return true;
   if(quickOpen || shutdownDialog || countdownStart)return false;
   if(homePage==HOME_FILES && fileDetailOpen)return false;
-  if(homePage==HOME_APPS) return (appsPage == 0);
+  if(homePage==HOME_APPS) return false;
   if(isLibrary()){
     if(homePage==HOME_ROUTES && librarySelection.length()) return false;
     return librarySelection.length()?true:libraryMore;
@@ -621,11 +623,6 @@ static bool globalHasNext(){
 }
 static void globalNext(){
   if(!globalHasNext())return;
-  if(homePage==HOME_APPS && appsPage == 0){
-    appsPage = 1;
-    uiRevision++;
-    return;
-  }
   if(gpsWaiting){
     gpsWaiting = false;
     countdownStart = millis();
@@ -672,7 +669,7 @@ static void globalHome(){
   activityEndConfirm=false;
   fileDetailOpen=false;fileDeleteConfirm=false;
   shutdownDialog=false;gpsWaiting=false;gpsRadarInspector=false;countdownStart=0;
-  quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;appsPage=0;
+  quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;appsPage=0;appsScroll=0;
   settingsPage=SET_MAIN;settingsScroll=0;settingChangePin=false;settingFormatConfirm=false;pinInput="";
   uiRevision++;
 }
@@ -693,11 +690,8 @@ static void globalBack(){
       homePage = HOME_MAPS;
     }
     else if(homePage == HOME_APPS) {
-      if(appsPage == 1) {
-        appsPage = 0;
-      } else {
-        homePage = HOME_MAIN;
-      }
+      homePage = HOME_MAIN;
+      appsScroll = 0;
     }
     else if(isLibrary()){
       if(librarySelection.length()){
@@ -1274,40 +1268,54 @@ static void drawHomeSubpage(){
   statusBar();
   if(isLibrary()){drawLibrary();return;}
   if(homePage==HOME_APPS){
-    drawScreenHeader("ALL APPS", CustomIcon::allAppsIcon, false);
-    if (appsPage == 0) {
-      const char* names[]={"MAPS","COMPASS","MY ACTIVITIES","SAVED ROUTES","SETTINGS","ACTIVITY"};
-      CustomIcon icons[]={CustomIcon::mapAppIcon,CustomIcon::compassIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::configureIcon};
-      const int btnW = 108, btnH = 64;
-      for(int i = 0; i < 6; i++){
-        int col = i % 2, row = i / 2;
-        int x = 8 + col * (btnW + 8);
-        int y = 70 + row * (btnH + 8);
-        display.fillRoundRect(x, y, btnW, btnH, 31, uiCard());
-        display.drawRoundRect(x, y, btnW, btnH, 31, darkTheme ? 0x2945 : 0xD6BA);
-        drawCustomIcon(display, x + (btnW - 22) / 2, y + 12, uiFg(), icons[i], 22, 22);
-        centeredLabel(x, y + 41, btnW, names[i], 1);
-      }
-      // Page indicator: ● ○
-      display.fillCircle(114, 282, 3, uiFg());
-      display.drawCircle(126, 282, 3, uiMuted());
-    } else {
-      const char* names[]={"MY FILES"};
-      CustomIcon icons[]={CustomIcon::folderIcon};
-      const int btnW = 108, btnH = 64;
-      for(int i = 0; i < 1; i++){
-        int col = i % 2, row = i / 2;
-        int x = 8 + col * (btnW + 8);
-        int y = 70 + row * (btnH + 8);
-        display.fillRoundRect(x, y, btnW, btnH, 31, uiCard());
-        display.drawRoundRect(x, y, btnW, btnH, 31, darkTheme ? 0x2945 : 0xD6BA);
-        drawCustomIcon(display, x + (btnW - 22) / 2, y + 12, uiFg(), icons[i], 22, 22);
-        centeredLabel(x, y + 41, btnW, names[i], 1);
-      }
-      // Page indicator: ○ ●
-      display.drawCircle(114, 282, 3, uiMuted());
-      display.fillCircle(126, 282, 3, uiFg());
+    struct AppItem {
+      const char* name;
+      CustomIcon icon;
+      uint16_t color;
+    };
+    static const AppItem kApps[] = {
+      {"Maps", CustomIcon::mapAppIcon, 0x33FB},           // Bright Blue (#3578DD)
+      {"Compass", CustomIcon::compassIcon, 0xE800},        // Bright Red (#EE0000)
+      {"My Activities", CustomIcon::runIcon, 0xFA61},      // Bright Orange (#F4510C)
+      {"Past Routes", CustomIcon::routeMapIcon, 0x5444},   // Leaf Green (#558920)
+      {"Settings", CustomIcon::systemIcon, 0x79F7},        // Purple (#7C3AED)
+      {"Activity Settings", CustomIcon::configureIcon, 0xDBC0}, // Amber (#D97706)
+      {"My Files", CustomIcon::folderIcon, 0x0CA1}         // Teal (#0D9488)
+    };
+    const int kNumApps = 7;
+    const int R = 32;
+    const int rowPitch = 106;
+
+    for (int i = 0; i < kNumApps; i++) {
+      int col = i % 2;
+      int row = i / 2;
+      int cx = (col == 0) ? 66 : 174;
+      int cy = 96 + row * rowPitch - appsScroll;
+
+      // Cull items completely offscreen
+      if (cy + R + 20 < 56 || cy - R > 290) continue;
+
+      display.fillCircle(cx, cy, R, kApps[i].color);
+      drawCustomIcon(display, cx - 14, cy - 14, 0xFFFF, kApps[i].icon, 28, 28);
+      centeredLabel(cx - 58, cy + R + 7, 116, kApps[i].name, 1, uiFg());
     }
+
+    // Scrollbar indicator
+    const int maxS = MAX_APPS_SCROLL;
+    if (maxS > 0) {
+      int trackH = 290 - 58 - 36;
+      int thumbY = 58 + (appsScroll * trackH) / maxS;
+      display.fillRoundRect(236, thumbY, 3, 36, 1, uiMuted());
+    }
+
+    // Re-draw fixed header and status bar to cleanly clip top scroll
+    display.fillRect(0, 0, DISP_W, 56, uiBg());
+    statusBar(true, false);
+    drawScreenHeader("All Apps", CustomIcon::allAppsIcon, false);
+
+    // Re-draw fixed bottom nav bar to cleanly clip bottom scroll
+    display.fillRect(0, 290, DISP_W, 30, uiBg());
+    drawGlobalNav();
   }else if(homePage==HOME_SETTINGS){
     drawSettingsApp();
   }else if(homePage==HOME_ACTIVITY_SETTINGS){
@@ -1845,36 +1853,51 @@ static void quickTap(int x, int y) {
       return;
     }
     if(homePage==HOME_APPS){
-      // Check page indicator tap (y=274..288, x=100..140)
-      if (y >= 274 && y <= 288 && x >= 100 && x <= 140) {
-        appsPage = (appsPage == 0) ? 1 : 0;
-        uiRevision++;
-        return;
-      }
-      int col = (x >= 120 && x < 236) ? 1 : (x >= 4 && x < 120) ? 0 : -1;
-      int row = -1;
-      if (y >= 66 && y < 138) row = 0;
-      else if (y >= 138 && y < 210) row = 1;
-      else if (y >= 210 && y < 282) row = 2;
-      if (col < 0 || row < 0) return;
-      int tile = row * 2 + col;
-      if (appsPage == 0) {
-        if(tile==0){
-          if(ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0){
-            mapViewerLat = ride.lat;
-            mapViewerLon = ride.lon;
+      if(y < 56 || y >= 290) return;
+      for(int i = 0; i < 7; i++){
+        int col = i % 2;
+        int row = i / 2;
+        int cx = (col == 0) ? 66 : 174;
+        int cy = 96 + row * 106 - appsScroll;
+        int dx = x - cx;
+        int dy = y - cy;
+        bool inCircle = (dx * dx + dy * dy <= 38 * 38);
+        bool inLabel = (abs(dx) <= 52 && (y >= cy + 30 && y <= cy + 56));
+        if (inCircle || inLabel) {
+          if(i == 0){ // Maps
+            if(ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0){
+              mapViewerLat = ride.lat;
+              mapViewerLon = ride.lon;
+            }
+            g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+            homePage = HOME_MAPS;
+            uiRevision++;
           }
-          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
-          homePage = HOME_MAPS;
-          uiRevision++;
+          else if(i == 1){ // Compass
+            homePage = HOME_COMPASS;
+            uiRevision++;
+          }
+          else if(i == 2){ // My Activities
+            openLibrary(HOME_ACTIVITY);
+          }
+          else if(i == 3){ // Past Routes
+            openLibrary(HOME_ROUTES);
+          }
+          else if(i == 4){ // Settings
+            homePage = HOME_SETTINGS;
+            settingsPage = SET_MAIN;
+            settingsScroll = 0;
+            uiRevision++;
+          }
+          else if(i == 5){ // Activity Settings
+            homePage = HOME_ACTIVITY_SETTINGS;
+            uiRevision++;
+          }
+          else if(i == 6){ // My Files
+            openBrowser("/");
+          }
+          return;
         }
-        else if(tile==1){homePage=HOME_COMPASS;uiRevision++;}
-        else if(tile==2)openLibrary(HOME_ACTIVITY);
-        else if(tile==3)openLibrary(HOME_ROUTES);
-        else if(tile==4){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;settingsScroll=0;uiRevision++;}
-        else if(tile==5){homePage=HOME_ACTIVITY_SETTINGS;uiRevision++;}
-      } else {
-        if(tile==0)openBrowser("/");
       }
       return;
     }
@@ -1897,7 +1920,7 @@ static void quickTap(int x, int y) {
       uiRevision++;
     }
     else if(y>=254 && y<288){
-      if(x>=6 && x<117){homePage=HOME_APPS;uiRevision++;}
+      if(x>=6 && x<117){homePage=HOME_APPS;appsScroll=0;uiRevision++;}
       else if(x>=123 && x<234)openBrowser("/");
     }
     return;
@@ -2180,6 +2203,9 @@ static void pollQuickTouch() {
           g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
           uiRevision++;
         }
+      } else if(welcomeOpen && !quickOpen && homePage == HOME_APPS){
+        int offset=constrain(startScroll+startY-y,0,MAX_APPS_SCROLL);
+        if(offset!=appsScroll){appsScroll=offset;uiRevision++;}
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
         int offset=constrain(startScroll+startY-y,0,88);
         if(offset!=settingsScroll){settingsScroll=offset;uiRevision++;}
@@ -2237,6 +2263,9 @@ static void pollQuickTouch() {
         startPanLat = mapViewerLat;
         startPanLon = mapViewerLon;
       }
+    } else if(welcomeOpen && !quickOpen && homePage == HOME_APPS && y >= 28 && y < 290){
+      rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=appsScroll;
+      sliderGesture=false;
     } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 54 && y < 286){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;
       sliderGesture=false;

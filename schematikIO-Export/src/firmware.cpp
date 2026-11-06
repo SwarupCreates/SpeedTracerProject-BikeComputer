@@ -583,9 +583,9 @@ uint32_t activityPoints = 0;
 #include "activity_fit.h"
 #include "activity_archive.h"
 static String paceText(float kmh){
-  if(kmh < 1.8f) return "--:--";
+  if(kmh < 1.8f) return "0:00";
   unsigned seconds = lroundf(3600.0f / kmh);
-  if(seconds > 1500) return "--:--";
+  if(seconds > 1500) return "0:00";
   return String(seconds / 60) + ":" + (seconds % 60 < 10 ? "0" : "") + String(seconds % 60);
 }
 static bool beginActivityFile() {
@@ -728,9 +728,9 @@ static void drawDashScreen() {
   int y = 29, h = 186;
   card(6, y, 228, h, uiCard());
   label(16, y + 8, "AVG", 1, uiMuted());
-  label(16, y + 18, (ride.elapsedSec ? (runningMode ? (ride.avgSpeedKmh >= 1.8f ? paceText(ride.avgSpeedKmh) : String("--:--")) : String(ride.avgSpeedKmh, 1)) : String("--")), 2, uiFg());
+  label(16, y + 18, (ride.elapsedSec ? (runningMode ? paceText(ride.avgSpeedKmh) : String(ride.avgSpeedKmh, 1)) : String("--")), 2, uiFg());
   label(192, y + 8, "MAX", 1, uiMuted());
-  label(180, y + 18, (ride.elapsedSec ? (runningMode ? (ride.maxSpeedKmh >= 1.8f ? paceText(ride.maxSpeedKmh) : String("--:--")) : String(ride.maxSpeedKmh, 1)) : String("--")), 2, uiFg());
+  label(180, y + 18, (ride.elapsedSec ? (runningMode ? paceText(ride.maxSpeedKmh) : String(ride.maxSpeedKmh, 1)) : String("--")), 2, uiFg());
 
   // Center Arc Gauge (270 degrees sweep)
   int cx = 120, cy = y + 78;

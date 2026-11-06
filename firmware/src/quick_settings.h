@@ -1357,29 +1357,24 @@ static void drawHomeSubpage(){
     };
     const int kNumApps = 7;
     if (appsListView) {
-      // LIST VIEW: 1 app per row, button with label beside in row, column layout
-      const int rowH = 48;
-      const int rowPitch = 56;
+      // LIST VIEW: 1 app per row, large button with label beside, clean minimal background
+      const int rowH = 56;
+      const int rowPitch = 64;
+      const int gutterX = 20;
+      const int btnR = 24;
+      const int btnCx = gutterX + btnR; // 44
 
       for (int i = 0; i < kNumApps; i++) {
         int cardY = 66 + i * rowPitch - appsScroll;
         if (cardY + rowH < 56 || cardY > 290) continue;
 
-        display.fillRoundRect(6, cardY, 228, rowH, 12, uiCard());
-        if (!darkTheme) display.drawRoundRect(6, cardY, 228, rowH, 12, 0xD69A);
-
-        // Circular colored app button on the left (R = 17, diameter 34)
-        int btnCx = 28;
+        // Circular colored app button on the left (R = 24, diameter 48)
         int btnCy = cardY + rowH / 2;
-        int btnR = 17;
         display.fillCircle(btnCx, btnCy, btnR, kApps[i].color);
-        drawCustomIcon(display, btnCx - 12, btnCy - 12, 0xFFFF, kApps[i].icon, 24, 24);
+        drawCustomIcon(display, btnCx - 16, btnCy - 16, 0xFFFF, kApps[i].icon, 32, 32);
 
-        // App label beside button in row
-        label(54, cardY + 16, kApps[i].name, 1, uiFg());
-
-        // goNext chevron on the right
-        drawCustomIcon(display, 212, cardY + 16, uiMuted(), CustomIcon::goNextIcon, 16, 16);
+        // App label beside button in row (size 2 = 18pt font, more than double size 1)
+        label(btnCx + btnR + 14, cardY + 20, kApps[i].name, 2, uiFg());
       }
     } else {
       // GRID VIEW: 2-column icon grid
@@ -2185,11 +2180,11 @@ static void quickTap(int x, int y) {
       if(y < 56 || y >= 290) return;
       int hitApp = -1;
       if (appsListView) {
-        const int rowH = 48;
-        const int rowPitch = 56;
+        const int rowH = 56;
+        const int rowPitch = 64;
         for (int i = 0; i < 7; i++) {
           int cardY = 66 + i * rowPitch - appsScroll;
-          if (x >= 6 && x <= 234 && y >= cardY && y <= cardY + rowH) {
+          if (x >= 10 && x <= 235 && y >= cardY && y <= cardY + rowH) {
             hitApp = i;
             break;
           }
@@ -2613,7 +2608,7 @@ static void pollQuickTouch() {
           uiRevision++;
         }
       } else if(welcomeOpen && !quickOpen && homePage == HOME_APPS){
-        int maxS = appsListView ? 180 : MAX_APPS_SCROLL;
+        int maxS = appsListView ? 220 : MAX_APPS_SCROLL;
         int offset=constrain(startScroll+startY-y,0,maxS);
         if(offset!=appsScroll){appsScroll=offset;uiRevision++;}
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){

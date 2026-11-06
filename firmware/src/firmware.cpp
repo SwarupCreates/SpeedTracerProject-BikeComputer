@@ -1592,6 +1592,7 @@ void setup() {
   cfg.maxSpeedRun      = prefs.getFloat("maxSpdRun", 20.0f);
     cfg.countdownSec     = prefs.getInt("cntdownSec", 3);
     if (cfg.countdownSec != 3 && cfg.countdownSec != 5 && cfg.countdownSec != 10) cfg.countdownSec = 3;
+    homeHeroClock        = prefs.getBool("heroClock", false);
   cfg.maxSpeedKmh      = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   cfg.maxPowerW        = prefs.getFloat("maxPower", cfg.maxPowerW);
   cfg.maxCadRpm        = prefs.getFloat("maxCad", cfg.maxCadRpm);
@@ -1691,6 +1692,44 @@ static void handleSerialTransfer() {
     Serial.printf("CURRENT_SCREEN:%d\n", (int)currentScreen);
     Serial.printf("FREE_HEAP:%lu\n", (unsigned long)ESP.getFreeHeap());
     Serial.printf("FREE_PSRAM:%lu\n", (unsigned long)ESP.getFreePsram());
+    return;
+  }
+  if (line == "CMD:I2C_SCAN") {
+    Serial.println("I2C_SCAN_START");
+    Serial.printf("Scanning Wire (SDA:%d, SCL:%d)...\n", COMPASS_SDA, COMPASS_SCL);
+    int wireCount = 0;
+    for (uint8_t a = 1; a < 127; a++) {
+      Wire.beginTransmission(a);
+      uint8_t err = Wire.endTransmission();
+      if (err == 0) {
+        Serial.printf("  Wire FOUND: 0x%02X\n", a);
+        wireCount++;
+      }
+    }
+    Serial.printf("Wire found %d devices\n", wireCount);
+
+    Serial.printf("Scanning touchBus (SDA:%d, SCL:%d)...\n", 1, 3);
+    int touchCount = 0;
+    for (uint8_t a = 1; a < 127; a++) {
+      touchBus.beginTransmission(a);
+      uint8_t err = touchBus.endTransmission();
+      if (err == 0) {
+        Serial.printf("  touchBus FOUND: 0x%02X\n", a);
+        touchCount++;
+      }
+    }
+    Serial.printf("touchBus found %d devices\n", touchCount);
+    // Probe 0x7E registers:
+    Wire.beginTransmission(0x7E);
+    Wire.write(0x00);
+    uint8_t err7e = Wire.endTransmission();
+    Serial.printf("0x7E write reg 0 err: %u\n", err7e);
+    if (err7e == 0 && Wire.requestFrom(uint8_t(0x7E), uint8_t(1)) == 1) {
+      Serial.printf("0x7E reg 0x00: 0x%02X\n", Wire.read());
+    }
+
+    Serial.printf("bmpOk: %d\n", (int)bmpOk);
+    Serial.println("I2C_SCAN_END");
     return;
   }
   if (line == "CMD:COMPASS_DEBUG") {
@@ -1899,7 +1938,8 @@ void loop() {
         ride.distanceKm = distAccum;
         // Grade: alt change / horizontal distance
         float altDelta = ride.altM - lastAltM;
-        ride.gradePercent = constrain((altDelta / (delta * 1000.0f)) * 100.0f, -30.0f, 30.0f);
+        float rawGrade = (altDelta / (delta * 1000.0f)) * 100.0f;
+        ride.gradePercent = constrain((0.65f * ride.gradePercent) + (0.35f * rawGrade), -30.0f, 30.0f);
         lastAltM = ride.altM;
         // Advance route waypoint
         if (routeLen > 0 && nav.routeIndex < routeLen - 1) {
@@ -1957,13 +1997,35 @@ void loop() {
     }
   }
   ride.speedKmh = filteredGpsSpeed;
-  if(bmpOk && millis()-sensorMs>500){sensorMs=millis();
-    if(bmp.performReading()&&isfinite(bmp.pressure)&&bmp.pressure>=30000&&bmp.pressure<=125000)
-      ride.altM=44330.0f*(1.0f-powf(bmp.pressure/101325.0f,0.1903f));
-    else {bmpOk=false;uiRevision++;}
+  static float filteredGpsAlt = 0.0f;
+  static float baroSeaLevelPressure = 101325.0f; // Pa, auto-calibrated by GPS
+
+  // Barometer reading + GPS pressure calibration
+  if(bmpOk && millis()-sensorMs>500){
+    sensorMs=millis();
+    if(bmp.performReading()&&isfinite(bmp.pressure)&&bmp.pressure>=30000&&bmp.pressure<=125000){
+      // When GPS fix is solid, continuously calibrate sea-level reference pressure:
+      if (ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age() < 2500 && startSatellites() >= 6) {
+        float gpsAlt = (float)gps.altitude.meters();
+        if (gpsAlt > -200.0f && gpsAlt < 9000.0f) {
+          float pTarget = bmp.pressure / powf(1.0f - (gpsAlt / 44330.0f), 5.255f);
+          if (pTarget >= 90000.0f && pTarget <= 110000.0f) {
+            baroSeaLevelPressure = (0.998f * baroSeaLevelPressure) + (0.002f * pTarget);
+          }
+        }
+      }
+      float baroAlt = 44330.0f * (1.0f - powf(bmp.pressure / baroSeaLevelPressure, 0.1903f));
+      ride.altM = baroAlt;
+    } else {
+      bmpOk=false;
+      uiRevision++;
+    }
   }
+
+  // Periodic sensor probe (every 5 seconds)
   static uint32_t retryMs=0;
-  if(millis()-retryMs>5000){retryMs=millis();
+  if(millis()-retryMs>5000){
+    retryMs=millis();
     if(!bmpOk)bmpOk=beginBarometer();
     bool present=externalPresent(0x20);
     if(!present)buttonsOk=false;
@@ -1972,7 +2034,25 @@ void loop() {
     else if(!compass.ready && externalPresent(0x0D)) compass.begin();
     if(!touchReady)initQuickTouch();
   }
-  if(!bmpOk || runningMode) ride.altM = ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age()<3000 ? gps.altitude.meters() : 0;
+
+  // Filtered GPS altitude fallback when barometer is offline or in running mode
+  if(!bmpOk || runningMode) {
+    if (ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age() < 3000) {
+      float rawAlt = (float)gps.altitude.meters();
+      if (filteredGpsAlt == 0.0f || !isfinite(filteredGpsAlt)) {
+        filteredGpsAlt = rawAlt;
+      } else {
+        // Low-pass exponential moving average to reject GPS vertical noise jitter
+        filteredGpsAlt = (0.80f * filteredGpsAlt) + (0.20f * rawAlt);
+      }
+      ride.altM = filteredGpsAlt;
+    }
+  }
+
+  // Zero out slope jitter when stationary or moving under 2.0 km/h
+  if (ride.speedKmh < 2.0f) {
+    ride.gradePercent = 0.0f;
+  }
   if(!ride.gpsFixed) {ride.lat=0;ride.lon=0;ride.gradePercent=0;nav.remainDistKm=0;lastLat=0;lastLon=0;}
 
   // Speed source

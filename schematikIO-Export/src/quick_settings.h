@@ -25,6 +25,7 @@ int settingsScroll=0;
 // Home subpages stay independent of dashboard navigation and touch calibration.
 enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH };
 HomePage homePage=HOME_MAIN;
+bool homeHeroClock = false;
 int appsScroll = 0;
 const int MAX_APPS_SCROLL = 200;
 static int appsPage = 0;
@@ -733,6 +734,14 @@ static void globalBack(){
     }
   }
   uiRevision++;
+}
+
+static void saveHomeHeroPref() {
+  Preferences p;
+  if (p.begin("cyclo", false)) {
+    p.putBool("heroClock", homeHeroClock);
+    p.end();
+  }
 }
 
 static void saveActivityConfig() {
@@ -1775,7 +1784,44 @@ static void drawCountdownScreen() {
   drawGlobalNav();
 }
 
-static bool drawLifecycleScreen() {
+static void drawHomeClockWidget() {
+  uint16_t fg = uiFg();
+  time_t now = time(nullptr);
+  struct tm local;
+  bool timeValid = (now >= 1704067200);
+  if (timeValid) {
+    localtime_r(&now, &local);
+  } else {
+    memset(&local, 0, sizeof(local));
+    uint32_t sec = millis() / 1000UL;
+    local.tm_hour = (sec / 3600UL) % 24;
+    local.tm_min = (sec / 60UL) % 60;
+    local.tm_sec = sec % 60;
+    local.tm_mday = 1;
+    local.tm_mon = 0;
+    local.tm_year = 124;
+  }
+
+  const char* const days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+  const char* const months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  int h12 = local.tm_hour % 12;
+  if (h12 == 0) h12 = 12;
+
+  String dateStr;
+  if (timeValid) {
+    dateStr = String(days[local.tm_wday]) + " " + String(local.tm_mday) + " " + String(months[local.tm_mon]) + ", " + String(1900 + local.tm_year);
+  } else {
+    dateStr = "Waiting for time sync";
+  }
+
+  // Large 56px smooth digital clock centered at Y = 44
+  drawSmoothClock56(44, h12, local.tm_min, fg);
+
+  // Date subtitle centered at Y = 96 (size 0 = 12px smooth anti-aliased font)
+  centeredLabel(0, 96, DISP_W, dateStr, 0, fg);
+}
+
+bool drawLifecycleScreen() {
   static String previous;
   String state;
   if(screenLocked) {
@@ -1792,7 +1838,7 @@ static bool drawLifecycleScreen() {
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
   else if(countdownGoStart) state="countGo:"+String((millis()-countdownGoStart)/40);
   else if(countdownStart) state="count:"+String((millis()-countdownStart)/40);
-  else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
+  else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(homeHeroClock)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
   if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart && !countdownGoStart){previous="";return false;}
   if(state.isEmpty()){previous="";return false;}
   if(state==previous)return true;
@@ -1816,7 +1862,11 @@ static bool drawLifecycleScreen() {
   } else {
     if(homePage!=HOME_MAIN){drawHomeSubpage();return true;}
     statusBar();
-    display.drawBrandLogo((DISP_W-BOOT_LOGO_WIDTH)/2,48,!darkTheme);
+    if (homeHeroClock) {
+      drawHomeClockWidget();
+    } else {
+      display.drawBrandLogo((DISP_W-BOOT_LOGO_WIDTH)/2,48,!darkTheme);
+    }
     bool ready=gpsStartReady();
     bool countValid=gpsDataReady && ((geprcGps.lastStatus && millis()-geprcGps.lastStatus<3000) || (gps.satellites.isValid() && gps.satellites.age()<3000));
     uint16_t gpsFg=ready?(darkTheme?0x9E73:0x2400):gpsDataReady?(darkTheme?0xFFE0:0x8380):(darkTheme?0xFA6A:0x9800);
@@ -2074,6 +2124,12 @@ static void quickTap(int x, int y) {
       }
       return;
     }
+    if (y >= 28 && y < 140) {
+      homeHeroClock = !homeHeroClock;
+      saveHomeHeroPref();
+      uiRevision++;
+      return;
+    }
     if(y>=140 && y<176 && x>=6 && x<190){
       openGpsInspector();
       return;
@@ -2264,7 +2320,33 @@ static void pollQuickTouch() {
       rootGesture = false; sliderGesture = false; mapPanGesture = false; held = false; candidateX = -1;
       return;
     }
-    if(rootGesture && !sliderGesture && !moved)quickTap(endX,endY);
+    if(rootGesture && !sliderGesture) {
+      if (welcomeOpen && !quickOpen && homePage == HOME_MAIN) {
+        int dx = endX - startX;
+        int dy = endY - startY;
+        if (startY < 140) {
+          if (abs(dx) >= 20 && abs(dx) > abs(dy)) {
+            homeHeroClock = !homeHeroClock;
+            saveHomeHeroPref();
+            uiRevision++;
+          } else if (!moved) {
+            homeHeroClock = !homeHeroClock;
+            saveHomeHeroPref();
+            uiRevision++;
+          }
+        } else {
+          if (abs(dx) >= 35 && abs(dx) > abs(dy) * 1.5) {
+            homeHeroClock = !homeHeroClock;
+            saveHomeHeroPref();
+            uiRevision++;
+          } else if (!moved || (abs(dx) < 20 && abs(dy) < 20)) {
+            quickTap(startX, startY);
+          }
+        }
+      } else if (!moved) {
+        quickTap(endX, endY);
+      }
+    }
     rootGesture=false;sliderGesture=false;mapPanGesture=false;held=false;candidateX=-1;
   };
   if (!touchReady || millis() - poll < 25) return;
@@ -2441,6 +2523,9 @@ static void pollQuickTouch() {
       sliderGesture=false;
     } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 54 && y < 286){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;
+      sliderGesture=false;
+    } else if(welcomeOpen && !quickOpen && homePage == HOME_MAIN && y >= 28 && y < 290){
+      rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
     } else quickTap(x, y);
   }

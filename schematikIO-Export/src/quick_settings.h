@@ -1965,16 +1965,24 @@ bool drawLifecycleScreen() {
 
     // Row 2: Slide-to-Start Slider (224x54, R=27, Y=190..244)
     display.fillRoundRect(8, 190, 224, 54, 27, uiCard());
-    centeredLabel(88, 190 + 20, 136, rideStarted ? "Swipe to open >" : "Swipe to start >", 0, uiMuted());
+    const char* sliderText = rideStarted ? "Swipe to open" : "Swipe to start";
+    int textW = textWidth(sliderText, 0);
+    int iconW = 12;
+    int gap = 6;
+    int totalTrackW = textW + gap + iconW;
+    int trackStartX = 86 + (146 - totalTrackW) / 2;
+    label(trackStartX, 190 + 21, sliderText, 0, uiMuted());
+    drawCustomIcon(display, trackStartX + textW + gap, 190 + 21, uiMuted(), CustomIcon::goNextIcon, iconW, iconW);
     int pillX = 8 + homeSliderOffset;
     display.fillRoundRect(pillX, 190, 78, 54, 27, 0xF800);
     drawCustomIcon(display, pillX + (78 - 28) / 2, 190 + 13, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 28, 28);
 
     // Row 3: Two Clean Pill Cards (108x54, R=27, Y=254..308)
-    // Row 3 Left: Compass App Pill (amber background)
-    uint16_t compassBg = darkTheme ? 0x2900 : 0xFFE0;
+    // Row 3 Left: Compass App Pill (warm amber in dark theme, brown on transparent brown in light theme)
+    uint16_t compassBg = darkTheme ? 0x2900 : 0xEEF7;
+    uint16_t compassFg = darkTheme ? 0xFE64 : 0xAC63;
     display.fillRoundRect(8, 254, 108, 54, 27, compassBg);
-    drawCustomIcon(display, 8 + (108 - 28) / 2, 254 + 13, 0xFE64, CustomIcon::compassIconLarge, 28, 28);
+    drawCustomIcon(display, 8 + (108 - 28) / 2, 254 + 13, compassFg, CustomIcon::compassIconLarge, 28, 28);
 
     // Row 3 Right: All Apps Launcher Pill (3x3 white dot matrix)
     display.fillRoundRect(124, 254, 108, 54, 27, uiCard());

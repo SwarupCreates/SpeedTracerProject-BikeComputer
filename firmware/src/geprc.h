@@ -47,10 +47,12 @@ public:
   bool finish(){for(int i=0;i<2;i++)if(int(mx[i])-mn[i]<200)return false;float radius[2];for(int i=0;i<2;i++){offset[i]=(float(mx[i])+mn[i])/2;radius[i]=(float(mx[i])-mn[i])/2;}for(int i=0;i<2;i++)scale[i]=(radius[0]+radius[1])/(2*radius[i]);calibrating=false;calibrated=true;save();return true;}
   void save(){Preferences p;p.begin("qmc",false);p.putBool("valid",calibrated);for(int i=0;i<2;i++){String k="o"+String(i);p.putFloat(k.c_str(),offset[i]);k="s"+String(i);p.putFloat(k.c_str(),scale[i]);}p.putFloat("yaw",yawOffset);p.putFloat("decl",declination);p.end();}
   void update(){if(!ready||millis()-sampleMs<40)return;sampleMs=millis();uint8_t v[6]={};if(!read(0,v,6))return;lastSample=millis();for(int i=0;i<3;i++)raw[i]=int16_t(v[i*2]|uint16_t(v[i*2+1])<<8);if(calibrating)for(int i=0;i<2;i++){mn[i]=min(mn[i],raw[i]);mx[i]=max(mx[i],raw[i]);}
-    // GEPRC specifies CW0 flip: x remains forward, y and z are inverted.
-    // Assumes module arrow points toward the bicycle front, with antenna upward.
-    float x=(raw[0]-offset[0])*scale[0],y=-(raw[1]-offset[1])*scale[1];
-    heading=fmodf(atan2f(y,x)*180/PI+yawOffset+declination+720,360);
+    // GEPRC M1025Q specifies CW0_DEG_FLIP (sensor inverted under ceramic antenna):
+    // Standard body frame: X is forward (-raw[0]), Y is right (+raw[1]), Z is down (-raw[2]).
+    // Assumes module arrow points toward the bicycle front, with ceramic antenna upward.
+    float x = -(raw[0] - offset[0]) * scale[0];
+    float y =  (raw[1] - offset[1]) * scale[1];
+    heading = fmodf(atan2f(y, x) * 180.0f / PI + yawOffset + declination + 720.0f, 360.0f);
   }
   bool usable(){return ready&&calibrated&&!calibrating&&millis()-lastSample<1000;}
 };

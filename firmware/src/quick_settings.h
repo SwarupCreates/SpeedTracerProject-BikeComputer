@@ -1967,15 +1967,12 @@ bool drawLifecycleScreen() {
     display.fillRoundRect(8, 190, 224, 54, 27, uiCard());
     const char* sliderText = rideStarted ? "Swipe to open" : "Swipe to start";
     int textW = textWidth(sliderText, 0);
-    int iconW = 12;
-    int gap = 6;
-    int totalTrackW = textW + gap + iconW;
-    int trackStartX = 86 + (146 - totalTrackW) / 2;
+    int trackStartX = 116 + (116 - textW) / 2;
     label(trackStartX, 190 + 21, sliderText, 0, uiMuted());
-    drawCustomIcon(display, trackStartX + textW + gap, 190 + 21, uiMuted(), CustomIcon::goNextIcon, iconW, iconW);
     int pillX = 8 + homeSliderOffset;
-    display.fillRoundRect(pillX, 190, 78, 54, 27, 0xF800);
-    drawCustomIcon(display, pillX + (78 - 28) / 2, 190 + 13, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 28, 28);
+    display.fillRoundRect(pillX, 190, 108, 54, 27, 0xF800);
+    drawCustomIcon(display, pillX + 27, 190 + 13, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 28, 28);
+    drawCustomIcon(display, pillX + 67, 190 + 20, 0xFFFF, CustomIcon::goNextIcon, 14, 14);
 
     // Row 3: Two Clean Pill Cards (108x54, R=27, Y=254..308)
     // Row 3 Left: Compass App Pill (warm amber in dark theme, brown on transparent brown in light theme)
@@ -2466,7 +2463,7 @@ static void pollQuickTouch() {
       return;
     }
     if (homeSliderDragging) {
-      if (homeSliderOffset >= 110) {
+      if (homeSliderOffset >= 85) {
         if (rideStarted) {
           welcomeOpen = false;
           currentScreen = (nav.hasDestination && routeLen > 1) ? SCR_MAP : SCR_DASH;
@@ -2584,7 +2581,7 @@ static void pollQuickTouch() {
     if(abs(y-startY)>7 || abs(x-startX)>7)moved=true;
     if(sliderGesture)setBrightnessFromTouch(x);
     else if(homeSliderDragging){
-      homeSliderOffset = constrain(x - homeSliderStartX, 0, 146);
+      homeSliderOffset = constrain(x - homeSliderStartX, 0, 116);
       uiRevision++;
     } else if(moved){
       if(gpsWaiting || gpsRadarInspector){
@@ -2685,7 +2682,7 @@ static void pollQuickTouch() {
     } else if(welcomeOpen && !quickOpen && homePage == HOME_MAIN && y >= 28 && y < 320){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
-      if (y >= 186 && y < 248 && x >= 4 && x <= 8 + homeSliderOffset + 88) {
+      if (y >= 186 && y < 248 && x >= 4 && x <= 8 + homeSliderOffset + 116) {
         homeSliderDragging = true;
         homeSliderStartX = x;
         homeSliderOffset = 0;

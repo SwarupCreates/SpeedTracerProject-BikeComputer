@@ -66,6 +66,7 @@ struct Config {
   float maxSpeedRide    = 60.0f;
   float maxSpeedRun     = 20.0f;
   int   countdownSec    = 3;
+  int   targetCalories  = 1200;
   float maxPowerW       = 400.0f;
   float maxCadRpm       = 120.0f;
   float vo2maxManual    = 0.0f;
@@ -103,6 +104,7 @@ struct TrackPoint  { float lat, lon, alt; uint32_t sec; };
 enum Screen { SCR_DASH, SCR_METRICS, SCR_MAP, SCR_CONTROLS, SCR_COUNT };
 bool darkTheme=false;
 bool appsListView=false;
+bool runningMode=false;
 uint32_t uiRevision=0;
 
 // ─── Globals ─────────────────────────────────────────────────────────────────
@@ -593,7 +595,9 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
                        uint32_t(WiFi.softAPIP()) != 0;
   const bool wifiAvailable = WiFi.status() == WL_CONNECTED || apReady;
   if (recording) {
-    drawBikeIcon(display, x, 5, blinkOn ? RED : uiBg());
+    const uint16_t actCol = darkTheme ? 0x3CE0 : 0x05E0;
+    const CustomIcon actIcon = runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon;
+    drawCustomIcon(display, x, 5, blinkOn ? actCol : uiBg(), actIcon, 16, 16);
     x += iconSize + gap;
   }
   drawSatelliteIcon(display, x, 5, ride.gpsFixed ? uiFg() : unavailable);
@@ -613,7 +617,6 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
 }
 
 // One binary FIT activity per SD file; finalized on Save.
-bool runningMode=false;
 File activityFile;
 String activityPath, activityMessage = "Ready - tap Start";
 uint32_t activityPoints = 0;
@@ -861,13 +864,12 @@ static void drawDashScreen() {
     }
   }
 
-  // Bike / Run Icon inside Arc
-  if (runningMode) drawCustomIcon(display, 107, 58, TEAL, CustomIcon::runIcon, 26, 18);
-  else drawBikeIcon(display, 107, 58, TEAL);
+  // Bike / Run Icon inside Arc (Frame 27: 30x30 square icon at x=105, y=54)
+  drawCustomIcon(display, 105, 54, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
 
   // Large Speed Digits & Unit inside Arc
   String sp = speedAvailable() ? (runningMode ? paceText(ride.speedKmh) : String(ride.speedKmh, 1)) : (runningMode ? String("0:00") : String("0.0"));
-  centeredLabel(40, 84, 160, sp, 3, fgCol);
+  centeredLabel(40, 88, 160, sp, 3, fgCol);
   centeredLabel(40, 122, 160, (ride.gpsFixed || (!runningMode && (bleSpeedReady || (sensors.speedPhysical && millis() - externalSensorMs < 5000)))) ? (runningMode ? "MIN/KM" : "KM/H") : "NO DATA", 1, mutedCol);
 
   // Complications Row (Frame 27: 3 columns at y = 158..180)
@@ -896,8 +898,12 @@ static void drawDashScreen() {
   uint16_t hrPillBg = darkTheme ? 0x0A20 : 0xDFF0;
   uint16_t hrPillFg = darkTheme ? 0x7FE0 : 0x0540;
   display.fillRoundRect(62, 201, 116, 44, 22, hrPillBg);
-  drawHeartIcon(display, 76, 214, hrPillFg);
-  label(104, 212, bleHRReady ? String(hrVal) : "--", 3, hrPillFg);
+  String hrStr = bleHRReady ? String(hrVal) : "--";
+  int hrTextW = textWidth(hrStr, 3);
+  int hrBlockW = 30 + 6 + hrTextW;
+  int hrStartX = 62 + (116 - hrBlockW) / 2;
+  drawCustomIcon(display, hrStartX, 208, hrPillFg, CustomIcon::heartRateIcon, 30, 30);
+  label(hrStartX + 36, 213, hrStr, 3, hrPillFg);
 
   label(192, 208, "MAX", 1, mutedCol);
   label(188, 222, (hrSamples ? String(hrMax) : String("--")), 2, fgCol);
@@ -929,7 +935,7 @@ static void drawMetricsScreen() {
   uint16_t spdFg = darkTheme ? 0x475F : 0x0395;
   display.fillRoundRect(8, 38, 108, 54, 27, spdBg);
   String sp = speedAvailable() ? (runningMode ? paceText(ride.speedKmh) : String(ride.speedKmh, 1)) : (runningMode ? String("0:00") : String("0.0"));
-  centeredLabel(8, 50, 108, sp, 3, spdFg);
+  centeredLabel(8, 55, 108, sp, 3, spdFg);
 
   int hrVal = bleHRReady ? bleHR : 0;
   int zone = calcHrZone(hrVal);
@@ -937,43 +943,56 @@ static void drawMetricsScreen() {
   uint16_t hrPillBg = darkTheme ? zc.bgDark : zc.bgLight;
   uint16_t hrPillFg = darkTheme ? zc.textDark : zc.textLight;
   display.fillRoundRect(124, 38, 108, 54, 27, hrPillBg);
-  drawHeartIcon(display, 138, 54, hrPillFg);
-  label(162, 50, bleHRReady ? String(hrVal) : "--", 3, hrPillFg);
+  String hrStr = bleHRReady ? String(hrVal) : "--";
+  int hrTextW = textWidth(hrStr, 3);
+  int hrBlockW = 30 + 6 + hrTextW;
+  int hrStartX = 124 + (108 - hrBlockW) / 2;
+  drawCustomIcon(display, hrStartX, 50, hrPillFg, CustomIcon::heartRateIcon, 30, 30);
+  label(hrStartX + 36, 55, hrStr, 3, hrPillFg);
 
-  // Row 2 (y = 102, h = 54): Calories Card (224x54)
+  // Row 2 (y = 102, h = 54): Calories Card (224x54) with 42x42 Dial & 24x24 Icon
   display.fillRoundRect(8, 102, 224, 54, 27, cardBg);
-  const int calCx = 38, calCy = 129;
+  const int calCx = 36, calCy = 129;
   uint16_t ringBg = darkTheme ? 0x31A6 : 0xD69A;
-  for (int d = 0; d < 360; d += 6) {
+  for (int d = 0; d < 360; d += 4) {
     float a = radians((float)d);
     float ca = cosf(a), sa = sinf(a);
-    for (int r = 13; r <= 15; r++) display.drawPixel(calCx + (int)(r * ca), calCy + (int)(r * sa), ringBg);
+    for (int r = 18; r <= 21; r++) display.drawPixel(calCx + (int)lroundf(r * ca), calCy + (int)lroundf(r * sa), ringBg);
   }
-  float calRatio = constrain(calorieEstimate / 1200.0f, 0.0f, 1.0f);
+  int tgtCal = max(100, cfg.targetCalories);
+  float calRatio = constrain(calorieEstimate / (float)tgtCal, 0.0f, 1.0f);
   int calSweep = (int)(360.0f * calRatio);
-  for (int d = -90; d <= -90 + calSweep; d += 3) {
+  for (int d = -90; d <= -90 + calSweep; d += 2) {
     float a = radians((float)d);
     float ca = cosf(a), sa = sinf(a);
-    for (int r = 13; r <= 15; r++) display.drawPixel(calCx + (int)(r * ca), calCy + (int)(r * sa), ORANGE);
+    for (int r = 18; r <= 21; r++) display.drawPixel(calCx + (int)lroundf(r * ca), calCy + (int)lroundf(r * sa), ORANGE);
   }
-  drawFlameIcon(display, calCx - 6, calCy - 8, ORANGE);
-  label(68, 115, String((int)calorieEstimate) + "/1200", 3, fgCol);
-  label(186, 122, "KCAL", 1, mutedCol);
+  drawCustomIcon(display, 24, 117, ORANGE, CustomIcon::caloriesIcon, 24, 24);
+  String calStr = String((int)calorieEstimate) + "/" + String(tgtCal);
+  label(64, 119, calStr, 3, fgCol);
+  label(222 - textWidth("KCAL", 1), 125, "KCAL", 1, mutedCol);
 
   // Row 3 (y = 166, h = 54): Two 108x54 pills
   display.fillRoundRect(8, 166, 108, 54, 27, cardBg);
   String distStr = (rideStarted || activityPoints ? String(ride.distanceKm, 2) : String("0.00"));
-  centeredLabel(8, 178, 108, distStr, 3, fgCol);
+  centeredLabel(8, 183, 108, distStr, 3, fgCol);
 
   display.fillRoundRect(124, 166, 108, 54, 27, cardBg);
-  drawLightningIcon(display, 138, 178, 0xFEE0);
   String pwrStr = runningMode ? paceText(ride.speedKmh) : (blePowerReady ? String(ride.powerW) : "104");
-  label(160, 178, pwrStr, 3, fgCol);
+  int pwrTextW = textWidth(pwrStr, 3);
+  int pwrBlockW = 30 + 6 + pwrTextW;
+  int pwrStartX = 124 + (108 - pwrBlockW) / 2;
+  drawCustomIcon(display, pwrStartX, 178, 0xFEE0, CustomIcon::powerIcon, 30, 30);
+  label(pwrStartX + 36, 183, pwrStr, 3, fgCol);
 
   // Row 4 (y = 230, h = 54): 224x54 pill with Bike icon + Duration
   display.fillRoundRect(8, 230, 224, 54, 27, cardBg);
-  drawCustomIcon(display, 28, 244, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 26, 18);
-  centeredLabel(50, 242, 170, durationText(), 3, fgCol);
+  String durStr = durationText();
+  int durTextW = textWidth(durStr, 3);
+  int durBlockW = 30 + 10 + durTextW;
+  int durStartX = 8 + (224 - durBlockW) / 2;
+  drawCustomIcon(display, durStartX, 242, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  label(durStartX + 40, 247, durStr, 3, fgCol);
 }
 
 static const float zoomRadiusKm[] = {0, 4.0f, 1.5f, 0.5f, 0.2f, 0.08f};
@@ -1334,12 +1353,12 @@ static void drawMapScreen() {
   float curSpeed = speedAvailable() ? ride.speedKmh : 0.0f;
   if (curSpeed < 0.1f) curSpeed = 0.0f;
   String sp = runningMode ? paceText(curSpeed) : String(curSpeed, 1);
-  centeredLabel(8, 242, 108, sp, 3, spdFg);
+  centeredLabel(8, 247, 108, sp, 3, spdFg);
 
   // Right Pill: DISTANCE (Dark card background, white text)
   display.fillRoundRect(124, 230, 108, 54, 27, darkTheme ? 0x18C3 : 0xEF5D);
   String distStr = (rideStarted || activityPoints ? String(ride.distanceKm, 2) : String("0.00"));
-  centeredLabel(124, 242, 108, distStr, 3, uiFg());
+  centeredLabel(124, 247, 108, distStr, 3, uiFg());
 }
 
 static void drawActivityControlsScreen() {
@@ -1350,12 +1369,16 @@ static void drawActivityControlsScreen() {
 
   // Row 1 (y = 38, h = 54): 224x54 pill with Bike icon + Duration
   display.fillRoundRect(8, 38, 224, 54, 27, cardBg);
-  drawCustomIcon(display, 28, 52, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 26, 18);
-  centeredLabel(50, 50, 170, durationText(), 3, fgCol);
+  String durStr = durationText();
+  int durTextW = textWidth(durStr, 3);
+  int durBlockW = 30 + 10 + durTextW;
+  int durStartX = 8 + (224 - durBlockW) / 2;
+  drawCustomIcon(display, durStartX, 50, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  label(durStartX + 40, 55, durStr, 3, fgCol);
 
   // Row 2 (y = 102, h = 54): Auto Pause Activity toggle
   display.fillRoundRect(8, 102, 224, 54, 27, cardBg);
-  label(24, 120, "Auto Pause Activity", 1, fgCol);
+  label(24, 125, "Auto Pause Activity", 1, fgCol);
   uint16_t swBg = autoPauseEnabled ? (darkTheme ? 0x3CE0 : 0x2CE0) : (darkTheme ? 0x31A6 : 0xD69A);
   display.fillRoundRect(168, 114, 48, 30, 15, swBg);
   display.fillCircle(autoPauseEnabled ? 201 : 183, 129, 11, 0xFFFF);
@@ -1364,7 +1387,7 @@ static void drawActivityControlsScreen() {
   uint16_t amberCardBg = darkTheme ? 0x4220 : 0xFFE0;
   uint16_t amberText = darkTheme ? 0xFEE0 : 0x8C00;
   display.fillRoundRect(8, 166, 224, 54, 27, amberCardBg);
-  label(24, 184, ridePaused ? "Resume Ride" : "Pause Ride", 2, amberText);
+  label(24, 186, ridePaused ? "Resume Ride" : "Pause Ride", 2, amberText);
   display.fillCircle(198, 193, 17, 0xFFFF);
   if (!ridePaused) {
     display.fillRect(193, 186, 3, 14, 0xF800);
@@ -1375,12 +1398,12 @@ static void drawActivityControlsScreen() {
 
   // Row 4 (y = 230, h = 54): REVERSE SLIDER "Swipe to end"
   display.fillRoundRect(8, 230, 224, 54, 27, cardBg);
-  label(32, 251, "Swipe to end", 1, mutedCol);
+  label(32, 253, "Swipe to end", 1, mutedCol);
 
   int pillX = 124 + controlSliderOffset;
   display.fillRoundRect(pillX, 230, 108, 54, 27, 0xE800);
-  drawCustomIconFlippedH(display, pillX + 22, 248, 0xFFFF, CustomIcon::goNextIcon, 16, 16);
-  drawCustomIcon(display, pillX + 58, 245, 0xFFFF, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 26, 18);
+  drawCustomIconFlippedH(display, pillX + 18, 249, 0xFFFF, CustomIcon::goNextIcon, 16, 16);
+  drawCustomIcon(display, pillX + 54, 242, 0xFFFF, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
 
   // Modal Dialog: End Activity Confirmation
   if (activityEndConfirm) {
@@ -1412,13 +1435,17 @@ static void drawAutoPauseScreen() {
   display.fillRect(123, 94, 6, 24, 0xF800);
 
   // Centered label "Auto paused"
-  centeredLabel(8, 162, 224, "Auto paused", 3, uiFg());
+  centeredLabel(8, 160, 224, "Auto paused", 3, uiFg());
 
   // Lower Green Pill: 224x54, R = 27 (y = 228..282)
   uint16_t greenBg = darkTheme ? 0x3CE0 : 0x2CE0;
   display.fillRoundRect(8, 228, 224, 54, 27, greenBg);
-  drawCustomIcon(display, 42, 242, 0xFFFF, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 22);
-  label(88, 243, "Override", 3, 0xFFFF);
+  String ovrStr = "Override";
+  int ovrTextW = textWidth(ovrStr, 3);
+  int ovrBlockW = 30 + 10 + ovrTextW;
+  int ovrStartX = 8 + (224 - ovrBlockW) / 2;
+  drawCustomIcon(display, ovrStartX, 240, 0xFFFF, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  label(ovrStartX + 40, 245, ovrStr, 3, 0xFFFF);
 }
 
 static void drawSplash() {
@@ -1694,6 +1721,8 @@ void setup() {
     if (cfg.countdownSec != 3 && cfg.countdownSec != 5 && cfg.countdownSec != 10) cfg.countdownSec = 3;
     homeHeroClock        = prefs.getBool("heroClock", false);
     activityMapNorthUp   = prefs.getBool("mapNorthUp", false);
+    cfg.targetCalories   = prefs.getInt("tgtCalories", 1200);
+    if (cfg.targetCalories < 100 || cfg.targetCalories > 10000) cfg.targetCalories = 1200;
   cfg.maxSpeedKmh      = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   cfg.maxPowerW        = prefs.getFloat("maxPower", cfg.maxPowerW);
   cfg.maxCadRpm        = prefs.getFloat("maxCad", cfg.maxCadRpm);

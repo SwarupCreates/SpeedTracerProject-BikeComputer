@@ -842,6 +842,7 @@ static void saveActivityConfig() {
     p.putFloat("maxSpdRide", cfg.maxSpeedRide);
     p.putFloat("maxSpdRun", cfg.maxSpeedRun);
     p.putInt("cntdownSec", cfg.countdownSec);
+    p.putInt("tgtCalories", cfg.targetCalories);
     p.end();
   }
 }
@@ -893,12 +894,18 @@ static void drawActivitySettingsApp() {
   display.fillRoundRect(152, y + 7, 68, 28, 14, 0xFA40);
   centeredLabel(152, y + 14, 68, String(cfg.countdownSec) + " SEC", 1, 0xFFFF);
 
-  // Tile 5: Speed Deadzone info
+  // Tile 5: Target Calories
   y = 226;
-  card(6, y, 228, 38, uiCard());
-  drawSatelliteIcon(display, 16, y + 10, uiFg());
-  label(44, y + 6, "GPS SPEED DEADZONE", 1, uiFg());
-  label(44, y + 20, runningMode ? "Run: < 0.8 km/h clamped to 0" : "Ride: < 1.0 km/h clamped to 0", 1, uiMuted());
+  card(6, y, 228, 42, uiCard());
+  drawCustomIcon(display, 16, y + 9, ORANGE, CustomIcon::caloriesIcon, 24, 24);
+  label(46, y + 6, "TARGET CALORIES", 1, uiFg());
+  label(46, y + 22, String(cfg.targetCalories) + " KCAL (Target)", 1, uiMuted());
+  display.fillRoundRect(152, y + 7, 30, 28, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(152, y + 7, 30, 28, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(152, y + 13, 30, "-", 2, uiFg());
+  display.fillRoundRect(190, y + 7, 30, 28, 6, darkTheme ? 0x2124 : 0xCE79);
+  display.drawRoundRect(190, y + 7, 30, 28, 6, darkTheme ? 0x2945 : 0xB596);
+  centeredLabel(190, y + 13, 30, "+", 2, uiFg());
 }
 
 static void tapActivitySettings(int x, int y) {
@@ -945,6 +952,20 @@ static void tapActivitySettings(int x, int y) {
     else cfg.countdownSec = 3;
     saveActivityConfig();
     uiRevision++;
+    return;
+  }
+
+  // Tile 5: Target Calories (y=226..270)
+  if (y >= 226 && y < 270) {
+    if (x >= 140 && x < 184) {
+      cfg.targetCalories = max(200, cfg.targetCalories - 100);
+      saveActivityConfig();
+      uiRevision++;
+    } else if (x >= 184 && x < 232) {
+      cfg.targetCalories = min(5000, cfg.targetCalories + 100);
+      saveActivityConfig();
+      uiRevision++;
+    }
     return;
   }
 }

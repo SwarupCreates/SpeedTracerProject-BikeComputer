@@ -28,7 +28,7 @@ HomePage homePage=HOME_MAIN;
 bool homeHeroClock = false;
 bool activityMapNorthUp = false;
 int appsScroll = 0;
-const int MAX_APPS_SCROLL = 200;
+const int MAX_APPS_SCROLL = 220;
 static int appsPage = 0;
 static double mapViewerLat = 22.594637;
 static double mapViewerLon = 88.425853;
@@ -1346,29 +1346,29 @@ static void drawHomeSubpage(){
       uint16_t color;
     };
     static const AppItem kApps[] = {
-      {"Maps", CustomIcon::mapAppIcon, 0x33FB},           // Bright Blue (#3578DD)
-      {"Compass", CustomIcon::compassIcon, 0xE800},        // Bright Red (#EE0000)
-      {"My Activities", CustomIcon::runIcon, 0xFA61},      // Bright Orange (#F4510C)
-      {"Past Routes", CustomIcon::routeMapIcon, 0x5444},   // Leaf Green (#558920)
-      {"Settings", CustomIcon::systemIcon, 0x79F7},        // Purple (#7C3AED)
-      {"Activity Settings", CustomIcon::configureIcon, 0xDBC0}, // Amber (#D97706)
-      {"My Files", CustomIcon::folderIcon, 0x0CA1}         // Teal (#0D9488)
+      {"Maps", CustomIcon::mapAppIconLarge, 0x33FB},           // Bright Blue (#3578DD)
+      {"Compass", CustomIcon::compassIconLarge, 0xE800},        // Bright Red (#EE0000)
+      {"My Activities", CustomIcon::activitiesIconLarge, 0xFA61}, // Bright Orange (#F4510C)
+      {"Past Routes", CustomIcon::routeMapIconLarge, 0x5444},   // Leaf Green (#558920)
+      {"Settings", CustomIcon::systemIconLarge, 0x79F7},        // Purple (#7C3AED)
+      {"Activity Settings", CustomIcon::configureIconLarge, 0xDBC0}, // Amber (#D97706)
+      {"My Files", CustomIcon::folderIconLarge, 0x0CA1}         // Teal (#0D9488)
     };
     const int kNumApps = 7;
-    const int R = 36;
-    const int rowPitch = 108;
+    const int R = 38;
+    const int rowPitch = 114;
 
     for (int i = 0; i < kNumApps; i++) {
       int col = i % 2;
       int row = i / 2;
       int cx = (col == 0) ? 68 : 172;
-      int cy = 100 + row * rowPitch - appsScroll;
+      int cy = 102 + row * rowPitch - appsScroll;
 
       // Cull items completely offscreen
-      if (cy + R + 22 < 56 || cy - R > 290) continue;
+      if (cy + R + 24 < 56 || cy - R > 290) continue;
 
       display.fillCircle(cx, cy, R, kApps[i].color);
-      drawCustomIcon(display, cx - 17, cy - 17, 0xFFFF, kApps[i].icon, 34, 34);
+      drawCustomIcon(display, cx - 20, cy - 20, 0xFFFF, kApps[i].icon);
       centeredLabel(cx - 58, cy + R + 7, 116, kApps[i].name, 0, uiFg());
     }
 
@@ -2126,11 +2126,11 @@ static void quickTap(int x, int y) {
         int col = i % 2;
         int row = i / 2;
         int cx = (col == 0) ? 68 : 172;
-        int cy = 100 + row * 108 - appsScroll;
+        int cy = 102 + row * 114 - appsScroll;
         int dx = x - cx;
         int dy = y - cy;
-        bool inCircle = (dx * dx + dy * dy <= 42 * 42);
-        bool inLabel = (abs(dx) <= 56 && (y >= cy + 32 && y <= cy + 62));
+        bool inCircle = (dx * dx + dy * dy <= 44 * 44);
+        bool inLabel = (abs(dx) <= 58 && (y >= cy + 34 && y <= cy + 64));
         if (inCircle || inLabel) {
           if(i == 0){ // Maps
             if(ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0){

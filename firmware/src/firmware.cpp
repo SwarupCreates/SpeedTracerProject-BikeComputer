@@ -1571,10 +1571,35 @@ static void handleSerialTransfer() {
     Serial.printf("TINYGPS_FAILED:%lu\n", (unsigned long)gps.failedChecksum());
     Serial.printf("COMPASS_READY:%d\n", (int)compass.ready);
     Serial.printf("COMPASS_HEADING:%.1f\n", compass.heading);
+    Serial.printf("COMPASS_SAMPLE_AGE_MS:%lu\n", (unsigned long)(compass.lastSample ? (millis() - compass.lastSample) : 999999));
+    Serial.printf("COMPASS_RAW:%d,%d,%d\n", compass.raw[0], compass.raw[1], compass.raw[2]);
     Serial.printf("BUTTONS_OK:%d\n", (int)buttonsOk);
     Serial.printf("CURRENT_SCREEN:%d\n", (int)currentScreen);
     Serial.printf("FREE_HEAP:%lu\n", (unsigned long)ESP.getFreeHeap());
     Serial.printf("FREE_PSRAM:%lu\n", (unsigned long)ESP.getFreePsram());
+    return;
+  }
+  if (line == "CMD:COMPASS_DEBUG") {
+    Serial.printf("COMPASS_READY:%d\n", (int)compass.ready);
+    Serial.printf("COMPASS_CALIBRATED:%d\n", (int)compass.calibrated);
+    Serial.printf("COMPASS_HEADING:%.1f\n", compass.heading);
+    Serial.printf("COMPASS_RAW:%d,%d,%d\n", compass.raw[0], compass.raw[1], compass.raw[2]);
+    uint32_t sampleAge = compass.lastSample ? (millis() - compass.lastSample) : 999999;
+    Serial.printf("COMPASS_SAMPLE_AGE_MS:%lu\n", (unsigned long)sampleAge);
+    bool sysCheckOk = compass.ready && compass.lastSample && (sampleAge < 2000);
+    Serial.printf("SYS_CHECK_OK:%d\n", (int)sysCheckOk);
+    Wire.beginTransmission(0x0D);
+    uint8_t probeErr = Wire.endTransmission();
+    Serial.printf("I2C_PROBE_0x0D_ERR:%u\n", probeErr);
+    Wire.beginTransmission(0x0D);
+    Wire.write(0x06);
+    Wire.endTransmission();
+    if (Wire.requestFrom(uint8_t(0x0D), uint8_t(1)) == 1) {
+      uint8_t st = Wire.read();
+      Serial.printf("REG_0x06_STATUS:0x%02X (DRDY:%d OVL:%d DOR:%d)\n", st, st&1, (st>>1)&1, (st>>2)&1);
+    } else {
+      Serial.println("REG_0x06_READ_FAILED");
+    }
     return;
   }
   if (line == "CMD:GPS_LOG" || line.startsWith("CMD:GPS_LOG")) {
@@ -1829,8 +1854,8 @@ void loop() {
     bool present=externalPresent(0x20);
     if(!present)buttonsOk=false;
     else if(!buttonsOk){buttonsOk=externalPresent(0x20) && buttons.begin_I2C(0x20,&Wire);if(buttonsOk)for(int i=0;i<4;i++)buttons.pinMode(i,INPUT_PULLUP);}
-    if(!externalPresent(0x0D))compass.ready=false;
-    else if(!compass.ready)compass.begin();
+    if(compass.ready && compass.lastSample && millis()-compass.lastSample > 3000) compass.ready=false;
+    else if(!compass.ready && externalPresent(0x0D)) compass.begin();
     if(!touchReady)initQuickTouch();
   }
   if(!bmpOk || runningMode) ride.altM = ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age()<3000 ? gps.altitude.meters() : 0;

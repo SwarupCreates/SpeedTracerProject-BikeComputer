@@ -38,15 +38,15 @@ public:
 
 class GeprcCompass {
   bool write(uint8_t r,uint8_t v){Wire.beginTransmission(0x0D);Wire.write(r);Wire.write(v);return Wire.endTransmission()==0;}
-  bool read(uint8_t r,uint8_t *p,uint8_t n){Wire.beginTransmission(0x0D);Wire.write(r);if(Wire.endTransmission(false))return false;if(Wire.requestFrom(uint8_t(0x0D),n)!=n)return false;for(int i=0;i<n;i++)p[i]=Wire.read();return true;}
+  bool read(uint8_t r,uint8_t *p,uint8_t n){Wire.beginTransmission(0x0D);Wire.write(r);if(Wire.endTransmission()!=0)return false;if(Wire.requestFrom(uint8_t(0x0D),n)!=n)return false;for(int i=0;i<n;i++)p[i]=Wire.read();return true;}
   float offset[2]={0,0},scale[2]={1,1};int16_t mn[2],mx[2];uint32_t sampleMs=0;
 public:
   bool ready=false,calibrated=false,calibrating=false;uint32_t lastSample=0;float heading=0,yawOffset=0,declination=0;int16_t raw[3]{};
-  void begin(){Preferences p;p.begin("qmc",false);calibrated=p.getBool("valid",false);for(int i=0;i<2;i++){String k="o"+String(i);offset[i]=p.getFloat(k.c_str(),0);k="s"+String(i);scale[i]=p.getFloat(k.c_str(),1);}yawOffset=p.getFloat("yaw",0);declination=p.getFloat("decl",0);p.end();ready=write(0x0B,1)&&write(0x09,0x11);}
+  void begin(){Preferences p;p.begin("qmc",false);calibrated=p.getBool("valid",false);for(int i=0;i<2;i++){String k="o"+String(i);offset[i]=p.getFloat(k.c_str(),0);k="s"+String(i);scale[i]=p.getFloat(k.c_str(),1);}yawOffset=p.getFloat("yaw",0);declination=p.getFloat("decl",0);p.end();write(0x0B,0x01);ready=write(0x09,0x1D)||write(0x09,0x11);}
   void start(){calibrating=true;calibrated=false;for(int i=0;i<2;i++){mn[i]=32767;mx[i]=-32768;}}
   bool finish(){for(int i=0;i<2;i++)if(int(mx[i])-mn[i]<200)return false;float radius[2];for(int i=0;i<2;i++){offset[i]=(float(mx[i])+mn[i])/2;radius[i]=(float(mx[i])-mn[i])/2;}for(int i=0;i<2;i++)scale[i]=(radius[0]+radius[1])/(2*radius[i]);calibrating=false;calibrated=true;save();return true;}
   void save(){Preferences p;p.begin("qmc",false);p.putBool("valid",calibrated);for(int i=0;i<2;i++){String k="o"+String(i);p.putFloat(k.c_str(),offset[i]);k="s"+String(i);p.putFloat(k.c_str(),scale[i]);}p.putFloat("yaw",yawOffset);p.putFloat("decl",declination);p.end();}
-  void update(){if(!ready || millis()-sampleMs<100)return;sampleMs=millis();uint8_t st,v[6];if(!read(6,&st,1)||!(st&1))return;if(!read(0,v,6)||(st&2))return;for(int i=0;i<3;i++)raw[i]=int16_t(v[i*2]|uint16_t(v[i*2+1])<<8);lastSample=millis();if(calibrating)for(int i=0;i<2;i++){mn[i]=min(mn[i],raw[i]);mx[i]=max(mx[i],raw[i]);}
+  void update(){if(!ready||millis()-sampleMs<40)return;sampleMs=millis();uint8_t v[6]={};if(!read(0,v,6))return;lastSample=millis();for(int i=0;i<3;i++)raw[i]=int16_t(v[i*2]|uint16_t(v[i*2+1])<<8);if(calibrating)for(int i=0;i<2;i++){mn[i]=min(mn[i],raw[i]);mx[i]=max(mx[i],raw[i]);}
     // GEPRC specifies CW0 flip: x remains forward, y and z are inverted.
     // Assumes module arrow points toward the bicycle front, with antenna upward.
     float x=(raw[0]-offset[0])*scale[0],y=-(raw[1]-offset[1])*scale[1];

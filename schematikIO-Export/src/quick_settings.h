@@ -2296,7 +2296,7 @@ static void drawQuickSettings() {
     }
     if (quickDetail == 5) {
       const char* names[] = {"Touch CST3530", "GPS u-blox M10", "Compass QMC5883L", "BMP390 Baro", "Buttons Expander", "SD Card FAT32"};
-      bool ok[] = {touchReady, gpsDataReady, compass.ready && compass.lastSample && (millis() - compass.lastSample < 2000), bmpOk, buttonsOk, sdOk};
+      bool ok[] = {touchReady, gpsDataReady, compass.ready && (compass.lastSample == 0 || (millis() - compass.lastSample < 3000)), bmpOk, buttonsOk, sdOk};
       for (int i = 0; i < 6; i++) {
         label(14, 76 + i * 27, names[i]);
         label(14, 88 + i * 27, ok[i] ? "READY" : "OFFLINE / NOT FOUND", 1, ok[i] ? 0x2564 : 0xFA08);

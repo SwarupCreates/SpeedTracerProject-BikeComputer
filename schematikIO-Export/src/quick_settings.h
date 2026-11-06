@@ -259,7 +259,7 @@ static void requestRideStart();
 static void drawGlobalNav();
 #include "route_archive.h"
 int archiveScroll=0;
-const int ARCHIVE_MAX_SCROLL=190;
+const int ARCHIVE_MAX_SCROLL=280;
 // Dedicated activity/route library, independent of the general file browser.
 String libraryNames[4],libraryPaths[4],librarySelection,libraryMessage;
 static HomePage prevActivityPage = HOME_APPS;
@@ -378,111 +378,148 @@ static void drawLibrary(){
     }
 
     // Past Activity / Ride History: Full vertically scrollable activity report
-    int topY = 34 - archiveScroll;
+    int topY = 70 - archiveScroll;
 
-    // 1. Header (Title & Completed Date)
+    // Determine Activity Title & sport type
     int slash = librarySelection.lastIndexOf('/');
-    String title = (slash >= 0) ? librarySelection.substring(slash + 1) : librarySelection;
-    title.replace(".fit", ""); title.replace(".gpx", ""); title.replace(".csv", "");
-    title.replace("_", " ");
-    String headTitle = truncateHeading(title, 16);
-    if (topY + 16 >= 28 && topY < 290) {
-      label(10, topY, headTitle, 2, uiFg());
-    }
-    if (topY + 34 >= 28 && topY + 18 < 290) {
-      label(10, topY + 19, completedText, 1, uiMuted());
+    String fn = (slash >= 0) ? librarySelection.substring(slash + 1) : librarySelection;
+    fn.replace(".fit", ""); fn.replace(".gpx", ""); fn.replace(".csv", ""); fn.replace(".json", "");
+    bool isRun = runningMode || fn.indexOf("run") >= 0;
+    String titleStr;
+    if (archiveSummary["title"].is<const char*>() && strlen(archiveSummary["title"].as<const char*>()) > 0) {
+      titleStr = String(archiveSummary["title"].as<const char*>());
+    } else if (fn.startsWith("ride-") || fn.startsWith("run-") || fn.startsWith("activity-") || fn.startsWith("activity_") || fn.length() == 0) {
+      uint32_t ep = archiveSummary["completedEpoch"] | 0;
+      String tod = "Evening";
+      if (ep > 0) {
+        time_t t = (time_t)ep; struct tm l; localtime_r(&t, &l);
+        int h = l.tm_hour;
+        if (h >= 5 && h < 12) tod = "Morning";
+        else if (h >= 12 && h < 17) tod = "Afternoon";
+        else if (h >= 17 && h < 21) tod = "Evening";
+        else tod = "Night";
+      }
+      titleStr = tod + (isRun ? " Run" : " Ride");
+    } else {
+      fn.replace("_", " ");
+      titleStr = truncateHeading(fn, 16);
     }
 
-    // 2. Metrics 2x2 Grid (y = topY + 36)
-    int mY = topY + 36;
-    // Card 1: DISTANCE
-    if (mY + 40 >= 28 && mY < 290) {
-      card(6, mY, 111, 40, uiCard());
-      label(14, mY + 4, "DISTANCE", 1, uiMuted());
-      label(14, mY + 19, String(previewKm, 2) + " km", 1, uiFg());
+    uint32_t sec = archiveSummary["seconds"].is<uint32_t>() ? archiveSummary["seconds"].as<uint32_t>() : (archiveSummary["seconds"].is<float>() ? (uint32_t)archiveSummary["seconds"].as<float>() : 0);
+
+    // --- ROW 1: Square Map (Left) + Stacked Distance & Duration (Right) ---
+    // 1A. Square Map Card (108x104)
+    drawActivitySquareMap(8, topY, 108, 104);
+
+    // 1B. Distance Card (108x48)
+    if (topY + 48 >= 68 && topY < 290) {
+      display.fillRoundRect(124, topY, 108, 48, 10, uiCard());
+      display.drawRoundRect(124, topY, 108, 48, 10, darkTheme ? 0x2945 : 0xD69A);
+      String distStr = (previewKm > 0.001f) ? (String(previewKm, 2) + "KM") : "--KM";
+      centeredLabel(124, topY + 15, 108, distStr, 2, 0xFFFF);
     }
-    // Card 2: TIME / DURATION
-    if (mY + 40 >= 28 && mY < 290) {
-      card(123, mY, 111, 40, uiCard());
-      label(131, mY + 4, "DURATION", 1, uiMuted());
-      uint32_t sec = archiveSummary["seconds"].is<uint32_t>() ? archiveSummary["seconds"].as<uint32_t>() : (archiveSummary["seconds"].is<float>() ? (uint32_t)archiveSummary["seconds"].as<float>() : 0);
+
+    // 1C. Duration Card (108x48)
+    int durY = topY + 56;
+    if (durY + 48 >= 68 && durY < 290) {
+      display.fillRoundRect(124, durY, 108, 48, 10, uiCard());
+      display.drawRoundRect(124, durY, 108, 48, 10, darkTheme ? 0x2945 : 0xD69A);
       String timeStr;
-      if (sec >= 3600) timeStr = String(sec / 3600) + "h " + String((sec % 3600) / 60) + "m";
+      if (sec >= 3600) timeStr = String(sec / 3600) + "hr " + String((sec % 3600) / 60) + "m";
       else if (sec > 0) timeStr = String(sec / 60) + "m " + String(sec % 60) + "s";
       else timeStr = "--";
-      label(131, mY + 19, timeStr, 1, uiFg());
+      centeredLabel(124, durY + 15, 108, timeStr, 2, 0xFFFF);
     }
 
-    // Row 2: SPEED & HR (y = mY + 44)
-    int mY2 = mY + 44;
-    // Card 3: AVG SPEED
-    if (mY2 + 40 >= 28 && mY2 < 290) {
-      card(6, mY2, 111, 40, uiCard());
-      label(14, mY2 + 4, "AVG SPEED", 1, uiMuted());
-      uint32_t sec = archiveSummary["seconds"].is<uint32_t>() ? archiveSummary["seconds"].as<uint32_t>() : 0;
+    // --- ROW 2: Speed (Left) & Heart Rate (Right) ---
+    int row2Y = topY + 112;
+    // 2A. Speed Card (108x68)
+    if (row2Y + 68 >= 68 && row2Y < 290) {
+      display.fillRoundRect(8, row2Y, 108, 68, 10, uiCard());
+      display.drawRoundRect(8, row2Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
+      // Cyan speedometer icon (20x20)
+      drawCustomIcon(display, 8 + (108 - 20) / 2, row2Y + 10, 0x475F, CustomIcon::speedometerIcon, 20, 20);
       float avgSpd = archiveSummary["avgSpeedKmh"].is<float>() ? archiveSummary["avgSpeedKmh"].as<float>() : ((sec > 0) ? (previewKm / (sec / 3600.0f)) : 0);
-      String spdStr = (avgSpd > 0) ? (String(avgSpd, 1) + " km/h") : "--";
-      label(14, mY2 + 19, spdStr, 1, uiFg());
+      String spdStr = (avgSpd > 0) ? (String(avgSpd, 1) + "KMPH") : "--KMPH";
+      centeredLabel(8, row2Y + 38, 108, spdStr, 2, 0xFFFF);
     }
-    // Card 4: AVG HR
-    if (mY2 + 40 >= 28 && mY2 < 290) {
-      card(123, mY2, 111, 40, uiCard());
-      label(131, mY2 + 4, "AVG HR", 1, uiMuted());
+
+    // 2B. Heart Rate Card (108x68)
+    if (row2Y + 68 >= 68 && row2Y < 290) {
+      display.fillRoundRect(124, row2Y, 108, 68, 10, uiCard());
+      display.drawRoundRect(124, row2Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
       float avgHr = archiveSummary["avgHeartRate"].is<float>() ? archiveSummary["avgHeartRate"].as<float>() : 0;
-      String hrStr = (avgHr > 0) ? (String((int)round(avgHr)) + " bpm") : "--";
-      label(131, mY2 + 19, hrStr, 1, uiFg());
+      int hrVal = (int)round(avgHr);
+      int zone = 3;
+      if (hrVal > 0) {
+        if (hrVal < 120) zone = 1;
+        else if (hrVal < 140) zone = 2;
+        else if (hrVal < 160) zone = 3;
+        else if (hrVal < 180) zone = 4;
+        else zone = 5;
+      }
+      // Red heart icon (16x16) + Zone number (size 2)
+      int hrIconX = 124 + (108 - 32) / 2;
+      drawCustomIcon(display, hrIconX, row2Y + 12, 0xF800, CustomIcon::heartRateIcon);
+      label(hrIconX + 20, row2Y + 10, String(zone), 2, 0xFFFF);
+      String hrStr = (hrVal > 0) ? (String(hrVal) + " BPM") : "-- BPM";
+      centeredLabel(124, row2Y + 38, 108, hrStr, 2, 0xFFFF);
     }
 
-    // Row 3: ELEVATION & KCAL (y = mY2 + 44)
-    int mY3 = mY2 + 44;
-    if (mY3 + 24 >= 28 && mY3 < 290) {
-      card(6, mY3, 111, 24, uiCard());
-      centeredLabel(6, mY3 + 6, 111, previewElevation ? (String(previewGain, 0) + " m up") : "Elev --", 1, uiMuted());
-      card(123, mY3, 111, 24, uiCard());
+    // --- ROW 3: Elevation Gain (Left) & Calories (Right) ---
+    int row3Y = topY + 188;
+    // 3A. Elevation Gain Card (108x68)
+    if (row3Y + 68 >= 68 && row3Y < 290) {
+      display.fillRoundRect(8, row3Y, 108, 68, 10, uiCard());
+      display.drawRoundRect(8, row3Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
+      drawCustomIcon(display, 8 + (108 - 16) / 2, row3Y + 12, 0xFDC0, CustomIcon::elevationIcon);
+      String elevStr = previewElevation ? (String((int)previewGain) + "M") : "--M";
+      centeredLabel(8, row3Y + 38, 108, elevStr, 2, 0xFFFF);
+    }
+
+    // 3B. Calories Card (108x68)
+    if (row3Y + 68 >= 68 && row3Y < 290) {
+      display.fillRoundRect(124, row3Y, 108, 68, 10, uiCard());
+      display.drawRoundRect(124, row3Y, 108, 68, 10, darkTheme ? 0x2945 : 0xD69A);
+      drawCustomIcon(display, 124 + (108 - 16) / 2, row3Y + 12, 0xFA80, CustomIcon::caloriesIcon);
       float cal = archiveSummary["caloriesEstimate"].is<float>() ? archiveSummary["caloriesEstimate"].as<float>() : 0;
-      centeredLabel(123, mY3 + 6, 111, (cal > 0) ? (String((int)cal) + " kcal") : "Kcal --", 1, uiMuted());
+      String calStr = (cal > 0) ? (String((int)cal) + " KCAL") : "-- KCAL";
+      centeredLabel(124, row3Y + 38, 108, calStr, 2, 0xFFFF);
     }
 
-    // 3. Route Preview Map Card (y = mY3 + 28, h = 88)
-    int mapY = mY3 + 28;
-    if (mapY + 88 >= 28 && mapY < 290) {
-      previewDraw(mapY, 88, false);
-    }
+    // --- ROW 4: Heart Rate Graph Card (224x82) ---
+    int hrY = topY + 264;
+    drawActivityGraph(8, hrY, 224, 82, 1);
 
-    // 4. Heart Rate Graph Card (y = mapY + 92, h = 76)
-    int hrY = mapY + 92;
-    if (hrY + 76 >= 28 && hrY < 290) {
-      String sub = archiveHrTop > 0 ? ("MAX " + String((int)archiveHrTop) + " BPM") : "BPM";
-      archiveGraph(librarySelection, hrY, 1, "HEART RATE", sub.c_str());
-    }
+    // --- ROW 5: Speed Graph Card (224x82) ---
+    int spdY = topY + 354;
+    drawActivityGraph(8, spdY, 224, 82, 2);
 
-    // 5. Speed Graph Card (y = hrY + 80, h = 76)
-    int spdY = hrY + 80;
-    if (spdY + 76 >= 28 && spdY < 290) {
-      String sub = archiveSpeedTop > 0 ? ("MAX " + String(archiveSpeedTop, 1) + " KM/H") : "KM/H";
-      archiveGraph(librarySelection, spdY, 2, "SPEED", sub.c_str());
-    }
+    // --- ROW 6: Sync to Strava Button (224x48) ---
+    int btnY = topY + 444;
+    drawStravaSyncButton(8, btnY, 224, 48);
 
-    // 6. Footer (y = spdY + 80)
-    int footY = spdY + 80;
-    if (footY + 34 >= 28 && footY < 290) {
-      centeredLabel(6, footY + 8, 228, "-- End of Activity --", 1, uiMuted());
-    }
-
-    // Right edge scrollbar thumb
-    if (ARCHIVE_MAX_SCROLL > 0) {
-      int thumbH = 44;
-      int thumbY = 32 + (archiveScroll * (250 - thumbH) / ARCHIVE_MAX_SCROLL);
-      display.fillRoundRect(237, thumbY, 2, thumbH, 1, uiMuted());
-    }
-
-    // Repaint fixed top status bar and bottom nav
+    // Fixed Top Header & Status Bar (repainted so scrolled cards never overlap)
+    display.fillRect(0, 0, 240, 68, uiBg());
     statusBar(true, false);
+    drawCustomIcon(display, 14, 36, 0xFFFF, isRun ? CustomIcon::runIcon : CustomIcon::bikeIcon, 24, 20);
+    label(44, 34, titleStr, 2, 0xFFFF);
+    label(44, 52, completedText, 1, uiMuted());
+
+    // Fixed Bottom Navigation Bar
+    display.fillRect(0, 290, 240, 30, uiBg());
     drawGlobalNav();
+
+    // Scrollbar on the right edge
+    if (ARCHIVE_MAX_SCROLL > 0) {
+      int thumbH = 40;
+      int thumbY = 70 + (archiveScroll * (216 - thumbH) / ARCHIVE_MAX_SCROLL);
+      display.fillRoundRect(236, thumbY, 3, thumbH, 1, uiMuted());
+    }
     return;
   }
 
-  drawScreenHeader(routes ? "SAVED ROUTES" : "MY ACTIVITIES", routes ? CustomIcon::routeMapIcon : CustomIcon::historyIcon, true);
+    drawScreenHeader(routes ? "SAVED ROUTES" : "MY ACTIVITIES", routes ? CustomIcon::routeMapIcon : CustomIcon::historyIcon, true);
 
   if(!libraryCount){
     card(6,76,228,150,uiCard());
@@ -567,10 +604,9 @@ static void libraryTap(int x,int y){
       return;
     } else {
       // Past Activity / Ride History Details
-      int topY = 34 - archiveScroll;
-      int mY3 = topY + 36 + 44 + 44;
-      int mapY = mY3 + 28;
-      if (x >= 6 && x <= 234 && y >= mapY && y < mapY + 88) {
+      int topY = 70 - archiveScroll;
+      int mapY = topY;
+      if (x >= 8 && x <= 116 && y >= mapY && y < mapY + 104) {
         String gpxPath = companion(librarySelection, ".gpx");
         if (!SD_MMC.exists(gpxPath)) {
           int slash = gpxPath.lastIndexOf('/');

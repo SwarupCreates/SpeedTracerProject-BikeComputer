@@ -231,7 +231,7 @@ static bool readGPX(String path){
       if(tEndSec>0){
         archiveSummary["completedEpoch"]=tEndSec;
         time_t tt=(time_t)tEndSec; struct tm local; localtime_r(&tt,&local);
-        char b[40]; strftime(b,sizeof b,"%d %b %Y %I:%M %p",&local);
+        char b[40]; strftime(b,sizeof b,"%d %b, %Y %I:%M%p",&local);if(b[12]=='0')memmove(b+12,b+13,strlen(b+13)+1);
         completedText=b;
       }
     }
@@ -326,7 +326,7 @@ static void loadArchive(String path){
     else if(SD_MMC.exists("/"+fn)) summary="/"+fn;
   }
   File f=SD_MMC.open(summary,FILE_READ);
-  if(f){deserializeJson(archiveSummary,f);f.close();time_t t=archiveSummary["completedEpoch"]|0;if(t){struct tm local;localtime_r(&t,&local);char b[40];strftime(b,sizeof b,"%d %b %Y %I:%M %p",&local);completedText=b;}}
+  if(f){deserializeJson(archiveSummary,f);f.close();time_t t=archiveSummary["completedEpoch"]|0;if(t){struct tm local;localtime_r(&t,&local);char b[40];strftime(b,sizeof b,"%d %b, %Y %I:%M%p",&local);if(b[12]=='0')memmove(b+12,b+13,strlen(b+13)+1);completedText=b;}}
   
   String gpxP=companion(path,".gpx");
   if(!SD_MMC.exists(gpxP)){
@@ -844,4 +844,182 @@ static void archiveGraph(String path,int y,int col,const char* title,const char*
     }
     prev=yy;
   }
+}
+
+
+static void drawActivitySquareMap(int x, int y, int w, int h) {
+  if (y + h <= 68 || y >= 290) return;
+  display.fillRoundRect(x, y, w, h, 10, uiCard());
+  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+
+  if (previewLen < 2) {
+    drawCustomIcon(display, x + 6, y + 6, 0xFFFF, CustomIcon::routeMapIcon);
+    centeredLabel(x, y + h / 2 - 4, w, "No GPX", 1, uiMuted());
+    return;
+  }
+
+  double minA = preview[0].lat, maxA = minA, minB = preview[0].lon, maxB = minB;
+  for (int i = 1; i < previewLen; i++) {
+    minA = min(minA, preview[i].lat);
+    maxA = max(maxA, preview[i].lat);
+    minB = min(minB, preview[i].lon);
+    maxB = max(maxB, preview[i].lon);
+  }
+  double centerLat = (minA + maxA) / 2.0;
+  double centerLon = (minB + maxB) / 2.0;
+  double co = cos(radians(centerLat));
+  double spanLonM = max(0.000001, (maxB - minB) * co * 111320.0);
+  double spanLatM = max(0.000001, (maxA - minA) * 111320.0);
+  double pad = 24.0;
+  double scale = min((w - pad) / spanLonM, (h - pad) / spanLatM);
+  int cardCenterX = x + w / 2;
+  int cardCenterY = y + h / 2;
+
+  const int clipX1 = x + 3;
+  const int clipY1 = max(68, y + 3);
+  const int clipX2 = x + w - 4;
+  const int clipY2 = min(289, y + h - 4);
+
+  auto clipLine = [&](int x0, int y0, int x1, int y1, uint16_t color, int width) {
+    if ((x0 < clipX1 && x1 < clipX1) || (x0 > clipX2 && x1 > clipX2) ||
+        (y0 < clipY1 && y1 < clipY1) || (y0 > clipY2 && y1 > clipY2)) return;
+    auto getCode = [&](int px, int py) -> uint8_t {
+      uint8_t c = 0;
+      if (px < clipX1) c |= 1; else if (px > clipX2) c |= 2;
+      if (py < clipY1) c |= 4; else if (py > clipY2) c |= 8;
+      return c;
+    };
+    uint8_t c0 = getCode(x0, y0), c1 = getCode(x1, y1);
+    while (true) {
+      if (!(c0 | c1)) {
+        if (width <= 1) display.drawLine(x0, y0, x1, y1, color);
+        else {
+          int dx = abs(x1 - x0), dy = abs(y1 - y0), hw = width / 2;
+          if (dx >= dy) {
+            for (int k = -hw; k <= width - 1 - hw; k++) display.drawLine(x0, y0 + k, x1, y1 + k, color);
+          } else {
+            for (int k = -hw; k <= width - 1 - hw; k++) display.drawLine(x0 + k, y0, x1 + k, y1, color);
+          }
+        }
+        return;
+      } else if (c0 & c1) return;
+      else {
+        int nx, ny;
+        uint8_t cOut = c0 ? c0 : c1;
+        if (cOut & 8) { nx = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY2 - y0) / (y1 - y0))) : x0; ny = clipY2; }
+        else if (cOut & 4) { nx = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0))) : x0; ny = clipY1; }
+        else if (cOut & 2) { ny = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0; nx = clipX2; }
+        else { ny = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0; nx = clipX1; }
+        if (cOut == c0) { x0 = nx; y0 = ny; c0 = getCode(x0, y0); }
+        else { x1 = nx; y1 = ny; c1 = getCode(x1, y1); }
+      }
+    }
+  };
+
+  const uint16_t routeOrange = 0xFA40; // Vibrant Strava Orange
+  for (int i = 1; i < previewLen; i++) {
+    int sx0 = cardCenterX + (int)lround((preview[i - 1].lon - centerLon) * co * 111320.0 * scale);
+    int sy0 = cardCenterY - (int)lround((preview[i - 1].lat - centerLat) * 111320.0 * scale);
+    int sx1 = cardCenterX + (int)lround((preview[i].lon - centerLon) * co * 111320.0 * scale);
+    int sy1 = cardCenterY - (int)lround((preview[i].lat - centerLat) * 111320.0 * scale);
+    clipLine(sx0, sy0, sx1, sy1, routeOrange, 3);
+  }
+
+  // Floating map icon at top-left
+  drawCustomIcon(display, x + 6, y + 6, 0xFFFF, CustomIcon::routeMapIcon);
+  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+}
+
+static void drawActivityGraph(int x, int y, int w, int h, int col) {
+  if (y + h <= 68 || y >= 290) return;
+  display.fillRoundRect(x, y, w, h, 10, uiCard());
+  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+
+  float *vals = (col == 1 ? archiveHrValues : archiveSpeedValues);
+  float top = (col == 1 ? archiveHrTop : archiveSpeedTop);
+
+  // Header: Icon on left, max metric on right
+  if (col == 1) {
+    drawCustomIcon(display, x + 10, y + 8, 0xF800, CustomIcon::heartRateIcon);
+    String metricStr = (top > 0) ? (String((int)top) + " BPM") : "-- BPM";
+    int tw = textWidth(metricStr, 2);
+    label(x + w - 10 - tw, y + 8, metricStr, 2, 0xFFFF);
+  } else {
+    drawCustomIcon(display, x + 10, y + 8, 0x475F, CustomIcon::speedometerIcon, 20, 20);
+    String metricStr = (top > 0) ? (String(top, 1) + " KMPH") : "-- KMPH";
+    int tw = textWidth(metricStr, 2);
+    label(x + w - 10 - tw, y + 8, metricStr, 2, 0xFFFF);
+  }
+
+  if (!archiveCsvLoaded || top <= 0) {
+    centeredLabel(x, y + h / 2 + 6, w, col == 1 ? "No heart rate data" : "No speed data", 1, uiMuted());
+    return;
+  }
+
+  const uint16_t fillColor   = (col == 1 ? 0x58E4 : 0x1229); // HR burgundy #5C1D24, Speed deep teal #16464D
+  const uint16_t lineColor   = (col == 1 ? 0x8926 : 0x1B2E);
+  const uint16_t peakDotCol  = (col == 1 ? 0xF800 : 0x475F);
+
+  const int Y_base = y + h - 5;
+  const int Y_top = y + 32;
+  const int H_graph = Y_base - Y_top;
+  const int clipY1 = max(68, y + 3);
+  const int clipY2 = min(289, Y_base);
+
+  int peakI = -1;
+  float peakVal = -1.0f;
+  int polyX[100];
+  int polyY[100];
+
+  for (int i = 0; i < 100; i++) {
+    polyX[i] = x + 10 + (int)(i * 2.04f);
+    float v = vals[i];
+    if (isfinite(v) && v > 0) {
+      if (v > peakVal) { peakVal = v; peakI = i; }
+      polyY[i] = Y_base - constrain((int)(v * H_graph / max(1.0f, top)), 1, H_graph);
+    } else {
+      polyY[i] = Y_base;
+    }
+  }
+
+  for (int i = 0; i < 99; i++) {
+    int x0 = polyX[i];
+    int x1 = polyX[i + 1];
+    int y0 = polyY[i];
+    int y1 = polyY[i + 1];
+    for (int xi = x0; xi < x1; xi++) {
+      if (xi >= x + 4 && xi <= x + w - 4) {
+        int yi = y0 + (y1 - y0) * (xi - x0) / max(1, x1 - x0);
+        int vy0 = constrain(yi, clipY1, clipY2);
+        int vy1 = constrain(Y_base, clipY1, clipY2);
+        if (vy1 > vy0) {
+          display.drawFastVLine(xi, vy0, vy1 - vy0, fillColor);
+        }
+      }
+    }
+    if (x0 >= x + 4 && x1 <= x + w - 4 && y0 >= clipY1 && y0 <= clipY2 && y1 >= clipY1 && y1 <= clipY2) {
+      display.drawLine(x0, y0, x1, y1, lineColor);
+    }
+  }
+
+  // Peak Crest Dot with tile color coding
+  if (peakI >= 0 && peakVal > 0) {
+    int px = polyX[peakI];
+    int py = polyY[peakI];
+    if (px >= x + 6 && px <= x + w - 6 && py >= clipY1 + 3 && py <= clipY2 - 3) {
+      display.fillCircle(px, py, 3, peakDotCol);
+    }
+  }
+
+  display.drawRoundRect(x, y, w, h, 10, darkTheme ? 0x2945 : 0xD69A);
+}
+
+static void drawStravaSyncButton(int x, int y, int w, int h) {
+  if (y + h <= 68 || y >= 290) return;
+  const uint16_t stravaOrange = 0xFA80; // Vibrant Strava #FC5200
+  display.fillRoundRect(x, y, w, h, 10, stravaOrange);
+  // White Strava Logo
+  drawCustomIcon(display, x + 24, y + (h - 24) / 2, 0xFFFF, CustomIcon::stravaIcon, 16, 24);
+  // White text "Sync to Strava"
+  label(x + 50, y + (h - 18) / 2, "Sync to Strava", 2, 0xFFFF);
 }

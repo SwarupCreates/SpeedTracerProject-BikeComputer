@@ -476,17 +476,17 @@ static void drawLibrary(){
     return;
   }
 
-  drawScreenHeader(routes ? "SAVED ROUTES" : (homePage == HOME_RIDES ? "RIDE HISTORY" : "PAST ACTIVITY"), routes ? CustomIcon::routeMapIcon : CustomIcon::historyIcon, true);
+  drawScreenHeader(routes ? "SAVED ROUTES" : "MY ACTIVITIES", routes ? CustomIcon::routeMapIcon : CustomIcon::historyIcon, true);
 
   if(!libraryCount){
     card(6,76,228,150,uiCard());
-    drawCustomIcon(display,108,105,uiMuted(),routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
+    drawCustomIcon(display,108,105,uiMuted(),routes?CustomIcon::routeMapIcon:CustomIcon::historyIcon);
     centeredLabel(6,140,228,libraryMessage.length()?libraryMessage:routes?"No saved routes":"No saved activities",1,uiMuted());
     centeredLabel(6,168,228,routes?"Add routes to SD /routes":"Finish and save an activity",1,uiMuted());
   }
   for(int i=0;i<libraryCount;i++){
     int y=68+i*44;card(6,y,228,40,uiCard());
-    drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:homePage==HOME_RIDES?CustomIcon::historyIcon:CustomIcon::runIcon);
+    drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:CustomIcon::historyIcon);
     String title=libraryNames[i];title.replace(".fit","");title.replace(".json","");title.replace(".gpx","");
     label(38,y+5,fitBrowserText(title,184),1);
     label(38,y+23,routes?"Route - tap to view":libraryNames[i].startsWith("run-")?"Run - tap to view":"Ride - tap to view",1,uiMuted());
@@ -1276,8 +1276,8 @@ static void drawHomeSubpage(){
   if(homePage==HOME_APPS){
     drawScreenHeader("ALL APPS", CustomIcon::allAppsIcon, false);
     if (appsPage == 0) {
-      const char* names[]={"MAPS","COMPASS","PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS"};
-      CustomIcon icons[]={CustomIcon::mapAppIcon,CustomIcon::compassIcon,CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon};
+      const char* names[]={"MAPS","COMPASS","MY ACTIVITIES","SAVED ROUTES","SETTINGS","ACTIVITY"};
+      CustomIcon icons[]={CustomIcon::mapAppIcon,CustomIcon::compassIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::configureIcon};
       const int btnW = 108, btnH = 64;
       for(int i = 0; i < 6; i++){
         int col = i % 2, row = i / 2;
@@ -1292,10 +1292,10 @@ static void drawHomeSubpage(){
       display.fillCircle(114, 282, 3, uiFg());
       display.drawCircle(126, 282, 3, uiMuted());
     } else {
-      const char* names[]={"MY FILES","ACTIVITY"};
-      CustomIcon icons[]={CustomIcon::folderIcon,CustomIcon::configureIcon};
+      const char* names[]={"MY FILES"};
+      CustomIcon icons[]={CustomIcon::folderIcon};
       const int btnW = 108, btnH = 64;
-      for(int i = 0; i < 2; i++){
+      for(int i = 0; i < 1; i++){
         int col = i % 2, row = i / 2;
         int x = 8 + col * (btnW + 8);
         int y = 70 + row * (btnH + 8);
@@ -1870,12 +1870,11 @@ static void quickTap(int x, int y) {
         }
         else if(tile==1){homePage=HOME_COMPASS;uiRevision++;}
         else if(tile==2)openLibrary(HOME_ACTIVITY);
-        else if(tile==3)openLibrary(HOME_RIDES);
-        else if(tile==4)openLibrary(HOME_ROUTES);
-        else if(tile==5){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;settingsScroll=0;uiRevision++;}
+        else if(tile==3)openLibrary(HOME_ROUTES);
+        else if(tile==4){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;settingsScroll=0;uiRevision++;}
+        else if(tile==5){homePage=HOME_ACTIVITY_SETTINGS;uiRevision++;}
       } else {
         if(tile==0)openBrowser("/");
-        else if(tile==1){homePage=HOME_ACTIVITY_SETTINGS;uiRevision++;}
       }
       return;
     }

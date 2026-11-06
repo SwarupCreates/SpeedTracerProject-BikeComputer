@@ -940,15 +940,16 @@ static void drawActivityGraph(int x, int y, int w, int h, int col) {
 
   // Header: Icon on left (square 20x20), max metric on right (size 2), center aligned vertically with each other
   if (col == 1) {
-    drawCustomIcon(display, x + 10, y + 8, 0xF800, CustomIcon::heartRateIcon, 20, 20);
+    drawCustomIcon(display, x + 10, y + 8, 0xF800, CustomIcon::heartRateIcon, 24, 24);
     String metricStr = (top > 0) ? (String((int)top) + " BPM") : "-- BPM";
     int tw = textWidth(metricStr, 2);
-    label(x + w - 10 - tw, y + 10, metricStr, 2, uiFg());
+    label(x + w - 10 - tw, y + 11, metricStr, 2, uiFg());
   } else {
-    drawCustomIcon(display, x + 10, y + 8, 0x475F, CustomIcon::speedometerIcon, 20, 20);
+    const uint16_t speedCol = darkTheme ? 0x475F : 0x03D4; // High-contrast deep cyan in light theme, neon cyan in dark theme
+    drawCustomIcon(display, x + 10, y + 8, speedCol, CustomIcon::speedometerIcon, 24, 24);
     String metricStr = (top > 0) ? (String(top, 1) + " KMPH") : "-- KMPH";
     int tw = textWidth(metricStr, 2);
-    label(x + w - 10 - tw, y + 10, metricStr, 2, uiFg());
+    label(x + w - 10 - tw, y + 11, metricStr, 2, uiFg());
   }
 
   if (!archiveCsvLoaded || top <= 0) {
@@ -958,7 +959,7 @@ static void drawActivityGraph(int x, int y, int w, int h, int col) {
 
   const uint16_t fillColor   = (col == 1 ? (darkTheme ? 0x58E4 : 0xFCCF) : (darkTheme ? 0x1229 : 0xCFBF)); // HR burgundy / rose, Speed deep teal / soft sea
   const uint16_t lineColor   = (col == 1 ? (darkTheme ? 0x8926 : 0xE8A6) : (darkTheme ? 0x1B2E : 0x2475));
-  const uint16_t peakDotCol  = (col == 1 ? 0xF800 : 0x475F);
+  const uint16_t peakDotCol  = (col == 1 ? 0xF800 : (darkTheme ? 0x475F : 0x03D4));
 
   const int Y_base = y + h - 5;
   const int Y_top = y + 32;

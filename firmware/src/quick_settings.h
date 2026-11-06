@@ -431,18 +431,18 @@ static void drawLibrary(){
 
     // --- ROW 2: Speed (Left) & Heart Rate (Right) ---
     int row2Y = topY + 112;
-    // 2A. Speed Card (108x68)
+    // 2A. Speed Card (108x68) - Exact uniform 24x24 icon size
     if (row2Y + 68 >= 68 && row2Y < 290) {
       display.fillRoundRect(8, row2Y, 108, 68, 10, uiCard());
       if (!darkTheme) display.drawRoundRect(8, row2Y, 108, 68, 10, 0xD69A);
-      // Cyan speedometer icon: Square 32x32 per user spec
-      drawCustomIcon(display, 8 + (108 - 32) / 2, row2Y + 8, 0x475F, CustomIcon::speedometerIcon, 32, 32);
+      const uint16_t speedCol = darkTheme ? 0x475F : 0x03D4; // High-contrast deep cyan in light theme, neon cyan in dark theme
+      drawCustomIcon(display, 8 + (108 - 24) / 2, row2Y + 9, speedCol, CustomIcon::speedometerIcon, 24, 24);
       float avgSpd = archiveSummary["avgSpeedKmh"].is<float>() ? archiveSummary["avgSpeedKmh"].as<float>() : ((sec > 0) ? (previewKm / (sec / 3600.0f)) : 0);
       String spdStr = (avgSpd > 0) ? (String(avgSpd, 1) + "KMPH") : "--KMPH";
       centeredLabel(8, row2Y + 44, 108, spdStr, 2, uiFg());
     }
 
-    // 2B. Heart Rate Card (108x68)
+    // 2B. Heart Rate Card (108x68) - Exact uniform 24x24 icon size
     if (row2Y + 68 >= 68 && row2Y < 290) {
       display.fillRoundRect(124, row2Y, 108, 68, 10, uiCard());
       if (!darkTheme) display.drawRoundRect(124, row2Y, 108, 68, 10, 0xD69A);
@@ -456,33 +456,33 @@ static void drawLibrary(){
         else if (hrVal < 180) zone = 4;
         else zone = 5;
       }
-      // Red heart icon (square 20x20) + Zone number (size 2), center aligned with each other
+      // Red heart icon (uniform 24x24) + Zone number (size 2), center aligned together
       String zoneStr = String(zone);
       int zw = textWidth(zoneStr, 2);
-      int totalTopW = 20 + 6 + zw;
+      int totalTopW = 24 + 6 + zw;
       int hrStartX = 124 + (108 - totalTopW) / 2;
-      drawCustomIcon(display, hrStartX, row2Y + 10, 0xF800, CustomIcon::heartRateIcon, 20, 20);
-      label(hrStartX + 20 + 6, row2Y + 12, zoneStr, 2, uiFg());
+      drawCustomIcon(display, hrStartX, row2Y + 9, 0xF800, CustomIcon::heartRateIcon, 24, 24);
+      label(hrStartX + 24 + 6, row2Y + 12, zoneStr, 2, uiFg());
       String hrStr = (hrVal > 0) ? (String(hrVal) + " BPM") : "-- BPM";
       centeredLabel(124, row2Y + 44, 108, hrStr, 2, uiFg());
     }
 
     // --- ROW 3: Elevation Gain (Left) & Calories (Right) ---
     int row3Y = topY + 188;
-    // 3A. Elevation Gain Card (108x68)
+    // 3A. Elevation Gain Card (108x68) - Exact uniform 24x24 icon size
     if (row3Y + 68 >= 68 && row3Y < 290) {
       display.fillRoundRect(8, row3Y, 108, 68, 10, uiCard());
       if (!darkTheme) display.drawRoundRect(8, row3Y, 108, 68, 10, 0xD69A);
-      drawCustomIcon(display, 8 + (108 - 24) / 2, row3Y + 10, 0xFDC0, CustomIcon::elevationIcon, 24, 24);
+      drawCustomIcon(display, 8 + (108 - 24) / 2, row3Y + 9, 0xFDC0, CustomIcon::elevationIcon, 24, 24);
       String elevStr = previewElevation ? (String((int)previewGain) + "M") : "--M";
       centeredLabel(8, row3Y + 44, 108, elevStr, 2, uiFg());
     }
 
-    // 3B. Calories Card (108x68)
+    // 3B. Calories Card (108x68) - Exact uniform 24x24 icon size
     if (row3Y + 68 >= 68 && row3Y < 290) {
       display.fillRoundRect(124, row3Y, 108, 68, 10, uiCard());
       if (!darkTheme) display.drawRoundRect(124, row3Y, 108, 68, 10, 0xD69A);
-      drawCustomIcon(display, 124 + (108 - 24) / 2, row3Y + 10, 0xFA80, CustomIcon::caloriesIcon, 24, 24);
+      drawCustomIcon(display, 124 + (108 - 24) / 2, row3Y + 9, 0xFA80, CustomIcon::caloriesIcon, 24, 24);
       float cal = archiveSummary["caloriesEstimate"].is<float>() ? archiveSummary["caloriesEstimate"].as<float>() : 0;
       String calStr = (cal > 0) ? (String((int)cal) + " KCAL") : "-- KCAL";
       centeredLabel(124, row3Y + 44, 108, calStr, 2, uiFg());

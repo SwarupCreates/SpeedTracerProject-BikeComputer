@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-enum class CustomIcon { bikeIcon,bluetoothConnectedIcon,bluetoothDisconnectedIcon,caloriesIcon,configureIcon,elevationIcon,heartRateIcon,powerIcon,routeMapIcon,runIcon,satelliteIcon,systemIcon,themeSwitcherIcon,wifiConnectedIcon,wifiDisconnectedIcon,GoBackIcon,HomeIcon,allAppsIcon,brightnessIcon,downArrowIcon,folderIcon,goNextIcon,refreshIcon,sdCardIcon,bikeIconLarge,goNextIconLarge,runIconLarge,historyIcon,satelliteIconLarge, caloryGoalAchievedIcon, directionIcon, fontIcon, hotSpotIcon, languageIcon, locationPinIcon, lockIcon, uploadIcon, warningIcon, lockIconLarge };
+enum class CustomIcon { bikeIcon,bluetoothConnectedIcon,bluetoothDisconnectedIcon,caloriesIcon,configureIcon,elevationIcon,heartRateIcon,powerIcon,routeMapIcon,runIcon,satelliteIcon,systemIcon,themeSwitcherIcon,wifiConnectedIcon,wifiDisconnectedIcon,GoBackIcon,HomeIcon,allAppsIcon,brightnessIcon,downArrowIcon,folderIcon,goNextIcon,refreshIcon,sdCardIcon,bikeIconLarge,goNextIconLarge,runIconLarge,historyIcon,satelliteIconLarge, caloryGoalAchievedIcon, directionIcon, fontIcon, hotSpotIcon, languageIcon, locationPinIcon, lockIcon, uploadIcon, warningIcon, lockIconLarge, compassIcon, mapAppIcon };
 static const uint8_t bikeIconMask[256] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,100,163,16,0,0,0,0,0,0,0,0,0,0,0,0,0,239,255,88,0,0,0,0,0,0,0,0,0,0,0,84,100,92,143,12,0,0,0,0,0,0,0,0,0,0,112,255,255,143,0,0,0,0,0,0,0,0,0,0,0,112,255,255,120,195,163,24,0,0,0,0,0,0,0,0,12,255,255,112,0,12,155,243,112,0,0,0,0,0,0,0,0,139,255,143,0,0,0,8,16,0,0,0,0,36,163,191,151,32,96,247,88,0,32,151,191,163,36,0,32,235,116,64,124,227,20,131,128,20,227,124,64,116,235,32,139,131,0,0,0,155,120,128,128,120,155,0,0,0,131,139,159,96,0,0,0,104,151,128,128,151,104,0,0,0,96,159,108,183,0,0,4,195,92,64,64,92,195,4,0,0,183,108,8,191,199,139,207,171,4,0,0,4,171,207,139,199,191,8,0,4,76,124,72,0,0,0,0,0,0,72,124,76,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static const uint8_t bluetoothConnectedIconMask[256] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,48,24,0,0,0,0,0,0,0,0,0,0,0,0,0,0,128,215,24,0,0,0,0,0,0,0,0,0,4,44,0,0,128,215,215,24,0,0,0,0,0,0,0,0,44,231,60,0,128,128,112,215,24,0,0,0,0,0,0,0,0,60,231,60,128,128,60,235,56,0,0,0,0,0,0,0,0,0,60,231,183,183,231,60,0,0,0,0,0,0,0,40,187,28,0,60,243,243,60,0,28,187,40,0,0,0,0,40,187,28,0,60,243,243,60,0,28,187,40,0,0,0,0,0,0,0,60,231,183,183,231,60,0,0,0,0,0,0,0,0,0,60,231,60,128,128,60,235,56,0,0,0,0,0,0,0,44,231,60,0,128,128,112,215,24,0,0,0,0,0,0,0,4,44,0,0,128,215,215,24,0,0,0,0,0,0,0,0,0,0,0,0,128,215,24,0,0,0,0,0,0,0,0,0,0,0,0,0,48,24,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static const uint8_t bluetoothDisconnectedIconMask[256] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,48,24,0,0,0,0,0,0,0,0,68,167,4,0,0,0,128,215,24,0,0,0,0,0,0,0,12,195,171,4,0,0,128,215,215,24,0,0,0,0,0,0,0,12,195,171,4,0,128,128,112,215,24,0,0,0,0,0,0,0,12,195,171,4,104,128,60,235,56,0,0,0,0,0,0,0,0,12,195,171,4,76,231,60,0,0,0,0,0,0,0,0,0,0,12,195,171,4,36,0,0,0,0,0,0,0,0,0,0,0,0,72,255,171,4,0,0,0,0,0,0,0,0,0,0,0,60,231,183,251,171,4,0,0,0,0,0,0,0,0,0,60,231,60,128,139,195,171,4,0,0,0,0,0,0,0,44,231,60,0,128,128,120,251,171,4,0,0,0,0,0,0,4,44,0,0,128,215,215,36,195,171,4,0,0,0,0,0,0,0,0,0,128,215,24,0,12,195,171,4,0,0,0,0,0,0,0,0,48,24,0,0,0,12,171,32,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -159,6 +159,44 @@ static const uint8_t lockIconLargeMask[576] = {
 0,0,0,0,0,1,3,3,3,3,3,3,3,3,3,3,3,3,1,0,0,0,0,0,
 };
 
-static const uint8_t *const customMasks[] = {bikeIconMask,bluetoothConnectedIconMask,bluetoothDisconnectedIconMask,caloriesIconMask,configureIconMask,elevationIconMask,heartRateIconMask,powerIconMask,routeMapIconMask,runIconMask,satelliteIconMask,systemIconMask,themeSwitcherIconMask,wifiConnectedIconMask,wifiDisconnectedIconMask,GoBackIconMask,HomeIconMask,allAppsIconMask,brightnessIconMask,downArrowIconMask,folderIconMask,goNextIconMask,refreshIconMask,sdCardIconMask,bikeIconLargeMask,goNextIconLargeMask,runIconLargeMask,historyIconMask,satelliteIconLargeMask, caloryGoalAchievedIconMask, directionIconMask, fontIconMask, hotSpotIconMask, languageIconMask, locationPinIconMask, lockIconMask, uploadIconMask, warningIconMask, lockIconLargeMask};
-static const uint8_t customWidths[] = {16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,17,16,16,16,24,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24};
-static const uint8_t customHeights[] = {16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,17,16,16,16,8,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24};
+static const uint8_t compassIconMask[256] = {
+  0,   0,   0,   0,   3,   1,   0,   0,   0,   0,   1,   3,   0,   0,   0,   0,
+  0,   0,   0,   3,   0,   0,  40,  74,  74,  40,   0,   0,   3,   0,   0,   0,
+  0,   0,   3,   0,  71, 196, 253, 255, 255, 252, 195,  69,   0,   3,   0,   0,
+  0,   2,   0, 109, 255, 255, 255, 252, 251, 251, 255, 255, 110,   0,   2,   0,
+  3,   0,  66, 255, 252, 252, 252, 254, 255, 255, 255, 252, 255,  67,   0,   3,
+  2,   1, 202, 254, 252, 255, 255, 255, 223, 148, 144, 252, 255, 202,   1,   2,
+  0,  40, 253, 254, 252, 254, 176,  49,   2,   0, 142, 255, 251, 253,  39,   0,
+  0,  75, 255, 252, 253, 255,  40, 146, 168,   9, 227, 255, 250, 255,  75,   0,
+  0,  75, 255, 250, 255, 227,   9, 169, 147,  40, 255, 253, 252, 255,  75,   0,
+  0,  41, 254, 251, 255, 142,   0,   2,  48, 176, 254, 252, 254, 253,  40,   0,
+  2,   1, 203, 255, 252, 144, 148, 223, 255, 255, 255, 252, 255, 201,   1,   2,
+  3,   0,  66, 255, 252, 255, 255, 255, 254, 252, 252, 253, 255,  67,   0,   3,
+  0,   3,   0, 109, 255, 255, 251, 251, 252, 255, 255, 255, 109,   0,   2,   0,
+  0,   0,   3,   0,  71, 196, 254, 255, 255, 253, 197,  69,   0,   3,   0,   0,
+  0,   0,   0,   3,   0,   0,  42,  75,  74,  40,   0,   0,   3,   0,   0,   0,
+  0,   0,   0,   0,   3,   1,   0,   0,   0,   0,   1,   3,   0,   0,   0,   0,
+};
+
+static const uint8_t mapAppIconMask[256] = {
+  0,   0,   0,   0,   3,   1,   0,   0,   0,   0,   0,   3,   0,   0,   0,   0,
+  0,   0,   0,   3,   0,   0,  41,  74,  75,  41,   0,   0,   3,   0,   0,   0,
+  0,   0,   3,   0,  70, 196, 253, 255, 255, 251, 208,  77,   0,   3,   0,   0,
+  0,   3,   0, 109, 255, 255, 255, 255, 255, 236, 100, 234, 120,   0,   2,   0,
+  3,   0,  67, 255, 252, 248, 251, 195, 167,  84,   0,  33, 243,  73,   0,   3,
+  2,   1, 202, 253, 251, 255, 255,  81,   0,   0,   7,   0,  88, 223,   3,   2,
+  0,  40, 249, 255, 253, 194, 161,  36,   0,   1,   1,   5,   4, 195,  47,   0,
+  0,  92, 184, 109, 255,  83,   1,  15,  17,  16,   0,   0,   0,   0,   5,   0,
+  0,  91, 190,   0, 130, 254, 239, 238, 238,  61,  10, 145, 209, 152,  17,   1,
+  0,  47, 221,   7,   0, 132, 255, 255, 206,   0, 162, 255, 207, 255, 177,   1,
+  2,   1, 212,  90,   0,  12, 243, 255, 153,   2, 248, 182,   0, 157, 254,  10,
+  3,   0,  73, 243,  33,   0, 146, 250, 181,   0, 192, 239, 125, 229, 205,   1,
+  0,   3,   0, 118, 233,  92,   0, 169, 249,  34,  37, 245, 255, 249,  55,   0,
+  0,   0,   3,   0,  76, 206, 213, 239, 255, 211,   6,  58, 240,  75,   0,   3,
+  0,   0,   0,   3,   0,   0,  49,  80,  74,  46,   7,   0,  39,   0,   2,   0,
+  0,   0,   0,   0,   3,   0,   0,   0,   0,   0,   0,   2,   0,   1,   0,   0,
+};
+
+static const uint8_t *const customMasks[] = {bikeIconMask,bluetoothConnectedIconMask,bluetoothDisconnectedIconMask,caloriesIconMask,configureIconMask,elevationIconMask,heartRateIconMask,powerIconMask,routeMapIconMask,runIconMask,satelliteIconMask,systemIconMask,themeSwitcherIconMask,wifiConnectedIconMask,wifiDisconnectedIconMask,GoBackIconMask,HomeIconMask,allAppsIconMask,brightnessIconMask,downArrowIconMask,folderIconMask,goNextIconMask,refreshIconMask,sdCardIconMask,bikeIconLargeMask,goNextIconLargeMask,runIconLargeMask,historyIconMask,satelliteIconLargeMask, caloryGoalAchievedIconMask, directionIconMask, fontIconMask, hotSpotIconMask, languageIconMask, locationPinIconMask, lockIconMask, uploadIconMask, warningIconMask, lockIconLargeMask, compassIconMask, mapAppIconMask};
+static const uint8_t customWidths[] = {16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,17,16,16,16,24,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24, 16, 16};
+static const uint8_t customHeights[] = {16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,17,16,16,16,8,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24, 16, 16};

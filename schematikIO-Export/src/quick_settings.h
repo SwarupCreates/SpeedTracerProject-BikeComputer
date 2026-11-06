@@ -21,8 +21,15 @@ bool gpsRadarInspector=false;
 int gpsScroll=0;
 int settingsScroll=0;
 // Home subpages stay independent of dashboard navigation and touch calibration.
-enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS };
+enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH };
 HomePage homePage=HOME_MAIN;
+static int appsPage = 0;
+static double mapViewerLat = 22.594637;
+static double mapViewerLon = 88.425853;
+static int mapViewerZoom = 2; // 1..4
+static String mapSearchLat = "22.5946";
+static String mapSearchLon = "88.4258";
+static int mapSearchField = 0; // 0 for LAT, 1 for LON
 String browserPath="/", browserError, selectedFile;
 String browserNames[4];
 bool browserDirs[4];
@@ -605,6 +612,7 @@ static bool globalHasNext(){
   if(!welcomeOpen) return true;
   if(quickOpen || shutdownDialog || countdownStart)return false;
   if(homePage==HOME_FILES && fileDetailOpen)return false;
+  if(homePage==HOME_APPS) return (appsPage == 0);
   if(isLibrary()){
     if(homePage==HOME_ROUTES && librarySelection.length()) return false;
     return librarySelection.length()?true:libraryMore;
@@ -613,6 +621,11 @@ static bool globalHasNext(){
 }
 static void globalNext(){
   if(!globalHasNext())return;
+  if(homePage==HOME_APPS && appsPage == 0){
+    appsPage = 1;
+    uiRevision++;
+    return;
+  }
   if(gpsWaiting){
     gpsWaiting = false;
     countdownStart = millis();
@@ -659,7 +672,7 @@ static void globalHome(){
   activityEndConfirm=false;
   fileDetailOpen=false;fileDeleteConfirm=false;
   shutdownDialog=false;gpsWaiting=false;gpsRadarInspector=false;countdownStart=0;
-  quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;
+  quickOpen=false;quickDetail=0;welcomeOpen=true;homePage=HOME_MAIN;appsPage=0;
   settingsPage=SET_MAIN;settingsScroll=0;settingChangePin=false;settingFormatConfirm=false;pinInput="";
   uiRevision++;
 }
@@ -672,6 +685,19 @@ static void globalBack(){
   else if(welcomeOpen){
     if(homePage == HOME_ACTIVITY_SETTINGS) {
       homePage = HOME_APPS;
+    }
+    else if(homePage == HOME_COMPASS || homePage == HOME_MAPS) {
+      homePage = HOME_APPS;
+    }
+    else if(homePage == HOME_MAP_SEARCH) {
+      homePage = HOME_MAPS;
+    }
+    else if(homePage == HOME_APPS) {
+      if(appsPage == 1) {
+        appsPage = 0;
+      } else {
+        homePage = HOME_MAIN;
+      }
     }
     else if(isLibrary()){
       if(librarySelection.length()){
@@ -817,28 +843,481 @@ static void tapActivitySettings(int x, int y) {
   }
 }
 
+static const char* getCardinalDirection(float deg) {
+  deg = fmodf(deg + 360.0f, 360.0f);
+  if (deg >= 337.5f || deg < 22.5f) return "N";
+  if (deg < 67.5f) return "NE";
+  if (deg < 112.5f) return "E";
+  if (deg < 157.5f) return "SE";
+  if (deg < 202.5f) return "S";
+  if (deg < 247.5f) return "SW";
+  if (deg < 292.5f) return "W";
+  return "NW";
+}
+
+static void drawCompassApp() {
+  display.fillRect(0, 28, 240, 262, uiBg());
+
+  const int cx = 120, cy = 145, r = 78;
+
+  // Outer circular dial
+  display.drawCircle(cx, cy, r, uiFg());
+  display.drawCircle(cx, cy, r - 1, uiFg());
+
+  // Cardinal letters: N in Red, others in White
+  label(cx - 5, cy - r + 8, "N", 2, 0xF800);
+  label(cx - 5, cy + r - 22, "S", 2, uiFg());
+  label(cx + r - 20, cy - 7, "E", 2, uiFg());
+  label(cx - r + 8, cy - 7, "W", 2, uiFg());
+
+  // Current heading
+  float h = (compass.ready && isfinite(compass.heading)) ? compass.heading : (ride.gpsFixed ? (float)ride.heading : 0.0f);
+  float rad = radians(h);
+  float dx = sinf(rad), dy = -cosf(rad);
+  float px = -dy, py = dx;
+
+  float L = 58.0f;
+  float hw = 6.0f;
+
+  int ntx = lroundf((float)cx + L * dx);
+  int nty = lroundf((float)cy + L * dy);
+  int stx = lroundf((float)cx - L * dx);
+  int sty = lroundf((float)cy - L * dy);
+  int s1x = lroundf((float)cx + hw * px);
+  int s1y = lroundf((float)cy + hw * py);
+  int s2x = lroundf((float)cx - hw * px);
+  int s2y = lroundf((float)cy - hw * py);
+
+  // Red North half
+  display.fillTriangle(ntx, nty, s1x, s1y, s2x, s2y, 0xF800);
+  // White South half
+  display.fillTriangle(stx, sty, s1x, s1y, s2x, s2y, uiFg());
+
+  // Center pivot (dark hole with white rim)
+  display.fillCircle(cx, cy, 6, uiBg());
+  display.drawCircle(cx, cy, 6, uiFg());
+  display.drawCircle(cx, cy, 7, uiFg());
+
+  // Large heading readout at bottom (Frame 16: "20°N")
+  int deg = (int)lroundf(fmodf(h + 360.0f, 360.0f)) % 360;
+  const char* card = getCardinalDirection(deg);
+  String degStr = String(deg);
+  int wNum = textWidth(degStr, 3);
+  int wCard = textWidth(card, 3);
+  int degGap = 12;
+  int totalW = wNum + degGap + wCard;
+  int startX = (DISP_W - totalW) / 2;
+  int yText = 246;
+
+  label(startX, yText, degStr, 3, uiFg());
+  display.drawCircle(startX + wNum + 5, yText + 5, 3, uiFg());
+  display.drawCircle(startX + wNum + 5, yText + 5, 2, uiFg());
+  label(startX + wNum + degGap, yText, card, 3, uiFg());
+}
+
+static void drawMapViewerApp() {
+  uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
+  display.fillRect(0, 28, 240, 262, terrainBg);
+
+  const int clipX1 = 0, clipY1 = 28, clipX2 = 239, clipY2 = 289;
+  const int cardCenterX = 120, cardCenterY = 158;
+
+  // 4 Preset Zoom Levels:
+  // Level 1: 0.15 (District, ~1.5 km across)
+  // Level 2: 0.27 (Neighborhood, ~900 m across)
+  // Level 3: 0.48 (Street View, ~500 m across)
+  // Level 4: 0.85 (Max Zoom, ~280 m across)
+  float scale = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
+
+  double centerLat = mapViewerLat;
+  double centerLon = mapViewerLon;
+
+  // Align PSRAM sliding window around current pin position
+  g_mapCache.updatePosition(centerLat, centerLon);
+
+  int centerTX, centerTY;
+  float cfx, cfy;
+  MapTileCache::latLonToTile(centerLat, centerLon, centerTX, centerTY, cfx, cfy);
+  int centerU = (int)lround(cfx * 4096.0f);
+  int centerV = (int)lround(cfy * 4096.0f);
+
+  double latRad = centerLat * (PI / 180.0);
+  float metersPerUnit = (float)((40075016.686 * cos(latRad) / 16384.0) / 4096.0);
+  float pxPerUnit = metersPerUnit * scale;
+
+  int maxDxU = (int)(130.0f / pxPerUnit) + 120;
+  int maxDyU = (int)(140.0f / pxPerUnit) + 120;
+
+  static int s_viewerPolyX[256];
+  static int s_viewerPolyY[256];
+
+  const uint16_t parkFill    = darkTheme ? 0x1A44 : 0xC673;
+  const uint16_t parkBorder  = darkTheme ? 0x1222 : 0xAE30;
+  const uint16_t waterFill   = darkTheme ? 0x1A36 : 0x9E5F;
+  const uint16_t waterBorder = darkTheme ? 0x1171 : 0x7CD8;
+  const uint16_t roadCasing  = darkTheme ? 0x3186 : 0xD69A;
+  const uint16_t roadFill    = darkTheme ? 0x52AA : 0xFFFF;
+
+  auto clipAndDrawLine = [&](int x0, int y0, int x1, int y1, uint16_t color, int width) {
+    if ((x0 < clipX1 && x1 < clipX1) || (x0 > clipX2 && x1 > clipX2) ||
+        (y0 < clipY1 && y1 < clipY1) || (y0 > clipY2 && y1 > clipY2)) return;
+
+    auto getCode = [&](int x, int y) -> uint8_t {
+      uint8_t code = 0;
+      if (x < clipX1) code |= 1;
+      else if (x > clipX2) code |= 2;
+      if (y < clipY1) code |= 4;
+      else if (y > clipY2) code |= 8;
+      return code;
+    };
+    uint8_t c0 = getCode(x0, y0), c1 = getCode(x1, y1);
+    while (true) {
+      if (!(c0 | c1)) {
+        if (width <= 1) {
+          display.drawLine(x0, y0, x1, y1, color);
+        } else {
+          int dx = abs(x1 - x0);
+          int dy = abs(y1 - y0);
+          int h = width / 2;
+          if (dx >= dy) {
+            for (int k = -h; k <= width - 1 - h; k++) {
+              display.drawLine(x0, y0 + k, x1, y1 + k, color);
+            }
+          } else {
+            for (int k = -h; k <= width - 1 - h; k++) {
+              display.drawLine(x0 + k, y0, x1 + k, y1, color);
+            }
+          }
+          if (width >= 3) {
+            display.fillCircle(x0, y0, h, color);
+            display.fillCircle(x1, y1, h, color);
+          }
+        }
+        return;
+      } else if (c0 & c1) {
+        return;
+      } else {
+        int x, y;
+        uint8_t cOut = c0 ? c0 : c1;
+        if (cOut & 8) {
+          x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY2 - y0) / (y1 - y0))) : x0;
+          y = clipY2;
+        } else if (cOut & 4) {
+          x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0))) : x0;
+          y = clipY1;
+        } else if (cOut & 2) {
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0;
+          x = clipX2;
+        } else {
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0;
+          x = clipX1;
+        }
+        if (cOut == c0) { x0 = x; y0 = y; c0 = getCode(x0, y0); }
+        else { x1 = x; y1 = y; c1 = getCode(x1, y1); }
+      }
+    }
+  };
+
+  // PASS 1: FILLED POLYGONS (Parks & Water)
+  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+    int tx = g_mapCache.tiles[s].tileX;
+    int ty = g_mapCache.tiles[s].tileY;
+    if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+    int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+    int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+    MapPoint12* pts = g_mapCache.tiles[s].points;
+    uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+    for (uint16_t f = 0; f < featCount; f++) {
+      uint8_t ft = feats[f].type;
+      if (ft != FEAT_WATER && ft != FEAT_PARK) continue;
+      uint8_t cnt = feats[f].pointCount;
+      uint16_t off = feats[f].pointOffset;
+      if (cnt < 2 || cnt > 255) continue;
+
+      int p0X = tileDeltaX + pts[off].u;
+      int p0Y = tileDeltaY + pts[off].v;
+      int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+      int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+      bool hasJump = false;
+      for (uint8_t k = 1; k < cnt; k++) {
+        if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+          hasJump = true; break;
+        }
+      }
+      if (hasJump) continue;
+
+      bool isClosed = (cnt >= 3 && abs(pts[off].u - pts[off + cnt - 1].u) <= 35 &&
+                                   abs(pts[off].v - pts[off + cnt - 1].v) <= 35);
+      for (uint8_t k = 0; k < cnt; k++) {
+        s_viewerPolyX[k] = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+        s_viewerPolyY[k] = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+      }
+      if (ft == FEAT_PARK || isClosed) {
+        uint16_t fCol = (ft == FEAT_PARK) ? parkFill : waterFill;
+        uint16_t bCol = (ft == FEAT_PARK) ? parkBorder : waterBorder;
+        fillPolygon(s_viewerPolyX, s_viewerPolyY, cnt, fCol, clipX1, clipY1, clipX2, clipY2);
+        for (uint8_t k = 1; k < cnt; k++) {
+          clipAndDrawLine(s_viewerPolyX[k - 1], s_viewerPolyY[k - 1], s_viewerPolyX[k], s_viewerPolyY[k], bCol, 1);
+        }
+      } else {
+        for (uint8_t k = 1; k < cnt; k++) {
+          clipAndDrawLine(s_viewerPolyX[k - 1], s_viewerPolyY[k - 1], s_viewerPolyX[k], s_viewerPolyY[k], waterFill, 3);
+        }
+      }
+    }
+  }
+
+  // PASS 2: ROADS
+  int minorCasingW = (mapViewerZoom == 4) ? 5 : (mapViewerZoom == 3) ? 4 : (mapViewerZoom == 2) ? 3 : 2;
+  int minorFillW   = (mapViewerZoom == 4) ? 3 : (mapViewerZoom == 3) ? 2 : (mapViewerZoom == 2) ? 1 : 1;
+  int majorCasingW = (mapViewerZoom == 4) ? 7 : (mapViewerZoom == 3) ? 5 : (mapViewerZoom == 2) ? 4 : 3;
+  int majorFillW   = (mapViewerZoom == 4) ? 5 : (mapViewerZoom == 3) ? 3 : (mapViewerZoom == 2) ? 2 : 1;
+
+  // 2A. Road Casings
+  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+    int tx = g_mapCache.tiles[s].tileX;
+    int ty = g_mapCache.tiles[s].tileY;
+    if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+    int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+    int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+    MapPoint12* pts = g_mapCache.tiles[s].points;
+    uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+    for (uint16_t f = 0; f < featCount; f++) {
+      uint8_t ft = feats[f].type;
+      if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
+          ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+      uint8_t cnt = feats[f].pointCount;
+      uint16_t off = feats[f].pointOffset;
+      if (cnt < 2) continue;
+
+      int p0X = tileDeltaX + pts[off].u;
+      int p0Y = tileDeltaY + pts[off].v;
+      int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+      int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+      bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
+      int w = isMajor ? majorCasingW : minorCasingW;
+
+      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
+      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      for (uint8_t k = 1; k < cnt; k++) {
+        if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          continue;
+        }
+        int pkX = tileDeltaX + pts[off + k].u;
+        int pkY = tileDeltaY + pts[off + k].v;
+        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
+        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        clipAndDrawLine(sx0, sy0, sx1, sy1, roadCasing, w);
+        sx0 = sx1;
+        sy0 = sy1;
+      }
+    }
+  }
+
+  // 2B. Road Inner Fills
+  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
+    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
+    int tx = g_mapCache.tiles[s].tileX;
+    int ty = g_mapCache.tiles[s].tileY;
+    if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
+
+    int tileDeltaX = (tx - centerTX) * 4096 - centerU;
+    int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    MapFeatureRecord* feats = g_mapCache.tiles[s].features;
+    MapPoint12* pts = g_mapCache.tiles[s].points;
+    uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
+
+    for (uint16_t f = 0; f < featCount; f++) {
+      uint8_t ft = feats[f].type;
+      if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
+          ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
+      uint8_t cnt = feats[f].pointCount;
+      uint16_t off = feats[f].pointOffset;
+      if (cnt < 2) continue;
+
+      int p0X = tileDeltaX + pts[off].u;
+      int p0Y = tileDeltaY + pts[off].v;
+      int pEndX = tileDeltaX + pts[off + cnt - 1].u;
+      int pEndY = tileDeltaY + pts[off + cnt - 1].v;
+      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
+          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+
+      bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
+      int w = isMajor ? majorFillW : minorFillW;
+
+      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
+      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      for (uint8_t k = 1; k < cnt; k++) {
+        if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
+          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
+          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          continue;
+        }
+        int pkX = tileDeltaX + pts[off + k].u;
+        int pkY = tileDeltaY + pts[off + k].v;
+        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
+        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        clipAndDrawLine(sx0, sy0, sx1, sy1, roadFill, w);
+        sx0 = sx1;
+        sy0 = sy1;
+      }
+    }
+  }
+
+  // Dropped Pin at center
+  drawCustomIcon(display, cardCenterX - 8, cardCenterY - 16, 0x03FF, CustomIcon::locationPinIcon);
+  display.fillCircle(cardCenterX, cardCenterY, 3, 0x03FF);
+  display.drawCircle(cardCenterX, cardCenterY, 3, 0xFFFF);
+
+  // Floating Search Button (top-left)
+  display.fillRoundRect(10, 36, 68, 30, 8, uiCard());
+  display.drawRoundRect(10, 36, 68, 30, 8, darkTheme ? 0x39E7 : 0xC618);
+  drawCustomIcon(display, 16, 43, uiFg(), CustomIcon::locationPinIcon);
+  label(36, 44, "FIND", 1, uiFg());
+
+  // Floating Zoom In [+]
+  display.fillRoundRect(196, 36, 34, 30, 8, uiCard());
+  display.drawRoundRect(196, 36, 34, 30, 8, darkTheme ? 0x39E7 : 0xC618);
+  label(208, 43, "+", 2, mapViewerZoom < 4 ? uiFg() : uiMuted());
+
+  // Floating Zoom Out [-]
+  display.fillRoundRect(196, 72, 34, 30, 8, uiCard());
+  display.drawRoundRect(196, 72, 34, 30, 8, darkTheme ? 0x39E7 : 0xC618);
+  label(210, 78, "-", 2, mapViewerZoom > 1 ? uiFg() : uiMuted());
+
+  // Floating GPS Recenter
+  display.fillRoundRect(196, 108, 34, 30, 8, uiCard());
+  display.drawRoundRect(196, 108, 34, 30, 8, darkTheme ? 0x39E7 : 0xC618);
+  drawCustomIcon(display, 205, 115, ride.gpsFixed ? TEAL : uiMuted(), CustomIcon::satelliteIcon);
+
+  // Zoom badge (bottom-left)
+  display.fillRoundRect(10, 262, 40, 22, 11, uiCard());
+  display.drawRoundRect(10, 262, 40, 22, 11, darkTheme ? 0x39E7 : 0xC618);
+  centeredLabel(10, 267, 40, String(mapViewerZoom) + "/4", 0, uiMuted());
+
+  // Dropped Pin coords pill (bottom-center)
+  int pillW = 150, pillH = 22;
+  int pillX = (DISP_W - pillW) / 2 + 10, pillY = 262;
+  display.fillRoundRect(pillX, pillY, pillW, pillH, 11, uiCard());
+  display.drawRoundRect(pillX, pillY, pillW, pillH, 11, darkTheme ? 0x39E7 : 0xC618);
+  String coordStr = String(mapViewerLat, 4) + ", " + String(mapViewerLon, 4);
+  centeredLabel(pillX, pillY + 5, pillW, coordStr, 0, uiFg());
+}
+
+static void drawMapSearchApp() {
+  drawScreenHeader("SEARCH COORD", CustomIcon::locationPinIcon, true);
+
+  // Input boxes
+  display.fillRoundRect(12, 68, 216, 26, 6, uiCard());
+  display.drawRoundRect(12, 68, 216, 26, 6, mapSearchField == 0 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
+  label(18, 74, "LAT: " + mapSearchLat + (mapSearchField == 0 ? "_" : ""), 1, uiFg());
+
+  display.fillRoundRect(12, 98, 216, 26, 6, uiCard());
+  display.drawRoundRect(12, 98, 216, 26, 6, mapSearchField == 1 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
+  label(18, 104, "LON: " + mapSearchLon + (mapSearchField == 1 ? "_" : ""), 1, uiFg());
+
+  // Keypad: 4 rows x 3 columns
+  const char* keys[4][3] = {
+    {"1", "2", "3"},
+    {"4", "5", "6"},
+    {"7", "8", "9"},
+    {".", "0", "DEL"}
+  };
+  for (int r = 0; r < 4; r++) {
+    for (int c = 0; c < 3; c++) {
+      int kx = 14 + c * 72;
+      int ky = 130 + r * 30;
+      display.fillRoundRect(kx, ky, 68, 26, 6, uiCard());
+      display.drawRoundRect(kx, ky, 68, 26, 6, darkTheme ? 0x2945 : 0xD6BA);
+      centeredLabel(kx, ky + 6, 68, keys[r][c], 1, (r == 3 && c == 2) ? 0xFA08 : uiFg());
+    }
+  }
+
+  // Action Buttons row at y = 254
+  // CLEAR
+  display.fillRoundRect(14, 254, 68, 28, 6, uiCard());
+  display.drawRoundRect(14, 254, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(14, 262, 68, "CLEAR", 1, uiMuted());
+
+  // MY LOC
+  display.fillRoundRect(86, 254, 68, 28, 6, uiCard());
+  display.drawRoundRect(86, 254, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(86, 262, 68, "MY LOC", 1, uiFg());
+
+  // SEARCH
+  display.fillRoundRect(158, 254, 68, 28, 6, TEAL);
+  display.drawRoundRect(158, 254, 68, 28, 6, TEAL);
+  centeredLabel(158, 262, 68, "SEARCH", 1, 0xFFFF);
+}
+
 static void drawHomeSubpage(){
 
   statusBar();
   if(isLibrary()){drawLibrary();return;}
   if(homePage==HOME_APPS){
     drawScreenHeader("ALL APPS", CustomIcon::allAppsIcon, false);
-    const char* names[]={"PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS","MY FILES","ACTIVITY"};
-    CustomIcon icons[]={CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon,CustomIcon::folderIcon,CustomIcon::configureIcon};
-    const int btnW = 108, btnH = 64;
-    for(int i = 0; i < 6; i++){
-      int col = i % 2, row = i / 2;
-      int x = 8 + col * (btnW + 8);
-      int y = 70 + row * (btnH + 8);
-      display.fillRoundRect(x, y, btnW, btnH, 31, uiCard());
-      display.drawRoundRect(x, y, btnW, btnH, 31, darkTheme ? 0x2945 : 0xD6BA);
-      drawCustomIcon(display, x + (btnW - 22) / 2, y + 12, uiFg(), icons[i], 22, 22);
-      centeredLabel(x, y + 41, btnW, names[i], 1);
+    if (appsPage == 0) {
+      const char* names[]={"MAPS","COMPASS","PAST ACTIVITY","RIDE HISTORY","SAVED ROUTES","SETTINGS"};
+      CustomIcon icons[]={CustomIcon::mapAppIcon,CustomIcon::compassIcon,CustomIcon::runIcon,CustomIcon::historyIcon,CustomIcon::routeMapIcon,CustomIcon::systemIcon};
+      const int btnW = 108, btnH = 64;
+      for(int i = 0; i < 6; i++){
+        int col = i % 2, row = i / 2;
+        int x = 8 + col * (btnW + 8);
+        int y = 70 + row * (btnH + 8);
+        display.fillRoundRect(x, y, btnW, btnH, 31, uiCard());
+        display.drawRoundRect(x, y, btnW, btnH, 31, darkTheme ? 0x2945 : 0xD6BA);
+        drawCustomIcon(display, x + (btnW - 22) / 2, y + 12, uiFg(), icons[i], 22, 22);
+        centeredLabel(x, y + 41, btnW, names[i], 1);
+      }
+      // Page indicator: ● ○
+      display.fillCircle(114, 282, 3, uiFg());
+      display.drawCircle(126, 282, 3, uiMuted());
+    } else {
+      const char* names[]={"MY FILES","ACTIVITY"};
+      CustomIcon icons[]={CustomIcon::folderIcon,CustomIcon::configureIcon};
+      const int btnW = 108, btnH = 64;
+      for(int i = 0; i < 2; i++){
+        int col = i % 2, row = i / 2;
+        int x = 8 + col * (btnW + 8);
+        int y = 70 + row * (btnH + 8);
+        display.fillRoundRect(x, y, btnW, btnH, 31, uiCard());
+        display.drawRoundRect(x, y, btnW, btnH, 31, darkTheme ? 0x2945 : 0xD6BA);
+        drawCustomIcon(display, x + (btnW - 22) / 2, y + 12, uiFg(), icons[i], 22, 22);
+        centeredLabel(x, y + 41, btnW, names[i], 1);
+      }
+      // Page indicator: ○ ●
+      display.drawCircle(114, 282, 3, uiMuted());
+      display.fillCircle(126, 282, 3, uiFg());
     }
   }else if(homePage==HOME_SETTINGS){
     drawSettingsApp();
   }else if(homePage==HOME_ACTIVITY_SETTINGS){
     drawActivitySettingsApp();
+  }else if(homePage==HOME_COMPASS){
+    drawCompassApp();
+  }else if(homePage==HOME_MAPS){
+    drawMapViewerApp();
+  }else if(homePage==HOME_MAP_SEARCH){
+    drawMapSearchApp();
   }else{
     if(fileDetailOpen){
       drawFileDetail();
@@ -1261,7 +1740,117 @@ static void quickTap(int x, int y) {
       tapActivitySettings(x, y);
       return;
     }
+    if(homePage==HOME_COMPASS){
+      return;
+    }
+    if(homePage==HOME_MAPS){
+      // SEARCH button (x=10..78, y=36..66)
+      if (x >= 8 && x <= 85 && y >= 34 && y <= 68) {
+        mapSearchField = 0;
+        homePage = HOME_MAP_SEARCH;
+        uiRevision++;
+        return;
+      }
+      // Zoom in [+] (x=196..230, y=36..66)
+      if (x >= 190 && x <= 236 && y >= 34 && y <= 68) {
+        if (mapViewerZoom < 4) { mapViewerZoom++; uiRevision++; }
+        return;
+      }
+      // Zoom out [-] (x=196..230, y=72..102)
+      if (x >= 190 && x <= 236 && y >= 70 && y <= 104) {
+        if (mapViewerZoom > 1) { mapViewerZoom--; uiRevision++; }
+        return;
+      }
+      // GPS Recenter (x=196..230, y=108..138)
+      if (x >= 190 && x <= 236 && y >= 106 && y <= 142) {
+        if (ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0) {
+          mapViewerLat = ride.lat;
+          mapViewerLon = ride.lon;
+          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+          uiRevision++;
+        }
+        return;
+      }
+      return;
+    }
+    if(homePage==HOME_MAP_SEARCH){
+      // LAT input box (y=68..94)
+      if (x >= 12 && x <= 228 && y >= 68 && y <= 94) {
+        mapSearchField = 0;
+        uiRevision++;
+        return;
+      }
+      // LON input box (y=98..124)
+      if (x >= 12 && x <= 228 && y >= 98 && y <= 124) {
+        mapSearchField = 1;
+        uiRevision++;
+        return;
+      }
+      // Keypad area (y=130..250)
+      if (x >= 14 && x <= 230 && y >= 130 && y <= 250) {
+        int kr = (y - 130) / 30;
+        int kc = (x - 14) / 72;
+        if (kr >= 0 && kr < 4 && kc >= 0 && kc < 3) {
+          const char* keys[4][3] = {
+            {"1", "2", "3"},
+            {"4", "5", "6"},
+            {"7", "8", "9"},
+            {".", "0", "DEL"}
+          };
+          String& target = (mapSearchField == 0) ? mapSearchLat : mapSearchLon;
+          if (kr == 3 && kc == 2) {
+            if (target.length() > 0) target.remove(target.length() - 1);
+          } else {
+            if (target.length() < 12) target += keys[kr][kc];
+          }
+          uiRevision++;
+          return;
+        }
+      }
+      // Action row (y=254..284)
+      if (y >= 252 && y <= 286) {
+        // CLEAR (x=14..82)
+        if (x >= 12 && x <= 84) {
+          if (mapSearchField == 0) mapSearchLat = "";
+          else mapSearchLon = "";
+          uiRevision++;
+          return;
+        }
+        // MY LOC (x=86..154)
+        if (x >= 86 && x <= 156) {
+          if (ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0) {
+            mapSearchLat = String(ride.lat, 5);
+            mapSearchLon = String(ride.lon, 5);
+          } else {
+            mapSearchLat = "22.5946";
+            mapSearchLon = "88.4258";
+          }
+          uiRevision++;
+          return;
+        }
+        // SEARCH (x=158..228)
+        if (x >= 158 && x <= 230) {
+          double lat = mapSearchLat.toDouble();
+          double lon = mapSearchLon.toDouble();
+          if (isfinite(lat) && isfinite(lon) && lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0 && (lat != 0.0 || lon != 0.0)) {
+            mapViewerLat = lat;
+            mapViewerLon = lon;
+            g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+            homePage = HOME_MAPS;
+            uiRevision++;
+          }
+          return;
+        }
+      }
+      return;
+    }
     if(homePage==HOME_APPS){
+      // Check page indicator tap (y=274..288, x=100..140)
+      if (y >= 274 && y <= 288 && x >= 100 && x <= 140) {
+        appsPage = (appsPage == 0) ? 1 : 0;
+        uiRevision++;
+        return;
+      }
       int col = (x >= 120 && x < 236) ? 1 : (x >= 4 && x < 120) ? 0 : -1;
       int row = -1;
       if (y >= 66 && y < 138) row = 0;
@@ -1269,12 +1858,25 @@ static void quickTap(int x, int y) {
       else if (y >= 210 && y < 282) row = 2;
       if (col < 0 || row < 0) return;
       int tile = row * 2 + col;
-      if(tile==0)openLibrary(HOME_ACTIVITY);
-      else if(tile==1)openLibrary(HOME_RIDES);
-      else if(tile==2)openLibrary(HOME_ROUTES);
-      else if(tile==3){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;settingsScroll=0;uiRevision++;}
-      else if(tile==4)openBrowser("/");
-      else {homePage=HOME_ACTIVITY_SETTINGS;uiRevision++;}
+      if (appsPage == 0) {
+        if(tile==0){
+          if(ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0){
+            mapViewerLat = ride.lat;
+            mapViewerLon = ride.lon;
+          }
+          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+          homePage = HOME_MAPS;
+          uiRevision++;
+        }
+        else if(tile==1){homePage=HOME_COMPASS;uiRevision++;}
+        else if(tile==2)openLibrary(HOME_ACTIVITY);
+        else if(tile==3)openLibrary(HOME_RIDES);
+        else if(tile==4)openLibrary(HOME_ROUTES);
+        else if(tile==5){homePage=HOME_SETTINGS;settingsPage=SET_MAIN;settingsScroll=0;uiRevision++;}
+      } else {
+        if(tile==0)openBrowser("/");
+        else if(tile==1){homePage=HOME_ACTIVITY_SETTINGS;uiRevision++;}
+      }
       return;
     }
     if(y>=140 && y<176 && x>=6 && x<190){
@@ -1568,6 +2170,17 @@ static void pollQuickTouch() {
           int offset=constrain(startScroll+startY-y,0,maxS);
           if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
         }
+      } else if(welcomeOpen && !quickOpen && homePage == HOME_MAPS){
+        if (mapPanGesture) {
+          float scale = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
+          double co = cos(radians(startPanLat));
+          double dXm = (x - startX) / max(0.0001f, scale);
+          double dYm = (y - startY) / max(0.0001f, scale);
+          mapViewerLon = startPanLon - (dXm / max(0.0001, co * 111320.0));
+          mapViewerLat = startPanLat + (dYm / 111320.0);
+          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+          uiRevision++;
+        }
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
         int offset=constrain(startScroll+startY-y,0,88);
         if(offset!=settingsScroll){settingsScroll=offset;uiRevision++;}
@@ -1615,6 +2228,15 @@ static void pollQuickTouch() {
       if (mapPanGesture) {
         startPanLat = previewPanLat;
         startPanLon = previewPanLon;
+      }
+    } else if(welcomeOpen && !quickOpen && homePage == HOME_MAPS && y >= 28 && y < 290){
+      rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
+      sliderGesture=false;
+      bool inButtons = (x >= 8 && x <= 85 && y >= 34 && y <= 68) || (x >= 190 && y >= 34 && y <= 145);
+      mapPanGesture = !inButtons;
+      if (mapPanGesture) {
+        startPanLat = mapViewerLat;
+        startPanLon = mapViewerLon;
       }
     } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 54 && y < 286){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;

@@ -1952,16 +1952,17 @@ void loop() {
       int routeL, trackL;
       float destLat, destLon;
     };
+    int cHeading = (compass.ready && isfinite(compass.heading)) ? (int)roundf(compass.heading) : ride.heading;
     UIState curState = {
-      (uint32_t)((gpsWaiting || gpsRadarInspector) ? (millis() / 40) : 0),
+      (uint32_t)((gpsWaiting || gpsRadarInspector || (welcomeOpen && homePage == HOME_COMPASS)) ? (millis() / 80) : 0),
       (uint32_t)(millis() / 500),
       uiRevision,
       ride.elapsedSec / 60,
       ride.speedKmh,
       ride.distanceKm,
       ride.lat, ride.lon, ride.altM,
-      ride.cadenceRpm, ride.powerW, ride.heading,
-      (uint8_t)currentScreen, (uint8_t)mapZoom, (uint8_t)darkTheme, (uint8_t)bleCount(),
+      ride.cadenceRpm, ride.powerW, cHeading,
+      (uint8_t)(welcomeOpen ? (int)homePage : (int)currentScreen), (uint8_t)mapZoom, (uint8_t)darkTheme, (uint8_t)bleCount(),
       (uint8_t)WiFi.getMode(), (uint8_t)WiFi.status(), (uint8_t)ride.gpsFixed, (uint8_t)gpsDataReady,
       routeLen, trackLen,
       nav.destLat, nav.destLon

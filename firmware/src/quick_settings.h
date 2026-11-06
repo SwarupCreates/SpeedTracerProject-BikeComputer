@@ -687,6 +687,10 @@ static void globalNext(){
   else {browserPage++;loadBrowser();}
   uiRevision++;
 }
+static bool isHomeScreen() {
+  return (welcomeOpen && homePage == HOME_MAIN && !quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart && !countdownGoStart && !quickDetail);
+}
+
 static bool globalHasBack(){
   if(screenLocked) return false;
   if(shutdownDialog || gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || quickOpen) return true;
@@ -695,7 +699,7 @@ static bool globalHasBack(){
   return false;
 }
 static void drawGlobalNav(){
-  if(screenLocked) return;
+  if(screenLocked || isHomeScreen()) return;
   display.fillRect(0,290,240,30,uiBg());
   if(globalHasBack())drawCustomIcon(display,42,297,uiFg(),CustomIcon::GoBackIcon);
   drawCustomIcon(display,112,297,uiFg(),CustomIcon::HomeIcon);
@@ -1877,11 +1881,15 @@ static void drawHomeClockWidget() {
     dateStr = "Friday 6 Nov, 2026";
   }
 
-  // Large smooth digits centered at Y = 38 (cap height ~20px, total visual height 28px)
-  centeredLabel(0, 38, DISP_W, timeBuf, 3, fg);
-
-  // Date subtitle centered at Y = 74 (size 0 = 12px smooth font)
-  centeredLabel(0, 74, DISP_W, dateStr, 0, fg);
+  if (activeFontId == FONT_GOOGLE_SANS) {
+    // Large 56px smooth Google Sans digits centered at Y = 44 (height 44px)
+    drawSmoothClock56(44, local.tm_hour, local.tm_min, fg);
+    centeredLabel(0, 96, DISP_W, dateStr, 0, fg);
+  } else {
+    // Enlarged smooth digits with active theme font (height 28px) at Y = 48
+    centeredLabel(0, 48, DISP_W, timeBuf, 3, fg);
+    centeredLabel(0, 90, DISP_W, dateStr, 0, fg);
+  }
 }
 
 
@@ -1929,10 +1937,10 @@ bool drawLifecycleScreen() {
     if (homeHeroClock) {
       drawHomeClockWidget();
     } else {
-      display.drawBrandLogo((DISP_W - 118) / 2, 40, !darkTheme, 118, 48);
+      display.drawBrandLogo((DISP_W - 137) / 2, 48, !darkTheme, 137, 56);
     }
 
-    // Row 1: Two Clean Pill Cards (108x54, R=27, Y=100..154)
+    // Row 1: Two Clean Pill Cards (108x54, R=27, Y=126..180)
     bool ready = gpsStartReady();
     int sats = startSatellites();
     bool countValid = gpsDataReady && ((geprcGps.lastStatus && millis() - geprcGps.lastStatus < 3000) || (gps.satellites.isValid() && gps.satellites.age() < 3000));
@@ -1940,38 +1948,38 @@ bool drawLifecycleScreen() {
     uint16_t gpsFg = darkTheme ? (ready ? 0x7FE0 : (gpsDataReady ? 0xFD20 : 0x8410)) : (ready ? 0x2400 : 0x9800);
 
     // Row 1 Left: GPS Status Pill
-    display.fillRoundRect(8, 100, 108, 54, 27, gpsBg);
+    display.fillRoundRect(8, 126, 108, 54, 27, gpsBg);
     String satStr = (countValid && sats > 0) ? String(sats) : (gpsDataReady ? "0" : "--");
     int satNumW = textWidth(satStr, 2);
     int totalGpsW = 26 + 8 + satNumW;
     int gpsStartX = 8 + (108 - totalGpsW) / 2;
-    drawCustomIcon(display, gpsStartX, 114, gpsFg, CustomIcon::satelliteIconLarge, 26, 26);
-    label(gpsStartX + 26 + 8, 118, satStr, 2, gpsFg);
+    drawCustomIcon(display, gpsStartX, 126 + 14, gpsFg, CustomIcon::satelliteIconLarge, 26, 26);
+    label(gpsStartX + 26 + 8, 126 + 18, satStr, 2, gpsFg);
 
     // Row 1 Right: Sport Switcher Pill (108x54, R=27)
-    display.fillRoundRect(124, 100, 108, 54, 27, uiCard());
+    display.fillRoundRect(124, 126, 108, 54, 27, uiCard());
     int switchStartX = 124 + (108 - (24 + 12 + 24)) / 2;
     uint16_t sportAltColor = darkTheme ? 0x475F : 0x034E;
-    drawCustomIcon(display, switchStartX, 115, sportAltColor, runningMode ? CustomIcon::bikeIcon : CustomIcon::runIcon, 24, 24);
-    drawCustomIcon(display, switchStartX + 24 + 12, 115, uiFg(), CustomIcon::switchIcon, 24, 24);
+    drawCustomIcon(display, switchStartX, 126 + 15, sportAltColor, runningMode ? CustomIcon::bikeIcon : CustomIcon::runIcon, 24, 24);
+    drawCustomIcon(display, switchStartX + 24 + 12, 126 + 15, uiFg(), CustomIcon::switchIcon, 24, 24);
 
-    // Row 2: Slide-to-Start Slider (224x54, R=27, Y=164..218)
-    display.fillRoundRect(8, 164, 224, 54, 27, uiCard());
-    centeredLabel(88, 184, 136, rideStarted ? "Swipe to open >" : "Swipe to start >", 0, uiMuted());
+    // Row 2: Slide-to-Start Slider (224x54, R=27, Y=190..244)
+    display.fillRoundRect(8, 190, 224, 54, 27, uiCard());
+    centeredLabel(88, 190 + 20, 136, rideStarted ? "Swipe to open >" : "Swipe to start >", 0, uiMuted());
     int pillX = 8 + homeSliderOffset;
-    display.fillRoundRect(pillX, 164, 78, 54, 27, 0xF800);
-    drawCustomIcon(display, pillX + (78 - 28) / 2, 177, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 28, 28);
+    display.fillRoundRect(pillX, 190, 78, 54, 27, 0xF800);
+    drawCustomIcon(display, pillX + (78 - 28) / 2, 190 + 13, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 28, 28);
 
-    // Row 3: Two Clean Pill Cards (108x54, R=27, Y=228..282)
+    // Row 3: Two Clean Pill Cards (108x54, R=27, Y=254..308)
     // Row 3 Left: Compass App Pill (amber background)
     uint16_t compassBg = darkTheme ? 0x2900 : 0xFFE0;
-    display.fillRoundRect(8, 228, 108, 54, 27, compassBg);
-    drawCustomIcon(display, 8 + (108 - 28) / 2, 241, 0xFE64, CustomIcon::compassIconLarge, 28, 28);
+    display.fillRoundRect(8, 254, 108, 54, 27, compassBg);
+    drawCustomIcon(display, 8 + (108 - 28) / 2, 254 + 13, 0xFE64, CustomIcon::compassIconLarge, 28, 28);
 
     // Row 3 Right: All Apps Launcher Pill (3x3 white dot matrix)
-    display.fillRoundRect(124, 228, 108, 54, 27, uiCard());
+    display.fillRoundRect(124, 254, 108, 54, 27, uiCard());
     int dotCx = 124 + 54;
-    int dotCy = 228 + 27;
+    int dotCy = 254 + 27;
     for (int dy = -7; dy <= 7; dy += 7) {
       for (int dx = -7; dx <= 7; dx += 7) {
         display.fillCircle(dotCx + dx, dotCy + dy, 2, uiFg());
@@ -1985,7 +1993,7 @@ static void quickTap(int x, int y) {
   if (screenLocked) {
     return;
   }
-  if(y>=290){
+  if(y>=290 && !isHomeScreen()){
     if(x>=26 && x<78){if(globalHasBack())globalBack();}
     else if(x>=94 && x<146)globalHome();
     else if(x>=164 && x<216)globalNext();
@@ -2239,7 +2247,13 @@ static void quickTap(int x, int y) {
       uiRevision++;
       return;
     }
-    if (y >= 98 && y < 158) {
+    if (y >= 29 && y < 124) {
+      homeHeroClock = !homeHeroClock;
+      saveHomeHeroPref();
+      uiRevision++;
+      return;
+    }
+    if (y >= 124 && y < 184) {
       if (x < 120) {
         openGpsInspector();
       } else {
@@ -2253,7 +2267,7 @@ static void quickTap(int x, int y) {
       }
       return;
     }
-    if (y >= 224 && y < 288) {
+    if (y >= 250 && y < 320) {
       if (x < 120) {
         homePage = HOME_COMPASS;
         uiRevision++;
@@ -2462,7 +2476,7 @@ static void pollQuickTouch() {
       if (welcomeOpen && !quickOpen && homePage == HOME_MAIN) {
         int dx = endX - startX;
         int dy = endY - startY;
-        if (startY < 98) {
+        if (startY < 124) {
           if (abs(dx) >= 20 && abs(dx) > abs(dy)) {
             homeHeroClock = !homeHeroClock;
             saveHomeHeroPref();
@@ -2660,10 +2674,10 @@ static void pollQuickTouch() {
     } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN && y >= 54 && y < 286){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;startScroll=settingsScroll;
       sliderGesture=false;
-    } else if(welcomeOpen && !quickOpen && homePage == HOME_MAIN && y >= 28 && y < 290){
+    } else if(welcomeOpen && !quickOpen && homePage == HOME_MAIN && y >= 28 && y < 320){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
-      if (y >= 160 && y < 224 && x >= 4 && x <= 8 + homeSliderOffset + 88) {
+      if (y >= 186 && y < 248 && x >= 4 && x <= 8 + homeSliderOffset + 88) {
         homeSliderDragging = true;
         homeSliderStartX = x;
         homeSliderOffset = 0;

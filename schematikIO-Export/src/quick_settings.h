@@ -108,10 +108,27 @@ static void drawScreenHeader(const char* title, CustomIcon icon, bool showBack =
 #include "settings_app.h"
 
 static String storageSize(uint64_t n){
-  if(n>=1073741824ULL)return String((double)n/1073741824.0,2)+" GiB";
-  if(n>=1048576)return String((double)n/1048576.0,1)+" MiB";
-  if(n>=1024)return String((double)n/1024.0,1)+" KiB";
-  return String((unsigned long)n)+" bytes";
+  if(n>=1073741824ULL)return String((double)n/1073741824.0,1)+"GB";
+  if(n>=1048576)return String((double)n/1048576.0,1)+"MB";
+  if(n>=1024)return String((unsigned long)(n/1024))+"KB";
+  return String((unsigned long)n)+"B";
+}
+
+static int countFilesInDir(const String& path) {
+  if (!sdOk) return 0;
+  File dir = SD_MMC.open(path, FILE_READ);
+  if (!dir || !dir.isDirectory()) { if (dir) dir.close(); return 0; }
+  int count = 0;
+  while (true) {
+    File entry = dir.openNextFile();
+    if (!entry) break;
+    if (!entry.isDirectory()) {
+      count++;
+    }
+    entry.close();
+  }
+  dir.close();
+  return count;
 }
 static String fitBrowserText(String text,int width){
   while(text.length() && textWidth(text,1)>width)text.remove(text.length()-1);
@@ -136,11 +153,14 @@ static void loadBrowser(){
   if(!browserTotal){browserError="Card filesystem unreadable";return;}
   File dir=SD_MMC.open(browserPath,FILE_READ);
   if(!dir || !dir.isDirectory()){browserError="Folder unavailable";if(dir)dir.close();return;}
-  int skip=browserPage*4,index=0;
+  bool isRoot = (browserPath == "/");
+  int perPage = isRoot ? 4 : 3;
+  int skip = browserPage * perPage;
+  int index = 0;
   while(true){
     File entry=dir.openNextFile();if(!entry)break;
     if(index++<skip){entry.close();continue;}
-    if(browserCount==4){browserMore=true;entry.close();break;}
+    if(browserCount==perPage){browserMore=true;entry.close();break;}
     String name=entry.name();int slash=name.lastIndexOf('/');if(slash>=0)name=name.substring(slash+1);
     browserNames[browserCount]=name;browserDirs[browserCount]=entry.isDirectory();
     browserSizes[browserCount]=entry.size();browserCount++;entry.close();
@@ -204,64 +224,63 @@ static void openFileDetail(int row){
 }
 
 static void drawFileDetail(){
-  drawScreenHeader("FILE DETAILS", fileDetailIsFit ? CustomIcon::runIcon : (fileDetailIsGpx ? CustomIcon::routeMapIcon : CustomIcon::sdCardIcon), true);
-  display.drawFastHLine(6,58,228,uiCard());
+  statusBar();
 
   // Icon & Type Header
-  card(6,64,48,46,uiCard());
+  display.fillRoundRect(8, 36, 224, 46, 14, uiCard());
   if(fileDetailIsFit){
-    drawCustomIcon(display,22,79,TEAL,CustomIcon::runIcon);
+    drawCustomIcon(display, 20, 45, TEAL, CustomIcon::runIconLarge, 28, 28);
   } else if(fileDetailIsGpx){
-    drawCustomIcon(display,22,79,0x3DF7,CustomIcon::routeMapIcon);
+    drawCustomIcon(display, 20, 45, 0x3DF7, CustomIcon::routeMapIconLarge, 28, 28);
   } else {
-    drawCustomIcon(display,22,79,uiFg(),CustomIcon::sdCardIcon);
+    drawCustomIcon(display, 20, 45, uiFg(), CustomIcon::sdCardIcon, 28, 28);
   }
 
-  label(60,67,fileDetailIsFit?"FIT ACTIVITY":fileDetailIsGpx?"GPX ROUTE":"FILE",2,uiFg());
-  label(60,89,fileDetailIsFit?"Recorded Activity Data":fileDetailIsGpx?"GPS Route / Trackpoints":"SD Storage File",1,uiMuted());
+  label(58, 42, fileDetailIsFit ? "FIT ACTIVITY" : fileDetailIsGpx ? "GPX ROUTE" : "SD FILE", 2, uiFg());
+  label(58, 62, fileDetailIsFit ? "Recorded Activity Data" : fileDetailIsGpx ? "GPS Route Trackpoints" : "Storage File", 0, uiMuted());
 
   // Full file name card (multi-line wrapped)
-  card(6,116,228,52,uiCard());
-  label(12,120,"FULL FILE NAME",1,TEAL);
-  if(fileDetailName.length()<=34){
-    label(12,136,fileDetailName,1,uiFg());
+  display.fillRoundRect(8, 88, 224, 50, 14, uiCard());
+  label(16, 94, "FILE NAME", 0, TEAL);
+  if(fileDetailName.length() <= 32){
+    label(16, 112, fileDetailName, 1, uiFg());
   } else {
-    int splitPos = 30;
-    for(int i=30; i>=16; i--){
-      if(fileDetailName[i]=='_' || fileDetailName[i]==' ' || fileDetailName[i]=='-'){
-        splitPos = i+1;
+    int splitPos = 28;
+    for(int i = 28; i >= 16; i--){
+      if(fileDetailName[i] == '_' || fileDetailName[i] == ' ' || fileDetailName[i] == '-'){
+        splitPos = i + 1;
         break;
       }
     }
     String line1 = fileDetailName.substring(0, splitPos);
     String line2 = fileDetailName.substring(splitPos);
-    label(12,135,line1,1,uiFg());
-    label(12,149,fitBrowserText(line2,216),1,uiFg());
+    label(16, 108, line1, 1, uiFg());
+    label(16, 122, fitBrowserText(line2, 208), 1, uiFg());
   }
 
   // Metadata Card: Date and Size
-  card(6,174,228,52,uiCard());
-  label(12,180,"DATE:",1,uiMuted());
-  label(58,180,fileDetailDate,1,uiFg());
+  display.fillRoundRect(8, 144, 224, 56, 14, uiCard());
+  label(16, 150, "DATE:", 0, uiMuted());
+  label(58, 150, fileDetailDate, 0, uiFg());
 
-  label(12,196,"SIZE:",1,uiMuted());
-  label(58,196,storageSize(fileDetailSize)+" ("+String((unsigned long)fileDetailSize)+" B)",1,uiFg());
+  label(16, 166, "SIZE:", 0, uiMuted());
+  label(58, 166, storageSize(fileDetailSize) + " (" + String((unsigned long)fileDetailSize) + " B)", 0, uiFg());
 
-  label(12,212,"PATH:",1,uiMuted());
-  label(58,212,fitBrowserText(fileDetailPath,160),1,uiMuted());
+  label(16, 182, "PATH:", 0, uiMuted());
+  label(58, 182, fitBrowserText(fileDetailPath, 160), 0, uiMuted());
 
   // Delete Action / Confirmation
   if(!fileDeleteConfirm){
-    card(6,234,228,38,0xF800);
-    centeredLabel(6,245,228,"DELETE FILE",2,WHITE);
+    display.fillRoundRect(8, 206, 224, 40, 20, 0xF800);
+    centeredLabel(8, 218, 224, "DELETE FILE", 2, WHITE);
   } else {
-    card(6,234,110,38,0x4208);
-    centeredLabel(6,245,110,"CANCEL",1,WHITE);
+    display.fillRoundRect(8, 206, 108, 40, 20, 0x4208);
+    centeredLabel(8, 218, 108, "CANCEL", 1, WHITE);
 
-    card(124,234,110,38,0xF800);
-    centeredLabel(124,245,110,"CONFIRM",1,WHITE);
+    display.fillRoundRect(124, 206, 108, 40, 20, 0xF800);
+    centeredLabel(124, 218, 108, "CONFIRM", 1, WHITE);
 
-    centeredLabel(6,276,228,"Delete permanently from SD?",1,0xFA08);
+    centeredLabel(8, 252, 224, "Delete permanently from SD?", 0, 0xFA08);
   }
 }
 
@@ -525,17 +544,24 @@ static void drawLibrary(){
   statusBar();
 
   if(!libraryCount){
-    card(6,42,228,150,uiCard());
-    drawCustomIcon(display,108,71,uiMuted(),routes?CustomIcon::routeMapIcon:CustomIcon::historyIcon);
-    centeredLabel(6,106,228,libraryMessage.length()?libraryMessage:routes?"No saved routes":"No saved activities",1,uiMuted());
-    centeredLabel(6,134,228,routes?"Add routes to SD /routes":"Finish and save an activity",1,uiMuted());
+    display.fillRoundRect(8, 38, 224, 54, 27, uiCard());
+    centeredLabel(8, 56, 224, libraryMessage.length() ? libraryMessage : (routes ? "No saved routes" : "No saved activities"), 1, uiMuted());
   }
-  for(int i=0;i<libraryCount;i++){
-    int y=34+i*44;card(6,y,228,40,uiCard());
-    drawCustomIcon(display,14,y+12,TEAL,routes?CustomIcon::routeMapIcon:CustomIcon::historyIcon);
-    String title=libraryNames[i];title.replace(".fit","");title.replace(".json","");title.replace(".gpx","");
-    label(38,y+5,fitBrowserText(title,184),1);
-    label(38,y+23,routes?"Route - tap to view":libraryNames[i].startsWith("run-")?"Run - tap to view":"Ride - tap to view",1,uiMuted());
+  for(int i = 0; i < libraryCount; i++){
+    int y = 38 + i * 64;
+    display.fillRoundRect(8, y, 224, 54, 27, uiCard());
+    bool isRun = libraryNames[i].startsWith("run-") || libraryNames[i].indexOf("run") >= 0;
+    CustomIcon icon = routes ? CustomIcon::routeMapIconLarge : (isRun ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge);
+    drawCustomIcon(display, 22, y + 13, uiFg(), icon, 28, 28);
+
+    String title = libraryNames[i];
+    title.replace(".fit", ""); title.replace(".json", ""); title.replace(".gpx", ""); title.replace("_", " ");
+    if(title.length() > 14) title = truncateHeading(title, 14);
+    label(62, y + 19, title, 2, uiFg());
+
+    String szStr = storageSize(librarySizes[i]);
+    int sw = textWidth(szStr, 1);
+    label(220 - sw, y + 21, szStr, 1, uiMuted());
   }
 }
 static void libraryTap(int x,int y){
@@ -637,8 +663,8 @@ static void libraryTap(int x,int y){
     }
     return;
   }
-  int row=(y-34)/44;
-  if(y>=34 && row>=0 && row<libraryCount && y<34+row*44+40){
+  int row = (y - 38) / 64;
+  if(y >= 38 && row >= 0 && row < libraryCount && (y - 38) % 64 < 54 && x >= 8 && x <= 232){
     drawLoadingScreen("Loading assets...", "Please wait!");
     prevActivitySelection = "";
     prevActivityPage = HOME_APPS;
@@ -1434,24 +1460,97 @@ static void drawHomeSubpage(){
       return;
     }
     statusBar();
-    if(!sdOk)label(10,48,"SD card unavailable",1,0xFA08);
-    else if(browserError.length())label(10,48,browserError,1,0xFA08);
-    else if(!browserCount)label(10,48,"This folder is empty",1,uiMuted());
-    for(int i=0;i<browserCount;i++){int y=34+i*44;
-      card(6,y,228,40,uiCard());
-      String low=browserNames[i];low.toLowerCase();
-      CustomIcon icon = browserDirs[i] ? CustomIcon::folderIcon :
-                        low.endsWith(".fit") ? CustomIcon::runIcon :
-                        low.endsWith(".gpx") ? CustomIcon::routeMapIcon :
-                        CustomIcon::sdCardIcon;
-      uint16_t iconColor = browserDirs[i] ? uiFg() :
-                           low.endsWith(".fit") ? TEAL :
-                           low.endsWith(".gpx") ? 0x3DF7 : uiFg();
-      drawCustomIcon(display,14,y+12,iconColor,icon);
-      label(38,y+5,fitBrowserText(browserNames[i],184));
-      label(38,y+23,browserDirs[i]?"Folder - tap to open":storageSize(browserSizes[i])+" - tap to view",1,uiMuted());
+    bool isRoot = (browserPath == "/");
+    uint16_t folderCardBg = darkTheme ? 0x3221 : 0xFEE7;
+    uint16_t folderAmber = darkTheme ? 0xFDE0 : 0xB480;
+
+    if(!sdOk){
+      display.fillRoundRect(8, 38, 224, 54, 27, uiCard());
+      centeredLabel(8, 56, 224, "SD card unavailable", 1, 0xFA08);
     }
-    if(selectedFile.length())label(8,275,fitBrowserText(selectedFile,224),1,uiMuted());
+    else if(browserError.length()){
+      display.fillRoundRect(8, 38, 224, 54, 27, uiCard());
+      centeredLabel(8, 56, 224, browserError, 1, 0xFA08);
+    }
+    else if(isRoot){
+      // Root Directory: Frame 33 style - up to 4 folder pills (224x54, R=27)
+      if(!browserCount){
+        display.fillRoundRect(8, 38, 224, 54, 27, uiCard());
+        centeredLabel(8, 56, 224, "No folders found", 1, uiMuted());
+      }
+      for(int i = 0; i < browserCount; i++){
+        int y = 38 + i * 64;
+        display.fillRoundRect(8, y, 224, 54, 27, folderCardBg);
+        // Large Folder Icon (amber)
+        drawCustomIcon(display, 22, y + 13, folderAmber, CustomIcon::folderIconLarge, 30, 28);
+        // Folder Name (amber, font size 2)
+        label(62, y + 19, browserNames[i], 2, folderAmber);
+        // Dynamic file count or size on right (amber, font size 3)
+        if(browserDirs[i]){
+          String dirPath = String("/") + browserNames[i];
+          int c = countFilesInDir(dirPath);
+          String cStr = String(c);
+          int cw = textWidth(cStr, 3);
+          label(216 - cw, y + 15, cStr, 3, folderAmber);
+        } else {
+          String sz = storageSize(browserSizes[i]);
+          int sw = textWidth(sz, 2);
+          label(216 - sw, y + 19, sz, 2, folderAmber);
+        }
+      }
+    } else {
+      // Subdirectory: Frame 34 style
+      // Row 1: Folder Header Pill (tapping navigates back)
+      int slash = browserPath.lastIndexOf('/');
+      String curFolder = (slash >= 0) ? browserPath.substring(slash + 1) : browserPath;
+      if(curFolder.isEmpty()) curFolder = "files";
+      display.fillRoundRect(8, 38, 224, 54, 27, folderCardBg);
+      drawCustomIcon(display, 22, 38 + 13, folderAmber, CustomIcon::folderIconLarge, 30, 28);
+      label(62, 38 + 19, curFolder, 2, folderAmber);
+
+      // Rows 2, 3, 4: File Pills (224x54, R=27, dark cards)
+      if(!browserCount){
+        display.fillRoundRect(8, 102, 224, 54, 27, uiCard());
+        centeredLabel(8, 120, 224, "This folder is empty", 1, uiMuted());
+      }
+      for(int i = 0; i < browserCount; i++){
+        int y = 102 + i * 64;
+        display.fillRoundRect(8, y, 224, 54, 27, uiCard());
+
+        String low = browserNames[i];
+        low.toLowerCase();
+        CustomIcon icon;
+        if(browserDirs[i]){
+          icon = CustomIcon::folderIconLarge;
+        } else if(low.endsWith(".fit")){
+          if(low.indexOf("run") >= 0) icon = CustomIcon::runIconLarge;
+          else icon = CustomIcon::bikeIconLarge;
+        } else if(low.endsWith(".gpx")){
+          icon = CustomIcon::routeMapIconLarge;
+        } else if(low.endsWith(".bin")){
+          icon = CustomIcon::mapAppIconLarge;
+        } else {
+          icon = CustomIcon::sdCardIcon;
+        }
+
+        // Left Icon in clean white/uiFg
+        drawCustomIcon(display, 22, y + 13, uiFg(), icon, 28, 28);
+
+        // Center: Formatted File Display Name
+        String dispName = browserNames[i];
+        dispName.replace(".fit", "");
+        dispName.replace(".gpx", "");
+        dispName.replace(".bin", "");
+        dispName.replace("_", " ");
+        if(dispName.length() > 14) dispName = truncateHeading(dispName, 14);
+        label(62, y + 19, dispName, 2, uiFg());
+
+        // Right: File Size in uiMuted() (e.g. "50KB")
+        String szStr = browserDirs[i] ? "DIR" : storageSize(browserSizes[i]);
+        int sw = textWidth(szStr, 1);
+        label(220 - sw, y + 21, szStr, 1, uiMuted());
+      }
+    }
   }
 
 }
@@ -1885,9 +1984,9 @@ static void drawHomeClockWidget() {
     dateStr = "Friday 6 Nov, 2026";
   }
 
-  // Large 56px smooth digits centered at Y = 38 (height 44px)
-  drawSmoothClock56(38, local.tm_hour, local.tm_min, fg);
-  centeredLabel(0, 90, DISP_W, dateStr, 0, fg);
+  // Large 56px smooth digits lowered slightly to Y = 46 (height 44px)
+  drawSmoothClock56(46, local.tm_hour, local.tm_min, fg);
+  centeredLabel(0, 98, DISP_W, dateStr, 0, fg);
 }
 
 
@@ -2036,7 +2135,7 @@ static void quickTap(int x, int y) {
           uiRevision++;
           return;
         }
-        if(y>=234 && y<274){
+        if(y>=204 && y<250){
           if(!fileDeleteConfirm){
             fileDeleteConfirm=true;
             uiRevision++;
@@ -2058,20 +2157,34 @@ static void quickTap(int x, int y) {
         }
         return;
       }
-      if(browserPath != "/" && y>=29 && y<60 && x<60){
-        int slash=browserPath.lastIndexOf('/');
-        browserPath=slash<=0?"/":browserPath.substring(0,slash);
-        browserPage=0;
-        loadBrowser();
-        uiRevision++;
+      if(browserPath != "/"){
+        // Tapping Row 1 (Folder Header Pill) goes back to root
+        if(y >= 38 && y < 92 && x >= 8 && x <= 232){
+          int slash = browserPath.lastIndexOf('/');
+          browserPath = slash <= 0 ? "/" : browserPath.substring(0, slash);
+          browserPage = 0;
+          loadBrowser();
+          uiRevision++;
+          return;
+        }
+        // File rows (Rows 2, 3, 4 at y=102, 166, 230)
+        int row = (y - 102) / 64;
+        if(y >= 102 && row >= 0 && row < browserCount && (y - 102) % 64 < 54 && x >= 8 && x <= 232){
+          if(browserDirs[row]) openBrowser((browserPath == "/" ? String("") : browserPath) + "/" + browserNames[row]);
+          else openFileDetail(row);
+          return;
+        }
+        return;
+      } else {
+        // Root folder rows (Rows 1, 2, 3, 4 at y=38, 102, 166, 230)
+        int row = (y - 38) / 64;
+        if(y >= 38 && row >= 0 && row < browserCount && (y - 38) % 64 < 54 && x >= 8 && x <= 232){
+          if(browserDirs[row]) openBrowser((browserPath == "/" ? String("") : browserPath) + "/" + browserNames[row]);
+          else openFileDetail(row);
+          return;
+        }
         return;
       }
-      int row=(y-34)/44;
-      if(y>=34 && row>=0 && row<browserCount && y<34+row*44+40){
-        if(browserDirs[row])openBrowser((browserPath=="/"?String(""):browserPath)+"/"+browserNames[row]);
-        else openFileDetail(row);
-      }
-      return;
     }
     if(homePage==HOME_ACTIVITY_SETTINGS){
       tapActivitySettings(x, y);

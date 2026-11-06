@@ -5,7 +5,8 @@
 TwoWire touchBus(1);
 bool touchReady = false, quickOpen = false, ridePaused = false;
 extern bool autoPauseEnabled, autoPaused;
-extern uint32_t autoPauseStartMs, nearZeroSpeedStartMs, autoPauseOverrideGraceMs;
+extern uint32_t autoPauseStartMs, nearZeroSpeedStartMs, autoPauseOverrideGraceMs, autoResumeMovementStartMs;
+extern float autoPauseAnchorLat, autoPauseAnchorLon;
 extern int controlSliderOffset;
 extern bool controlSliderDragging;
 extern int controlSliderStartX;
@@ -2415,6 +2416,8 @@ static void quickTap(int x, int y) {
         }
         autoPauseOverrideGraceMs = millis() + 15000;
         nearZeroSpeedStartMs = 0;
+        autoResumeMovementStartMs = 0;
+        autoPauseAnchorLat = autoPauseAnchorLon = 0.0f;
         distAnchorLat = distAnchorLon = 0.0f;
         fitEvent(0);
         uiRevision++;
@@ -2459,6 +2462,9 @@ static void quickTap(int x, int y) {
             rideStartMs += (millis() - autoPauseStartMs);
             autoPauseStartMs = 0;
           }
+          nearZeroSpeedStartMs = 0;
+          autoResumeMovementStartMs = 0;
+          autoPauseAnchorLat = autoPauseAnchorLon = 0.0f;
         }
         uiRevision++;
         return;

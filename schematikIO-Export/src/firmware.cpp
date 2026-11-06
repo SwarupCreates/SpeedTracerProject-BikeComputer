@@ -379,7 +379,9 @@ bool            autoPauseEnabled = true;
 bool            autoPaused = false;
 uint32_t        autoPauseStartMs = 0;
 uint32_t        nearZeroSpeedStartMs = 0;
+uint32_t        autoResumeMovementStartMs = 0;
 uint32_t        autoPauseOverrideGraceMs = 0;
+float           autoPauseAnchorLat = 0.0f, autoPauseAnchorLon = 0.0f;
 int             controlSliderOffset = 0;
 bool            controlSliderDragging = false;
 int             controlSliderStartX = 0;
@@ -780,6 +782,10 @@ static void saveActivity() {
   else activityMessage="No open activity to save";
   rideStarted=false;
   autoPaused=false;
+  autoPauseStartMs = 0;
+  nearZeroSpeedStartMs = 0;
+  autoResumeMovementStartMs = 0;
+  autoPauseAnchorLat = autoPauseAnchorLon = 0.0f;
   controlSliderOffset=0;
   controlSliderDragging=false;
   resetMaxSpeedTracker();
@@ -2141,20 +2147,24 @@ void loop() {
   }
   ride.speedKmh = filteredGpsSpeed;
 
-  // Auto-Pause & Auto-Resume Detection
+  // Auto-Pause & Auto-Resume Detection (3-tier filter with speed hysteresis, temporal & spatial confirmation)
   if (rideStarted && !ridePaused && autoPauseEnabled) {
-    float deadzone = runningMode ? 0.8f : 1.0f;
-    float resumeThreshold = runningMode ? 1.4f : 1.8f;
+    float pauseSpeedThreshold = runningMode ? 1.0f : 1.5f;
+    float resumeSpeedThreshold = runningMode ? 2.8f : 4.0f;
+    const float highSpeedThreshold = 7.0f;
     float curSpd = speedAvailable() ? ride.speedKmh : 0.0f;
 
     if (!autoPaused) {
-      if (curSpd < deadzone && millis() > autoPauseOverrideGraceMs) {
+      if (curSpd < pauseSpeedThreshold && millis() > autoPauseOverrideGraceMs) {
         if (nearZeroSpeedStartMs == 0) {
           nearZeroSpeedStartMs = millis();
         } else if (millis() - nearZeroSpeedStartMs >= 4000) { // 4 seconds idle buffer
           autoPaused = true;
           autoPauseStartMs = millis();
           nearZeroSpeedStartMs = 0;
+          autoResumeMovementStartMs = 0;
+          autoPauseAnchorLat = (ride.gpsFixed && gps.location.isValid()) ? (float)gps.location.lat() : 0.0f;
+          autoPauseAnchorLon = (ride.gpsFixed && gps.location.isValid()) ? (float)gps.location.lng() : 0.0f;
           fitEvent(4); // Pause FIT event
           uiRevision++;
         }
@@ -2162,21 +2172,43 @@ void loop() {
         nearZeroSpeedStartMs = 0;
       }
     } else {
-      // Auto-resume check: movement detected for >= 2 consecutive readings
-      if (curSpd >= resumeThreshold) {
-        static uint8_t motionFixCount = 0;
-        motionFixCount++;
-        if (motionFixCount >= 2) {
-          autoPaused = false;
-          motionFixCount = 0;
-          nearZeroSpeedStartMs = 0;
-          if (autoPauseStartMs > 0) {
-            rideStartMs += (millis() - autoPauseStartMs);
-            autoPauseStartMs = 0;
+      // Auto-resume check:
+      // Require HDOP to be reasonable to prevent indoor multipath false triggers
+      bool hdopAcceptable = (!gps.hdop.isValid() || gps.hdop.hdop() <= 4.5f);
+      bool movingNow = (curSpd >= resumeSpeedThreshold) && hdopAcceptable;
+
+      if (!movingNow) {
+        autoResumeMovementStartMs = 0;
+      } else {
+        if (autoResumeMovementStartMs == 0) {
+          autoResumeMovementStartMs = millis();
+        } else {
+          uint32_t moveDuration = millis() - autoResumeMovementStartMs;
+
+          // Check physical displacement from the pause location (eliminates stationary chair drift)
+          float dispMeters = 0.0f;
+          if (autoPauseAnchorLat != 0.0f && autoPauseAnchorLon != 0.0f && ride.gpsFixed && gps.location.isValid()) {
+            dispMeters = haversineKm(autoPauseAnchorLat, autoPauseAnchorLon, (float)gps.location.lat(), (float)gps.location.lng()) * 1000.0f;
           }
-          distAnchorLat = distAnchorLon = 0.0f;
-          fitEvent(0); // Resume FIT event
-          uiRevision++;
+          bool displacementOk = (dispMeters >= 8.0f) || (autoPauseAnchorLat == 0.0f);
+
+          // Fast resume if riding fast (>= 7 km/h for 1.5s), or standard resume (>= 2.5s sustained with > 8m displacement)
+          bool highSpeedConfirm = (curSpd >= highSpeedThreshold && moveDuration >= 1500);
+          bool normalConfirm = (moveDuration >= 2500 && displacementOk);
+
+          if (highSpeedConfirm || normalConfirm) {
+            autoPaused = false;
+            autoResumeMovementStartMs = 0;
+            nearZeroSpeedStartMs = 0;
+            if (autoPauseStartMs > 0) {
+              rideStartMs += (millis() - autoPauseStartMs);
+              autoPauseStartMs = 0;
+            }
+            distAnchorLat = distAnchorLon = 0.0f;
+            autoPauseAnchorLat = autoPauseAnchorLon = 0.0f;
+            fitEvent(0); // Resume FIT event
+            uiRevision++;
+          }
         }
       }
     }
@@ -2187,7 +2219,9 @@ void loop() {
       autoPauseStartMs = 0;
     }
     nearZeroSpeedStartMs = 0;
+    autoResumeMovementStartMs = 0;
     distAnchorLat = distAnchorLon = 0.0f;
+    autoPauseAnchorLat = autoPauseAnchorLon = 0.0f;
     uiRevision++;
   }
   static float filteredGpsAlt = 0.0f;

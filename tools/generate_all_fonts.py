@@ -4,7 +4,8 @@ import re
 FONTS = [
     ("Metro", "font/Metropolis-Medium.ttf", "Metropolis Medium", [(10, 7), (12, 9), (18, 13), (28, 20)]),
     ("GoogleSans", "font/GoogleSans-Medium.ttf", "Google Sans Medium", [(10, 7), (12, 9), (18, 13), (28, 20)]),
-    ("Michroma", "font/Michroma-Regular.ttf", "Michroma Regular", [(10, 7), (12, 9), (18, 13), (28, 20)]),
+    ("Galano", "font/Galano Grotesque Semi Bold.otf", "Galano Grotesque SemiBold", [(10, 7), (12, 9), (18, 13), (28, 20)]),
+    ("GalanoItalic", "font/Galano Grotesque Semi Bold Italic.otf", "Galano Grotesque Italic", [(10, 7), (12, 9), (18, 13), (28, 20)]),
     ("SpaceGrotesk", "font/SpaceGrotesk-SemiBold.ttf", "Space Grotesk SemiBold", [(10, 7), (12, 9), (18, 13), (28, 20)]),
     ("Tektur", "font/Tektur-Medium.ttf", "Tektur Medium", [(10, 8), (12, 9), (18, 13), (28, 20)])
 ]
@@ -31,22 +32,24 @@ header_code = '''#pragma once
 #include <Arduino.h>
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  SPEEDTRACER MULTI-FONT SYSTEM (5 ANTI-ALIASED FONTS x 4 SIZES)
+//  SPEEDTRACER MULTI-FONT SYSTEM (6 ANTI-ALIASED FONTS x 4 SIZES)
 //  Auto-generated 4-BPP raw uncompressed font tables for live theme switching
 // ═══════════════════════════════════════════════════════════════════════════════
 
 enum SystemFontId {
   FONT_METROPOLIS = 0,
   FONT_GOOGLE_SANS = 1,
-  FONT_MICHROMA = 2,
-  FONT_SPACE_GROTESK = 3,
-  FONT_TEKTUR = 4
+  FONT_GALANO = 2,
+  FONT_GALANO_ITALIC = 3,
+  FONT_SPACE_GROTESK = 4,
+  FONT_TEKTUR = 5
 };
 
 static const char* const SYSTEM_FONT_NAMES[] = {
   "Metropolis",
   "Google Sans",
-  "Michroma",
+  "Galano Grotesque",
+  "Galano Italic",
   "Space Grotesk",
   "Tektur"
 };
@@ -85,7 +88,7 @@ for sz in [10, 12, 18, 28]:
     header_code += f'static const SmoothFont& smoothFont{sz} = smoothFont_Metro_{sz};\n'
 header_code += '\n'
 
-print(f"Total bitmap bytes across all 20 fonts: {total_bytes} bytes (~{total_bytes // 1024} KB)")
+print(f"Total bitmap bytes across all 24 fonts: {total_bytes} bytes (~{total_bytes // 1024} KB)")
 
 with open('firmware/src/system_fonts.h', 'w', encoding='utf-8') as f:
     f.write(header_code)

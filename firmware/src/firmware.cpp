@@ -480,8 +480,10 @@ static const SmoothFont& textFont(int size) {
   switch (activeFontId) {
     case FONT_GOOGLE_SANS:
       return size == 0 ? smoothFont_GoogleSans_12 : size <= 1 ? smoothFont_GoogleSans_10 : size == 2 ? smoothFont_GoogleSans_18 : smoothFont_GoogleSans_28;
-    case FONT_MICHROMA:
-      return size == 0 ? smoothFont_Michroma_12 : size <= 1 ? smoothFont_Michroma_10 : size == 2 ? smoothFont_Michroma_18 : smoothFont_Michroma_28;
+    case FONT_GALANO:
+      return size == 0 ? smoothFont_Galano_12 : size <= 1 ? smoothFont_Galano_10 : size == 2 ? smoothFont_Galano_18 : smoothFont_Galano_28;
+    case FONT_GALANO_ITALIC:
+      return size == 0 ? smoothFont_GalanoItalic_12 : size <= 1 ? smoothFont_GalanoItalic_10 : size == 2 ? smoothFont_GalanoItalic_18 : smoothFont_GalanoItalic_28;
     case FONT_SPACE_GROTESK:
       return size == 0 ? smoothFont_SpaceGrotesk_12 : size <= 1 ? smoothFont_SpaceGrotesk_10 : size == 2 ? smoothFont_SpaceGrotesk_18 : smoothFont_SpaceGrotesk_28;
     case FONT_TEKTUR:

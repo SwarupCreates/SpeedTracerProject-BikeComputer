@@ -543,14 +543,6 @@ static void drawSettingsApp() {
 
   if (settingsPage == SET_MAIN) {
     const char* titles[] = {"Theme & Font", "Language", "Time & Region", "Security", "Reset", "Power"};
-    String subtitles[] = {
-      (darkTheme ? "Dark" : "Light") + String(" • ") + SYSTEM_FONT_NAMES[activeFontId],
-      "English (US)",
-      "UTC+05:30 (IST)",
-      screenLockEnabled ? "Screen Lock: ON" : "Screen Lock: OFF",
-      "Format SD & Soft Reset",
-      "Battery & Power Options"
-    };
     CustomIcon icons[] = {
       CustomIcon::themeSwitcherIcon,
       CustomIcon::languageIcon,
@@ -566,8 +558,7 @@ static void drawSettingsApp() {
       if (y + 48 <= 56 || y >= 286) continue;
       display.fillRoundRect(6, y, 228, 48, 12, uiCard());
       drawCustomIcon(display, 16, y + 13, uiFg(), icons[i], 22, 22);
-      label(46, y + 9, titles[i], 1, uiFg());
-      label(46, y + 25, subtitles[i], 0, uiMuted());
+      label(46, y + 18, titles[i], 1, uiFg());
       drawCustomIcon(display, 212, y + 16, uiMuted(), CustomIcon::goNextIcon, 16, 16);
     }
 
@@ -616,23 +607,24 @@ static void drawSettingsApp() {
     const char* fontDescs[] = {
       "Modern Geometric Sans",
       "Clean Balanced Sans",
-      "Tech Racing Display",
+      "Semi Bold Grotesque",
+      "Semi Bold Dynamic Italic",
       "Modern Monospace Style",
       "Futuristic Tech Modular"
     };
 
-    for (int i = 0; i < 5; i++) {
-      int y = 60 + i * 43;
+    for (int i = 0; i < 6; i++) {
+      int y = 58 + i * 38;
       bool sel = (activeFontId == i);
-      display.fillRoundRect(6, y, 228, 39, 10, uiCard());
-      if (sel) display.drawRoundRect(6, y, 228, 39, 10, 0x34C2);
+      display.fillRoundRect(6, y, 228, 34, 10, uiCard());
+      if (sel) display.drawRoundRect(6, y, 228, 34, 10, 0x34C2);
 
       // Radio circle
-      display.drawCircle(22, y + 19, 7, sel ? 0x34C2 : uiMuted());
-      if (sel) display.fillCircle(22, y + 19, 3, 0x34C2);
+      display.drawCircle(22, y + 17, 7, sel ? 0x34C2 : uiMuted());
+      if (sel) display.fillCircle(22, y + 17, 3, 0x34C2);
 
-      label(38, y + 6, SYSTEM_FONT_NAMES[i], 1, sel ? 0x34C2 : uiFg());
-      label(38, y + 21, fontDescs[i], 0, uiMuted());
+      label(38, y + 4, SYSTEM_FONT_NAMES[i], 1, sel ? 0x34C2 : uiFg());
+      label(38, y + 19, fontDescs[i], 0, uiMuted());
     }
   }
   else if (settingsPage == SET_LANGUAGE) {
@@ -857,9 +849,9 @@ static void tapSettings(int x, int y) {
   }
   else if (settingsPage == SET_FONT) {
     if (x >= 6 && x < 234) {
-      for (int i = 0; i < 5; i++) {
-        int iy = 60 + i * 43;
-        if (y >= iy && y < iy + 39) {
+      for (int i = 0; i < 6; i++) {
+        int iy = 58 + i * 38;
+        if (y >= iy && y < iy + 34) {
           setActiveFont(i);
           uiRevision++;
           break;

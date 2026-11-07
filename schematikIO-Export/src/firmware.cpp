@@ -871,8 +871,9 @@ static void drawDashScreen() {
   // Top Row: AVG (Left) and MAX (Right)
   label(18, 38, "AVG", 1, mutedCol);
   label(18, 48, (ride.elapsedSec ? (runningMode ? paceText(ride.avgSpeedKmh) : String(ride.avgSpeedKmh, 1)) : String("--")), 2, fgCol);
-  label(192, 38, "MAX", 1, mutedCol);
-  label(180, 48, (ride.elapsedSec ? (runningMode ? paceText(ride.maxSpeedKmh) : String(ride.maxSpeedKmh, 1)) : String("--")), 2, fgCol);
+  label(222 - textWidth("MAX", 1), 38, "MAX", 1, mutedCol);
+  String maxSp = (ride.elapsedSec ? (runningMode ? paceText(ride.maxSpeedKmh) : String(ride.maxSpeedKmh, 1)) : String("--"));
+  label(222 - textWidth(maxSp, 2), 48, maxSp, 2, fgCol);
 
   // Center Circular Arc Gauge with Rounded Caps (cx = 120, cy = 103, R = 61.5, W = 6)
   const int cx = 120, cy = 103;
@@ -967,8 +968,9 @@ static void drawDashScreen() {
   drawCustomIcon(display, hrStartX, 208, hrPillFg, CustomIcon::heartRateIcon, 30, 30);
   label(hrStartX + 36, 209, hrStr, 4, hrPillFg);
 
-  label(192, 208, "MAX", 1, mutedCol);
-  label(188, 222, (hrSamples ? String(hrMax) : String("--")), 2, fgCol);
+  label(222 - textWidth("MAX", 1), 208, "MAX", 1, mutedCol);
+  String maxHrStr = (hrSamples ? String(hrMax) : String("--"));
+  label(222 - textWidth(maxHrStr, 2), 222, maxHrStr, 2, fgCol);
 
   // Zone text and pointer (neutral muted grey if no HR reading)
   uint16_t zoneCol = (bleHRReady && hrVal > 0) ? (darkTheme ? zc.textDark : zc.textLight) : mutedCol;
@@ -1057,8 +1059,10 @@ static void drawMetricsScreen() {
   }
   drawCustomIcon(display, 24, 117, ORANGE, CustomIcon::caloriesIcon, 24, 24);
   String calStr = String((int)calorieEstimate) + "/" + String(tgtCal);
-  label(64, 119, calStr, 3, fgCol);
-  label(222 - textWidth("KCAL", 1), 125, "KCAL", 1, mutedCol);
+  int calW = textWidth(calStr, 3);
+  int calX = 8 + (224 - calW) / 2;
+  label(calX, 119, calStr, 3, fgCol);
+  label(220 - textWidth("KCAL", 1), 125, "KCAL", 1, mutedCol);
 
   // Row 3 (y = 166, h = 54): Two 108x54 pills
   display.fillRoundRect(8, 166, 108, 54, 27, cardBg);
@@ -1079,7 +1083,7 @@ static void drawMetricsScreen() {
   int durTextW = textWidth(durStr, 3);
   int durBlockW = 30 + 10 + durTextW;
   int durStartX = 8 + (224 - durBlockW) / 2;
-  drawCustomIcon(display, durStartX, 242, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  drawCustomIcon(display, durStartX, 242, TEAL, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 30, 30);
   label(durStartX + 40, 247, durStr, 3, fgCol);
 }
 
@@ -1475,7 +1479,37 @@ static void drawMapScreen() {
   centeredLabel(124, 247, 108, distStr, 3, uiFg());
 }
 
+static void drawEndConfirmScreen() {
+  statusBar();
+  uint16_t fgCol = uiFg();
+  uint16_t cardBg = darkTheme ? 0x18C3 : 0xEF5D;
+
+  // Prominent Red Stop / Warning Badge Disc
+  display.fillCircle(120, 64, 24, 0xF800);
+  display.fillRect(118, 50, 4, 18, 0xFFFF);
+  display.fillCircle(120, 74, 2, 0xFFFF);
+
+  // Large Bold Title
+  centeredLabel(8, 98, 224, runningMode ? "END RUN?" : "END RIDE?", 3, fgCol);
+
+  // Activity Summary Metrics Subtitle
+  String summaryStr = durationText() + "  |  " + (rideStarted || activityPoints ? String(ride.distanceKm, 2) + " KM" : "0.00 KM");
+  centeredLabel(8, 130, 224, summaryStr, 1, TEAL);
+
+  // Big Capsule Button 1: Save & Finish (Solid Red, 224x54, R=27)
+  display.fillRoundRect(8, 166, 224, 54, 27, 0xF800);
+  centeredLabel(8, 184, 224, "Save & Finish", 2, 0xFFFF);
+
+  // Big Capsule Button 2: Resume Activity (Card Bg, 224x54, R=27)
+  display.fillRoundRect(8, 230, 224, 54, 27, cardBg);
+  centeredLabel(8, 248, 224, "Resume Activity", 2, fgCol);
+}
+
 static void drawActivityControlsScreen() {
+  if (activityEndConfirm) {
+    drawEndConfirmScreen();
+    return;
+  }
   statusBar();
   uint16_t fgCol = uiFg();
   uint16_t mutedCol = uiMuted();
@@ -1487,7 +1521,7 @@ static void drawActivityControlsScreen() {
   int durTextW = textWidth(durStr, 3);
   int durBlockW = 30 + 10 + durTextW;
   int durStartX = 8 + (224 - durBlockW) / 2;
-  drawCustomIcon(display, durStartX, 50, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  drawCustomIcon(display, durStartX, 50, TEAL, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 30, 30);
   label(durStartX + 40, 55, durStr, 3, fgCol);
 
   // Row 2 (y = 102, h = 54): Auto Pause Activity toggle
@@ -1501,7 +1535,7 @@ static void drawActivityControlsScreen() {
   uint16_t amberCardBg = darkTheme ? 0x4220 : 0xFFE0;
   uint16_t amberText = darkTheme ? 0xFEE0 : 0x8C00;
   display.fillRoundRect(8, 166, 224, 54, 27, amberCardBg);
-  label(24, 186, ridePaused ? "Resume Ride" : "Pause Ride", 2, amberText);
+  label(24, 189, ridePaused ? "Resume Ride" : "Pause Ride", 1, amberText);
   display.fillCircle(198, 193, 17, 0xFFFF);
   if (!ridePaused) {
     display.fillRect(193, 186, 3, 14, 0xF800);
@@ -1517,23 +1551,9 @@ static void drawActivityControlsScreen() {
   int pillX = 124 + controlSliderOffset;
   display.fillRoundRect(pillX, 230, 108, 54, 27, 0xE800);
   drawCustomIconFlippedH(display, pillX + 18, 249, 0xFFFF, CustomIcon::goNextIcon, 16, 16);
-  drawCustomIcon(display, pillX + 54, 242, 0xFFFF, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  drawCustomIcon(display, pillX + 54, 242, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 30, 30);
 
-  // Modal Dialog: End Activity Confirmation
-  if (activityEndConfirm) {
-    card(14, 76, 212, 148, uiCard());
-    display.drawRoundRect(14, 76, 212, 148, 8, RED);
-    display.drawRoundRect(15, 77, 210, 146, 7, RED);
 
-    centeredLabel(14, 92, 212, "END ACTIVITY?", 2, RED);
-    centeredLabel(14, 120, 212, "Save FIT & finish session?", 1, uiFg());
-
-    card(26, 154, 90, 48, RED);
-    centeredLabel(26, 169, 90, "CONFIRM", 2, 0xFFFF);
-
-    card(124, 154, 90, 48, darkTheme ? 0x39E7 : 0xBDD7);
-    centeredLabel(124, 169, 90, "CANCEL", 2, uiFg());
-  }
 }
 
 static void drawAutoPauseScreen() {
@@ -1558,7 +1578,7 @@ static void drawAutoPauseScreen() {
   int ovrTextW = textWidth(ovrStr, 3);
   int ovrBlockW = 30 + 10 + ovrTextW;
   int ovrStartX = 8 + (224 - ovrBlockW) / 2;
-  drawCustomIcon(display, ovrStartX, 240, 0xFFFF, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  drawCustomIcon(display, ovrStartX, 240, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 30, 30);
   label(ovrStartX + 40, 245, ovrStr, 3, 0xFFFF);
 }
 

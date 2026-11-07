@@ -2784,22 +2784,24 @@ static void quickTap(int x, int y) {
     }
     if (currentScreen == SCR_CONTROLS) {
       if (activityEndConfirm) {
-        if (y >= 150 && y <= 210) {
-          if (x >= 24 && x <= 118) {
-            activityEndConfirm = false;
-            saveActivity();
-            ridePaused = false;
-            welcomeOpen = true;
-            homePage = HOME_MAIN;
-            currentScreen = SCR_DASH;
-            uiRevision++;
-            return;
-          } else if (x >= 122 && x <= 216) {
-            activityEndConfirm = false;
-            uiRevision++;
-            return;
-          }
+        // Big Capsule Button 1: Save & Finish (y = 166..220)
+        if (y >= 160 && y <= 224 && x >= 8 && x <= 232) {
+          activityEndConfirm = false;
+          saveActivity();
+          ridePaused = false;
+          welcomeOpen = true;
+          homePage = HOME_MAIN;
+          currentScreen = SCR_DASH;
+          uiRevision++;
+          return;
         }
+        // Big Capsule Button 2: Resume Activity (y = 230..284)
+        if (y >= 226 && y <= 288 && x >= 8 && x <= 232) {
+          activityEndConfirm = false;
+          uiRevision++;
+          return;
+        }
+        // Tapping anywhere else also cancels confirmation safely
         activityEndConfirm = false;
         uiRevision++;
         return;

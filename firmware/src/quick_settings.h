@@ -2019,33 +2019,8 @@ static void updateRideCountdown() {
 }
 static void drawBigNumber(int rightX, int y, int value, uint16_t fg = 0xFFFF) {
   String s = String(value);
-  int totalAdvance = 0;
-  for (unsigned int k = 0; k < s.length(); k++) {
-    char ch = s[k];
-    if (ch >= '0' && ch <= '9') {
-      totalAdvance += smoothDigitGlyphs48[ch - '0'].advance;
-    }
-  }
-  int pen = (rightX * 16) - totalAdvance;
-  for (unsigned int k = 0; k < s.length(); k++) {
-    char ch = s[k];
-    if (ch < '0' || ch > '9') continue;
-    const auto& g = smoothDigitGlyphs48[ch - '0'];
-    int gx = (pen + 8) / 16 + g.x;
-    int gy = y + g.y;
-    for (int row = 0; row < g.h; row++) {
-      for (int col = 0; col < g.w; col++) {
-        int i = row * g.w + col;
-        uint8_t bits = pgm_read_byte(&smoothDigitBits48[g.offset + i / 2]);
-        int a = (bits >> ((i & 1) ? 0 : 4)) & 15;
-        if (a) {
-          uint16_t bg = display.backgroundPixel(gx + col, gy + row);
-          display.drawPixel(gx + col, gy + row, blendText(fg, bg, a));
-        }
-      }
-    }
-    pen += g.advance;
-  }
+  int w = textWidth(s, 4);
+  label(rightX - w, y, s, 4, fg);
 }
 
 static void drawGpsRadarScreen() {
@@ -2111,7 +2086,7 @@ static void drawGpsRadarScreen() {
   int textY = 217 - gpsScroll;
   label(20, textY, "LOCKED", 2, uiFg());
   label(20, textY + 23, "SATELLITES", 2, uiFg());
-  drawBigNumber(220, textY + 1, sats, uiFg());
+  drawBigNumber(220, textY + 5, sats, uiFg());
 
   // Satellite Connection Quality Progress Bar (max 6 sats for stable connection)
   int barY = 270 - gpsScroll;
@@ -2169,38 +2144,12 @@ static void drawGpsRadarScreen() {
   statusBar(true, false);
   drawGlobalNav();
 }
- static void drawCenteredBigNumber(int cx, int cy, int value, uint16_t fg = 0xFFFF) {
+static void drawCenteredBigNumber(int cx, int cy, int value, uint16_t fg = 0xFFFF) {
   String s = String(value);
-  int totalAdvance = 0;
-  for (unsigned int k = 0; k < s.length(); k++) {
-    char ch = s[k];
-    if (ch >= '0' && ch <= '9') {
-      totalAdvance += smoothDigitGlyphs48[ch - '0'].advance;
-    }
-  }
-  int totalW = (totalAdvance + 8) / 16;
-  int startX = cx - totalW / 2;
-  int pen = startX * 16;
-  int startY = cy - 17; // vertical center around cy for 34px glyph height
-  for (unsigned int k = 0; k < s.length(); k++) {
-    char ch = s[k];
-    if (ch < '0' || ch > '9') continue;
-    const auto& g = smoothDigitGlyphs48[ch - '0'];
-    int gx = (pen + 8) / 16 + g.x;
-    int gy = startY + g.y;
-    for (int row = 0; row < g.h; row++) {
-      for (int col = 0; col < g.w; col++) {
-        int i = row * g.w + col;
-        uint8_t bits = pgm_read_byte(&smoothDigitBits48[g.offset + i / 2]);
-        int a = (bits >> ((i & 1) ? 0 : 4)) & 15;
-        if (a) {
-          uint16_t bg = display.backgroundPixel(gx + col, gy + row);
-          display.drawPixel(gx + col, gy + row, blendText(fg, bg, a));
-        }
-      }
-    }
-    pen += g.advance;
-  }
+  int w = textWidth(s, 4);
+  const auto& f = textFont(4);
+  int startY = cy - f.cap / 2;
+  label(cx - w / 2, startY, s, 4, fg);
 }
 
 static void drawColoredArc(int cx, int cy, int r, float startDeg, float spanDeg, int thickness, uint16_t color) {

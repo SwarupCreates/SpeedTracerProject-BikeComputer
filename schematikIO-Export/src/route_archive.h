@@ -510,6 +510,10 @@ static void previewDraw(int y, int h, bool showControls = true) {
     uint8_t c0 = getCode(x0, y0), c1 = getCode(x1, y1);
     while (true) {
       if (!(c0 | c1)) {
+        x0 = constrain(x0, clipX1, clipX2);
+        x1 = constrain(x1, clipX1, clipX2);
+        y0 = constrain(y0, clipY1, clipY2);
+        y1 = constrain(y1, clipY1, clipY2);
         if (width <= 1) {
           display.drawLine(x0, y0, x1, y1, color);
         } else {
@@ -518,16 +522,24 @@ static void previewDraw(int y, int h, bool showControls = true) {
           int h = width / 2;
           if (dx >= dy) {
             for (int k = -h; k <= width - 1 - h; k++) {
-              display.drawLine(x0, y0 + k, x1, y1 + k, color);
+              int ly0 = constrain(y0 + k, clipY1, clipY2);
+              int ly1 = constrain(y1 + k, clipY1, clipY2);
+              display.drawLine(x0, ly0, x1, ly1, color);
             }
           } else {
             for (int k = -h; k <= width - 1 - h; k++) {
-              display.drawLine(x0 + k, y0, x1 + k, y1, color);
+              int lx0 = constrain(x0 + k, clipX1, clipX2);
+              int lx1 = constrain(x1 + k, clipX1, clipX2);
+              display.drawLine(lx0, y0, lx1, y1, color);
             }
           }
           if (width >= 3) {
-            display.fillCircle(x0, y0, h, color);
-            display.fillCircle(x1, y1, h, color);
+            if (x0 >= clipX1 + h && x0 <= clipX2 - h && y0 >= clipY1 + h && y0 <= clipY2 - h) {
+              display.fillCircle(x0, y0, h, color);
+            }
+            if (x1 >= clipX1 + h && x1 <= clipX2 - h && y1 >= clipY1 + h && y1 <= clipY2 - h) {
+              display.fillCircle(x1, y1, h, color);
+            }
           }
         }
         return;

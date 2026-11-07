@@ -697,35 +697,37 @@ static void resetFusedHeading() {
 }
 
 static void updateFusedHeading() {
-  // GPS course is valid and speed exceeds moving threshold
-  bool gpsMoving = (ride.gpsFixed && ride.speedKmh >= 2.0f && gps.course.isValid() && gps.course.age() < 2500);
+  bool compassValid = (compass.ready && isfinite(compass.heading) && (millis() - compass.lastSample < 1500));
+  bool gpsValid = (ride.gpsFixed && gps.course.isValid() && gps.course.age() < 2500);
+
+  // High-speed straight patch threshold: >= 8 km/h running, >= 12 km/h cycling
+  float highSpeedThreshold = runningMode ? 8.0f : 12.0f;
+  bool highSpeedStraight = (gpsValid && ride.speedKmh >= highSpeedThreshold);
 
   float targetHeading = s_fusedHeading;
-  float filterAlpha = 0.15f;
+  float filterAlpha = 0.22f;
 
-  if (gpsMoving) {
-    if (s_gpsMovingStartMs == 0) s_gpsMovingStartMs = millis();
-    // After moving with valid GPS course for ~1.5s, lock onto GPS heading
-    if (millis() - s_gpsMovingStartMs >= 1500) {
-      s_gpsHeadingLocked = true;
-      targetHeading = (float)gps.course.deg();
-      s_lastStableMovingHeading = targetHeading;
-      filterAlpha = 0.25f; // Responsive tracking while moving
-    }
-  } else {
-    s_gpsMovingStartMs = 0;
-    if (s_gpsHeadingLocked) {
-      // Stopped / stationary: HOLD last stable moving heading!
-      // Eliminates stationary EMF noise and spinning arrow completely.
-      targetHeading = s_lastStableMovingHeading;
-      filterAlpha = 0.20f;
-    } else {
-      // Prior to first movement: show filtered compass heading if available
-      if (compass.ready && isfinite(compass.heading) && (millis() - compass.lastSample < 1500)) {
-        targetHeading = compass.heading;
-        filterAlpha = 0.10f; // Heavy low-pass to absorb magnetic EMF noise
+  if (compassValid) {
+    // Prioritize clean compass data for live heading
+    targetHeading = compass.heading;
+    filterAlpha = 0.25f;
+
+    if (highSpeedStraight) {
+      // Blend GPS course on higher-speed straight patches to lock true geographic course
+      float gpsCourse = (float)gps.course.deg();
+      float diff = gpsCourse - compass.heading;
+      while (diff < -180.0f) diff += 360.0f;
+      while (diff > 180.0f)  diff -= 360.0f;
+
+      if (fabsf(diff) < 45.0f) {
+        targetHeading = fmodf(compass.heading + diff * 0.75f + 360.0f, 360.0f);
+        filterAlpha = 0.30f;
       }
     }
+  } else if (gpsValid && ride.speedKmh >= 2.0f) {
+    // Fallback to GPS course if compass unavailable
+    targetHeading = (float)gps.course.deg();
+    filterAlpha = 0.25f;
   }
 
   if (!s_fusedHeadingInit) {
@@ -872,10 +874,21 @@ static void drawDashScreen() {
   label(192, 38, "MAX", 1, mutedCol);
   label(180, 48, (ride.elapsedSec ? (runningMode ? paceText(ride.maxSpeedKmh) : String(ride.maxSpeedKmh, 1)) : String("--")), 2, fgCol);
 
-  // Center Circular Arc Gauge (cx = 120, cy = 103, radius = 62, 270 deg sweep)
+  // Center Circular Arc Gauge with Rounded Caps (cx = 120, cy = 103, R = 61.5, W = 6)
   const int cx = 120, cy = 103;
+  const float arcR = 61.5f;
   uint16_t arcBg = darkTheme ? 0x2945 : 0xCE79;
-  for (float d = 135.0f; d <= 405.0f; d += 0.5f) {
+
+  // Track Background: round caps at 135 deg and 405 deg
+  int x_start = cx + (int)lroundf(arcR * cosf(radians(135.0f)));
+  int y_start = cy + (int)lroundf(arcR * sinf(radians(135.0f)));
+  int x_end   = cx + (int)lroundf(arcR * cosf(radians(405.0f)));
+  int y_end   = cy + (int)lroundf(arcR * sinf(radians(405.0f)));
+  display.fillCircle(x_start, y_start, 3, arcBg);
+  display.fillCircle(x_end, y_end, 3, arcBg);
+
+  // High-res continuous 0.25 deg stroke
+  for (float d = 135.0f; d <= 405.0f; d += 0.25f) {
     float a = radians(d);
     float ca = cosf(a), sa = sinf(a);
     for (int r = 59; r <= 64; r++) {
@@ -883,18 +896,28 @@ static void drawDashScreen() {
     }
   }
 
-  // Active Progress Arc (zero out stationary idle jitter)
-  float spVal = (ride.speedKmh >= 1.0f && activityRecording()) ? ride.speedKmh : 0.0f;
+  // Active Progress Arc with Rounded Caps
+  float spVal = (ride.speedKmh >= 0.8f && activityRecording()) ? ride.speedKmh : 0.0f;
   float gaugeMax = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   int fillSpan = (int)(270.0f * constrain(spVal / gaugeMax, 0.0f, 1.0f));
   if (fillSpan > 0) {
-    for (float d = 135.0f; d <= 135.0f + (float)fillSpan; d += 0.5f) {
+    // Round cap at start
+    display.fillCircle(x_start, y_start, 3, TEAL);
+
+    // Continuous high-res arc body
+    for (float d = 135.0f; d <= 135.0f + (float)fillSpan; d += 0.25f) {
       float a = radians(d);
       float ca = cosf(a), sa = sinf(a);
       for (int r = 59; r <= 64; r++) {
         display.drawPixel(cx + (int)lroundf(r * ca), cy + (int)lroundf(r * sa), TEAL);
       }
     }
+
+    // Smooth rounded cap at leading tip
+    float tipA = radians(135.0f + (float)fillSpan);
+    int x_tip = cx + (int)lroundf(arcR * cosf(tipA));
+    int y_tip = cy + (int)lroundf(arcR * sinf(tipA));
+    display.fillCircle(x_tip, y_tip, 3, TEAL);
   }
 
   // Bike / Run Icon inside Arc (Frame 27: 30x30 square icon at x=105, lowered to y=62)
@@ -999,22 +1022,38 @@ static void drawMetricsScreen() {
   drawCustomIcon(display, hrStartX, 50, hrPillFg, CustomIcon::heartRateIcon, 30, 30);
   label(hrStartX + 36, 55, hrStr, 3, hrPillFg);
 
-  // Row 2 (y = 102, h = 54): Calories Card (224x54) with 42x42 Dial & 24x24 Icon
+  // Row 2 (y = 102, h = 54): Calories Card (224x54) with Smooth High-Res Dial & Rounded Caps
   display.fillRoundRect(8, 102, 224, 54, 27, cardBg);
   const int calCx = 36, calCy = 129;
+  const float calR = 19.5f;
   uint16_t ringBg = darkTheme ? 0x31A6 : 0xD69A;
-  for (int d = 0; d < 360; d += 4) {
-    float a = radians((float)d);
+
+  // Solid, continuous 360 deg track (0.5 deg steps, eliminating all segmentation)
+  for (float d = 0.0f; d < 360.0f; d += 0.5f) {
+    float a = radians(d);
     float ca = cosf(a), sa = sinf(a);
     for (int r = 18; r <= 21; r++) display.drawPixel(calCx + (int)lroundf(r * ca), calCy + (int)lroundf(r * sa), ringBg);
   }
+
   int tgtCal = max(100, cfg.targetCalories);
   float calRatio = constrain(calorieEstimate / (float)tgtCal, 0.0f, 1.0f);
   int calSweep = (int)(360.0f * calRatio);
-  for (int d = -90; d <= -90 + calSweep; d += 2) {
-    float a = radians((float)d);
-    float ca = cosf(a), sa = sinf(a);
-    for (int r = 18; r <= 21; r++) display.drawPixel(calCx + (int)lroundf(r * ca), calCy + (int)lroundf(r * sa), ORANGE);
+  if (calSweep > 0) {
+    // Round cap at top (-90 deg)
+    display.fillCircle(calCx, calCy - 20, 2, ORANGE);
+
+    // Continuous progress arc
+    for (float d = -90.0f; d <= -90.0f + (float)calSweep; d += 0.5f) {
+      float a = radians(d);
+      float ca = cosf(a), sa = sinf(a);
+      for (int r = 18; r <= 21; r++) display.drawPixel(calCx + (int)lroundf(r * ca), calCy + (int)lroundf(r * sa), ORANGE);
+    }
+
+    // Round cap at leading tip
+    float tipA = radians(-90.0f + (float)calSweep);
+    int tx = calCx + (int)lroundf(calR * cosf(tipA));
+    int ty = calCy + (int)lroundf(calR * sinf(tipA));
+    display.fillCircle(tx, ty, 2, ORANGE);
   }
   drawCustomIcon(display, 24, 117, ORANGE, CustomIcon::caloriesIcon, 24, 24);
   String calStr = String((int)calorieEstimate) + "/" + String(tgtCal);
@@ -1125,6 +1164,10 @@ static void drawMapScreen() {
     uint8_t c0 = getCode(x0, y0), c1 = getCode(x1, y1);
     while (true) {
       if (!(c0 | c1)) {
+        x0 = constrain(x0, clipX1, clipX2);
+        x1 = constrain(x1, clipX1, clipX2);
+        y0 = constrain(y0, clipY1, clipY2);
+        y1 = constrain(y1, clipY1, clipY2);
         if (width <= 1) {
           display.drawLine(x0, y0, x1, y1, color);
         } else {
@@ -1133,16 +1176,24 @@ static void drawMapScreen() {
           int h = width / 2;
           if (dx >= dy) {
             for (int k = -h; k <= width - 1 - h; k++) {
-              display.drawLine(x0, y0 + k, x1, y1 + k, color);
+              int ly0 = constrain(y0 + k, clipY1, clipY2);
+              int ly1 = constrain(y1 + k, clipY1, clipY2);
+              display.drawLine(x0, ly0, x1, ly1, color);
             }
           } else {
             for (int k = -h; k <= width - 1 - h; k++) {
-              display.drawLine(x0 + k, y0, x1 + k, y1, color);
+              int lx0 = constrain(x0 + k, clipX1, clipX2);
+              int lx1 = constrain(x1 + k, clipX1, clipX2);
+              display.drawLine(lx0, y0, lx1, y1, color);
             }
           }
           if (width >= 3) {
-            display.fillCircle(x0, y0, h, color);
-            display.fillCircle(x1, y1, h, color);
+            if (x0 >= clipX1 + h && x0 <= clipX2 - h && y0 >= clipY1 + h && y0 <= clipY2 - h) {
+              display.fillCircle(x0, y0, h, color);
+            }
+            if (x1 >= clipX1 + h && x1 <= clipX2 - h && y1 >= clipY1 + h && y1 <= clipY2 - h) {
+              display.fillCircle(x1, y1, h, color);
+            }
           }
         }
         return;
@@ -1158,10 +1209,10 @@ static void drawMapScreen() {
           x = (y1 != y0) ? (x0 + (int)((int64_t)(x1 - x0) * (clipY1 - y0) / (y1 - y0))) : x0;
           y = clipY1;
         } else if (cOut & 2) {
-          x = (y1 != y0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0;
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX2 - x0) / (x1 - x0))) : y0;
           x = clipX2;
         } else {
-          x = (y1 != y0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0;
+          y = (x1 != x0) ? (y0 + (int)((int64_t)(y1 - y0) * (clipX1 - x0) / (x1 - x0))) : y0;
           x = clipX1;
         }
         if (cOut == c0) { x0 = x; y0 = y; c0 = getCode(x0, y0); }
@@ -1392,6 +1443,18 @@ static void drawMapScreen() {
   // In North-Up mode: compass needle locks straight UP to North (0.0f).
   float compassH = activityMapNorthUp ? 0.0f : fmodf(360.0f - s_fusedHeading + 360.0f, 360.0f);
   drawCompassCoin(display, 202, 54, compassH);
+
+  // Erase any vector bleeding at the 4 rounded card corners (R=20)
+  for (int dy = 0; dy < 20; dy++) {
+    for (int dx = 0; dx < 20; dx++) {
+      if ((19 - dx) * (19 - dx) + (19 - dy) * (19 - dy) > 400) {
+        display.drawPixel(cardX + dx, cardY + dy, uiBg());
+        display.drawPixel(cardX + cardW - 1 - dx, cardY + dy, uiBg());
+        display.drawPixel(cardX + dx, cardY + cardH - 1 - dy, uiBg());
+        display.drawPixel(cardX + cardW - 1 - dx, cardY + cardH - 1 - dy, uiBg());
+      }
+    }
+  }
 
   // Re-stroke map border around viewport card
   display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, mapBorder);

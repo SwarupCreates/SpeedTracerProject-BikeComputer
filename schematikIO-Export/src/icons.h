@@ -14,9 +14,16 @@ static inline void drawHeartIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color,bo
 static inline void drawSatelliteIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color, int targetW = 0, int targetH = 0) {
   drawCustomIcon(gfx,x,y,color,CustomIcon::satelliteIcon, targetW, targetH);
 }
-static inline void drawBatteryIcon(Adafruit_GFX &gfx, int x, int y, int pct, bool isCharging, bool alert = false, uint16_t overrideColor = 0) {
+static inline void drawBatteryIcon(Adafruit_GFX &gfx, int x, int y, int pct, bool isCharging, bool alert = false, uint16_t overrideColor = 0, bool connected = true) {
   uint16_t col;
   CustomIcon icon;
+
+  if (!connected) {
+    icon = CustomIcon::batteryAlertIcon; // alert.svg (NO BATTERY)
+    col = overrideColor ? overrideColor : 0x8410; // uiMuted()
+    drawCustomIcon(gfx, x, y, col, icon, 24, 12);
+    return;
+  }
 
   if (isCharging) {
     col = overrideColor ? overrideColor : 0x3CE0; // Bright charging green
@@ -27,19 +34,23 @@ static inline void drawBatteryIcon(Adafruit_GFX &gfx, int x, int y, int pct, boo
     else if (phase == 2) icon = CustomIcon::battery75Icon;
     else if (phase == 3) icon = CustomIcon::batteryFullIcon;
     else icon = CustomIcon::batteryChargeIcon;
-  } else if (alert || pct < 10) {
+  } else if (alert || pct <= 10) {
     bool blink = (millis() / 500) % 2;
     col = overrideColor ? overrideColor : (blink ? 0xF800 : 0x8000);
     icon = CustomIcon::batteryAlertIcon;
   } else {
-    // Normal discharge: switch design based on level
-    if (pct >= 80) {
+    // Normal discharge ranges from user specification:
+    // 91-100: full
+    // 61-90: 75%
+    // 41-60: 50%
+    // 11-40: 25%
+    if (pct >= 91) {
       icon = CustomIcon::batteryFullIcon;
       col = overrideColor ? overrideColor : 0xFFFF;
-    } else if (pct >= 50) {
+    } else if (pct >= 61) {
       icon = CustomIcon::battery75Icon;
       col = overrideColor ? overrideColor : 0xFFFF;
-    } else if (pct >= 25) {
+    } else if (pct >= 41) {
       icon = CustomIcon::battery50Icon;
       col = overrideColor ? overrideColor : 0xFA60; // Amber
     } else {
@@ -52,11 +63,11 @@ static inline void drawBatteryIcon(Adafruit_GFX &gfx, int x, int y, int pct, boo
 }
 
 static inline void drawBatteryIcon(Adafruit_GFX &gfx, int x, int y, int pct, uint16_t fgColor) {
-  drawBatteryIcon(gfx, x, y, pct, false, (pct < 10), fgColor);
+  drawBatteryIcon(gfx, x, y, pct, false, (pct <= 10), fgColor, true);
 }
 
 static inline void drawBatteryIcon(Adafruit_GFX &gfx, int x, int y, int pct = 76) {
-  drawBatteryIcon(gfx, x, y, pct, false, (pct < 10), 0);
+  drawBatteryIcon(gfx, x, y, pct, false, (pct <= 10), 0, true);
 }
 static inline void drawFlameIcon(Adafruit_GFX &gfx,int x,int y,uint16_t color) {
   drawCustomIcon(gfx,x,y,color,CustomIcon::caloriesIcon);

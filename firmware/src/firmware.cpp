@@ -559,6 +559,7 @@ static String durationText() {
 #include "ble_sensors.h"
 
 // Live Battery State (Frame 27 Parity with Level & Charging Animations)
+static bool batteryConnected = false; // Default: no physical battery connected
 static int batteryPercent = 76;
 static bool batteryCharging = false;
 static bool batteryAlert = false;
@@ -614,30 +615,33 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
 
   }
 
-  // Battery Status (Frame 27 Parity with Animated & Level-Switched States)
+  // Battery Status (Frame 27 Parity with User Spec Ranges & NO BATTERY Detection)
   String batteryText;
   uint16_t batCol;
-  if (batteryCharging) {
+  if (!batteryConnected) {
+    batteryText = "N/A";
+    batCol = uiMuted();
+  } else if (batteryCharging) {
     batteryText = String(batteryPercent) + "%";
     batCol = 0x3CE0; // Charging green
-  } else if (batteryAlert || batteryPercent < 10) {
+  } else if (batteryAlert || batteryPercent <= 10) {
     batteryText = String(batteryPercent) + "%";
-    batCol = 0xF800; // Red alert
-  } else if (batteryPercent < 25) {
+    batCol = 0xF800; // Red alert (0-10)
+  } else if (batteryPercent <= 40) {
     batteryText = String(batteryPercent) + "%";
-    batCol = 0xF800; // Red low
-  } else if (batteryPercent < 50) {
+    batCol = 0xF800; // Red low (11-40)
+  } else if (batteryPercent <= 60) {
     batteryText = String(batteryPercent) + "%";
-    batCol = 0xFA60; // Amber
+    batCol = 0xFA60; // Amber (41-60)
   } else {
     batteryText = String(batteryPercent) + "%";
-    batCol = uiFg(); // Crisp white in dark theme
+    batCol = uiFg(); // Crisp white in dark theme (61-100)
   }
 
   int batX = 208;
   int batY = 8;
   label(batX - 4 - textWidth(batteryText, 0), 10, batteryText, 0, batCol);
-  drawBatteryIcon(display, batX, batY, batteryPercent, batteryCharging, batteryAlert);
+  drawBatteryIcon(display, batX, batY, batteryPercent, batteryCharging, batteryAlert, batCol, batteryConnected);
 }
 
 // One binary FIT activity per SD file; finalized on Save.
@@ -1594,8 +1598,13 @@ static void handleRoot(){server.send_P(200,"text/html",page);}
 
 static void handleStatus() {
   JsonDocument doc;
-  doc["batteryStatus"]="unavailable";
-  doc["batteryPercent"]=nullptr; doc["batteryConnected"]=nullptr; doc["batteryCharging"]=nullptr;
+  if (!batteryConnected) {
+    doc["batteryStatus"]="unavailable";
+    doc["batteryPercent"]=nullptr; doc["batteryConnected"]=false; doc["batteryCharging"]=false;
+  } else {
+    doc["batteryStatus"]=batteryCharging ? "charging" : (batteryPercent <= 10 ? "low" : "normal");
+    doc["batteryPercent"]=batteryPercent; doc["batteryConnected"]=true; doc["batteryCharging"]=batteryCharging;
+  }
   doc["missingReadingPolicy"]="0 means no data when readiness is false";
   doc["activityType"]=runningMode?"running":"cycling";
   doc["paceMinKm"]=runningMode && ride.speedKmh>0.1?60.0f/ride.speedKmh:0;
@@ -1951,19 +1960,27 @@ static void handleSerialTransfer() {
   if (line.startsWith("CMD:BAT ") || line.startsWith("BAT:")) {
     String arg = line.startsWith("CMD:BAT ") ? line.substring(8) : line.substring(4);
     arg.trim();
-    if (arg == "CHG" || arg == "CHARGE") {
+    if (arg == "NONE" || arg == "DISCONNECT" || arg == "NO_BAT") {
+      batteryConnected = false;
+      batteryCharging = false;
+      batteryAlert = false;
+      Serial.println("OK:BAT_NONE");
+    } else if (arg == "CHG" || arg == "CHARGE") {
+      batteryConnected = true;
       batteryCharging = true;
       batteryAlert = false;
       Serial.println("OK:BAT_CHARGING");
     } else if (arg == "ALERT") {
+      batteryConnected = true;
       batteryCharging = false;
       batteryAlert = true;
       Serial.println("OK:BAT_ALERT");
     } else {
       int val = arg.toInt();
+      batteryConnected = true;
       batteryPercent = constrain(val, 0, 100);
       batteryCharging = false;
-      batteryAlert = (batteryPercent < 10);
+      batteryAlert = (batteryPercent <= 10);
       Serial.printf("OK:BAT_SET %d\n", batteryPercent);
     }
     uiRevision++;

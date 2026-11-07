@@ -303,11 +303,34 @@ static void bleBegin(){
  else Serial.println("Bluetooth ready: controller, host, CTS server and sensor worker initialized");
 }
 
+#include "ant_sensors.h"
+
 static int bleHR=0;static bool bleHRReady=false,bleCadReady=false,bleSpeedReady=false,blePowerReady=false;
 static float bleSpeed=0;static int bleCad=0,blePower=0;
-static void bleReadings(){bleHRReady=bleCadReady=bleSpeedReady=blePowerReady=false;if(!bleMutex)return;xSemaphoreTake(bleMutex,portMAX_DELAY);bleCircum=cfg.wheelCircumM;
- for(auto&s:bleSlots)if(s.connected){if(bleFresh(s.hrMs)){bleHR=s.hr;bleHRReady=true;}if(bleFresh(s.cadMs)){bleCad=s.cad;bleCadReady=true;}if(bleFresh(s.speedMs)){bleSpeed=s.speed;bleSpeedReady=true;}if(bleFresh(s.powerMs)){blePower=s.power;blePowerReady=true;}}
- xSemaphoreGive(bleMutex);
+static void bleReadings(){
+ bleHRReady=bleCadReady=bleSpeedReady=blePowerReady=false;
+ if(bleMutex){
+  xSemaphoreTake(bleMutex,portMAX_DELAY);bleCircum=cfg.wheelCircumM;
+  for(auto&s:bleSlots)if(s.connected){if(bleFresh(s.hrMs)){bleHR=s.hr;bleHRReady=true;}if(bleFresh(s.cadMs)){bleCad=s.cad;bleCadReady=true;}if(bleFresh(s.speedMs)){bleSpeed=s.speed;bleSpeedReady=true;}if(bleFresh(s.powerMs)){blePower=s.power;blePowerReady=true;}}
+  xSemaphoreGive(bleMutex);
+ }
+ antSensorsUpdate();
+ if (antHRMs && (millis() - antHRMs < 5000) && antHR > 0) {
+  bleHR = antHR;
+  bleHRReady = true;
+ }
+ if (antSpeedMs && (millis() - antSpeedMs < 5000)) {
+  bleSpeed = antSpeed;
+  bleSpeedReady = true;
+ }
+ if (antCadMs && (millis() - antCadMs < 5000)) {
+  bleCad = antCad;
+  bleCadReady = true;
+ }
+ if (antPowerMs && (millis() - antPowerMs < 5000)) {
+  blePower = antPower;
+  blePowerReady = true;
+ }
 }
 
 static void bleHttp(){

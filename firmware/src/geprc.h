@@ -46,7 +46,15 @@ public:
   void start(){calibrating=true;calibrated=false;for(int i=0;i<2;i++){mn[i]=32767;mx[i]=-32768;}}
   bool finish(){for(int i=0;i<2;i++)if(int(mx[i])-mn[i]<200)return false;float radius[2];for(int i=0;i<2;i++){offset[i]=(float(mx[i])+mn[i])/2;radius[i]=(float(mx[i])-mn[i])/2;}for(int i=0;i<2;i++)scale[i]=(radius[0]+radius[1])/(2*radius[i]);calibrating=false;calibrated=true;save();return true;}
   void save(){Preferences p;p.begin("qmc",false);p.putBool("valid",calibrated);for(int i=0;i<2;i++){String k="o"+String(i);p.putFloat(k.c_str(),offset[i]);k="s"+String(i);p.putFloat(k.c_str(),scale[i]);}p.putFloat("yaw",yawOffset);p.putFloat("decl",declination);p.end();}
-  void update(){if(!ready||millis()-sampleMs<25)return;sampleMs=millis();uint8_t v[6]={};if(!read(0,v,6))return;lastSample=millis();for(int i=0;i<3;i++)raw[i]=int16_t(v[i*2]|uint16_t(v[i*2+1])<<8);if(calibrating)for(int i=0;i<2;i++){mn[i]=min(mn[i],raw[i]);mx[i]=max(mx[i],raw[i]);}
+  void update(bool highRate = false){
+    uint32_t interval = (highRate || calibrating) ? 25 : 500;
+    if(!ready || millis() - sampleMs < interval) return;
+    sampleMs = millis();
+    uint8_t v[6] = {};
+    if(!read(0, v, 6)) return;
+    lastSample = millis();
+    for(int i = 0; i < 3; i++) raw[i] = int16_t(v[i*2] | uint16_t(v[i*2+1]) << 8);
+    if(calibrating) for(int i = 0; i < 2; i++){ mn[i] = min(mn[i], raw[i]); mx[i] = max(mx[i], raw[i]); }
     // GEPRC M1025Q specifies CW0_DEG_FLIP (sensor inverted under ceramic antenna):
     // Standard body frame: X is forward (-raw[0]), Y is right (+raw[1]), Z is down (-raw[2]).
     // Assumes module arrow points toward the bicycle front, with ceramic antenna upward.

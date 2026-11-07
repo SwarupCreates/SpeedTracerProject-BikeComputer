@@ -1790,6 +1790,7 @@ void setup() {
   // 8. Start Bluetooth LE AFTER Wi-Fi & Display are up and running!
   bleBegin();
   bleHttp();
+  antSensorsBegin();
 }
 
 static uint32_t lastDispMs  = 0;
@@ -2079,7 +2080,8 @@ void loop() {
     timeval tv={};tv.tv_sec=epoch;settimeofday(&tv,nullptr);clockSyncMs=millis();
   }
   geprcGps.poll(gpsSerial);
-  compass.update();
+  bool compassScreenActive = (welcomeOpen || quickOpen) && (homePage == HOME_COMPASS);
+  compass.update(compassScreenActive);
 
   if (gps.location.isValid() && gps.location.isUpdated()) {
     float nLat = (float)gps.location.lat(), nLon = (float)gps.location.lng();

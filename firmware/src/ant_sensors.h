@@ -14,5 +14,16 @@ extern volatile int antPower;
 extern volatile uint32_t antPowerMs;
 extern volatile bool antReady;
 
+// Learned / Paired device telemetry
+extern volatile uint16_t antHrmDevId;
+extern volatile int8_t antHrmRssi;
+extern volatile uint16_t antSpdDevId;
+extern volatile int8_t antSpdRssi;
+extern volatile uint16_t antCadDevId;
+extern volatile int8_t antCadRssi;
+extern volatile uint16_t antPowerDevId;
+extern volatile int8_t antPowerRssi;
+
 void antSensorsBegin();
 void antSensorsUpdate();
+void antSearchAll();

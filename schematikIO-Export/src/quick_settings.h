@@ -29,7 +29,7 @@ bool gpsRadarInspector=false;
 int gpsScroll=0;
 int settingsScroll=0;
 // Home subpages stay independent of dashboard navigation and touch calibration.
-enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH };
+enum HomePage { HOME_MAIN, HOME_APPS, HOME_FILES, HOME_ACTIVITY, HOME_RIDES, HOME_ROUTES, HOME_SETTINGS, HOME_ACTIVITY_SETTINGS, HOME_COMPASS, HOME_MAPS, HOME_MAP_SEARCH, HOME_SENSORS };
 HomePage homePage=HOME_MAIN;
 bool homeHeroClock = false;
 static int homeSliderOffset = 0;
@@ -501,23 +501,26 @@ static void drawLibrary(){
       if (!darkTheme) display.drawRoundRect(124, row2Y, 108, 68, 10, 0xD69A);
       float avgHr = archiveSummary["avgHeartRate"].is<float>() ? archiveSummary["avgHeartRate"].as<float>() : 0;
       int hrVal = (int)round(avgHr);
-      int zone = 3;
       if (hrVal > 0) {
+        int zone = 1;
         if (hrVal < 120) zone = 1;
         else if (hrVal < 140) zone = 2;
         else if (hrVal < 160) zone = 3;
         else if (hrVal < 180) zone = 4;
         else zone = 5;
+        // Red heart icon (uniform 24x24) + Zone number (size 2), center aligned together
+        String zoneStr = String(zone);
+        int zw = textWidth(zoneStr, 2);
+        int totalTopW = 24 + 6 + zw;
+        int hrStartX = 124 + (108 - totalTopW) / 2;
+        drawCustomIcon(display, hrStartX, row2Y + 9, 0xF800, CustomIcon::heartRateIcon, 24, 24);
+        label(hrStartX + 24 + 6, row2Y + 12, zoneStr, 2, uiFg());
+        centeredLabel(124, row2Y + 44, 108, String(hrVal) + " BPM", 2, uiFg());
+      } else {
+        // Neutral fallback when no heart rate reading exists (stop showing zone 3)
+        drawCustomIcon(display, 124 + (108 - 24) / 2, row2Y + 9, uiMuted(), CustomIcon::heartRateIcon, 24, 24);
+        centeredLabel(124, row2Y + 44, 108, "-- BPM", 2, uiMuted());
       }
-      // Red heart icon (uniform 24x24) + Zone number (size 2), center aligned together
-      String zoneStr = String(zone);
-      int zw = textWidth(zoneStr, 2);
-      int totalTopW = 24 + 6 + zw;
-      int hrStartX = 124 + (108 - totalTopW) / 2;
-      drawCustomIcon(display, hrStartX, row2Y + 9, 0xF800, CustomIcon::heartRateIcon, 24, 24);
-      label(hrStartX + 24 + 6, row2Y + 12, zoneStr, 2, uiFg());
-      String hrStr = (hrVal > 0) ? (String(hrVal) + " BPM") : "-- BPM";
-      centeredLabel(124, row2Y + 44, 108, hrStr, 2, uiFg());
     }
 
     // --- ROW 3: Elevation Gain (Left) & Calories (Right) ---
@@ -765,6 +768,10 @@ static void drawGlobalNav(){
   drawCustomIcon(display,112,297,uiFg(),CustomIcon::HomeIcon);
   if(globalHasNext())drawCustomIcon(display,182,297,uiFg(),CustomIcon::goNextIcon);
 }
+static int sensorsScroll = 0;
+static int sensorsGuideSubpage = 0;
+static uint32_t sensorsScanStartMs = 0;
+
 static void globalHome(){
   if(shutdownPending)return;
   activityEndConfirm=false;
@@ -786,6 +793,14 @@ static void globalBack(){
     }
     else if(homePage == HOME_COMPASS || homePage == HOME_MAPS) {
       homePage = HOME_APPS;
+    }
+    else if(homePage == HOME_SENSORS) {
+      if (sensorsGuideSubpage > 0) {
+        sensorsGuideSubpage = 0;
+      } else {
+        homePage = HOME_APPS;
+      }
+      uiRevision++;
     }
     else if(homePage == HOME_MAP_SEARCH) {
       homePage = HOME_MAPS;
@@ -1448,6 +1463,177 @@ static void drawMapSearchApp() {
   drawGlobalNav();
 }
 
+static void drawSensorsApp() {
+  statusBar();
+
+  if (sensorsGuideSubpage > 0) {
+    // -------------------------------------------------------------
+    // SENSOR SYNC & SETUP WALKTHROUGH GUIDE
+    // -------------------------------------------------------------
+    // Header Bar with Back Button
+    display.fillRoundRect(6, 30, 80, 26, 13, uiCard());
+    drawCustomIcon(display, 12, 35, uiFg(), CustomIcon::GoBackIcon, 16, 16);
+    label(30, 37, "BACK", 1, uiFg());
+
+    const char* title = "";
+    uint16_t headerCol = uiFg();
+    if (sensorsGuideSubpage == 1) { title = "MAGENE H303 HRM"; headerCol = 0xF800; }
+    else if (sensorsGuideSubpage == 2) { title = "SPEED SENSOR"; headerCol = TEAL; }
+    else if (sensorsGuideSubpage == 3) { title = "CADENCE SENSOR"; headerCol = 0xFA60; }
+    else if (sensorsGuideSubpage == 4) { title = "POWER METER"; headerCol = 0xFE20; }
+
+    centeredLabel(88, 36, 146, title, 1, headerCol);
+
+    // Step-by-Step Instructions Container Card
+    display.fillRoundRect(6, 62, 228, 180, 10, uiCard());
+
+    struct StepItem { const char* num; const char* line1; const char* line2; };
+    StepItem steps[4];
+
+    if (sensorsGuideSubpage == 1) { // HRM
+      steps[0] = {"1", "Moisten rubber electrode pads", "on strap with water or gel"};
+      steps[1] = {"2", "Snap H303 sensor onto strap", "Ensure Magene logo is upright"};
+      steps[2] = {"3", "Wear strap snugly around chest", "Position directly below pectorals"};
+      steps[3] = {"4", "Sensor turns on from skin contact", "Broadcasts ANT+ (2457MHz) & BLE"};
+    } else if (sensorsGuideSubpage == 2) { // Speed
+      steps[0] = {"1", "Select SPEED MODE (Green LED)", "Reinstall CR2032 battery to switch"};
+      steps[1] = {"2", "Attach curved rubber pad", "Strap securely to front or rear hub"};
+      steps[2] = {"3", "Spin wheel 2-3 rotations", "Wakes internal sensor from sleep"};
+      steps[3] = {"4", "Speed calculated from wheel hub", "Zero GPS multipath or drift errors"};
+    } else if (sensorsGuideSubpage == 3) { // Cadence
+      steps[0] = {"1", "Select CADENCE MODE (Red LED)", "Reinstall CR2032 battery to switch"};
+      steps[1] = {"2", "Attach flat silicone pad", "Strap to inside face of left crank"};
+      steps[2] = {"3", "Rotate crank arm 2 full turns", "Accelerometer wakes from standby"};
+      steps[3] = {"4", "Live pedaling RPM broadcasts", "Streams to display & FIT records"};
+    } else { // Power
+      steps[0] = {"1", "Rotate crank arms 3-4 times", "Powers up strain-gauge radio"};
+      steps[1] = {"2", "Keep cranks vertical & unweighted", "For zero-offset torque balance"};
+      steps[2] = {"3", "ANT+ Channel 1 binds automatically", "Standard 4.00 Hz TDMA period"};
+      steps[3] = {"4", "Live power (Watts) & balance", "Saved to FIT & activity summary"};
+    }
+
+    for (int i = 0; i < 4; i++) {
+      int sy = 70 + i * 42;
+      display.fillCircle(22, sy + 14, 10, headerCol);
+      centeredLabel(12, sy + 10, 20, steps[i].num, 1, 0xFFFF);
+      label(40, sy + 6, steps[i].line1, 1, uiFg());
+      label(40, sy + 20, steps[i].line2, 1, uiMuted());
+    }
+
+    // Bottom Action Button: [ START PAIRING NOW ]
+    display.fillRoundRect(16, 248, 208, 34, 17, (millis() - sensorsScanStartMs < 5000) ? 0x07E0 : 0x051F);
+    centeredLabel(16, 258, 208, (millis() - sensorsScanStartMs < 5000) ? "SEARCHING SENSORS..." : "START PAIRING NOW", 1, 0xFFFF);
+
+    drawGlobalNav();
+    return;
+  }
+
+  // -------------------------------------------------------------
+  // MAIN SENSORS DASHBOARD
+  // -------------------------------------------------------------
+  // Header Status Bar: ANT+ & BLE Radio Indicators + Scan Button
+  int hy = 30;
+  card(6, hy, 228, 34, uiCard());
+  // ANT+ Indicator
+  display.fillCircle(18, hy + 17, 4, antReady ? 0x07E0 : 0xF800);
+  label(26, hy + 12, "ANT+ (CORE 0)", 1, uiFg());
+  // BLE Indicator
+  display.fillCircle(118, hy + 17, 4, 0x051F);
+  label(126, hy + 12, "BLE READY", 1, uiFg());
+
+  // Pair Action Pill
+  bool scanning = (millis() - sensorsScanStartMs < 5000);
+  uint16_t pairBg = scanning ? 0x07E0 : 0xFA60;
+  display.fillRoundRect(172, hy + 4, 56, 26, 13, pairBg);
+  centeredLabel(172, hy + 10, 56, scanning ? "SCAN" : "PAIR", 1, 0xFFFF);
+
+  // Card 1: Heart Rate Monitor (Magene H303)
+  int y1 = 68 - sensorsScroll;
+  if (y1 >= 24 && y1 < 290) {
+    card(6, y1, 228, 48, uiCard());
+    drawCustomIcon(display, 14, y1 + 12, 0xF800, CustomIcon::heartRateIcon, 24, 24);
+    label(44, y1 + 9, "HEART RATE (HRM)", 1, uiFg());
+    bool hrActive = (bleHRReady || (antHRMs && millis() - antHRMs < 4000 && antHR > 0));
+    int curHr = bleHRReady ? bleHR : antHR;
+    if (hrActive) {
+      String sub = antHrmDevId ? ("ANT+ #" + String(antHrmDevId) + " (" + String(antHrmRssi) + "dBm)") : "BLE HRM Connected";
+      label(44, y1 + 27, sub, 1, 0x07E0);
+      String val = String(curHr) + " BPM";
+      int vw = textWidth(val, 2);
+      label(226 - vw, y1 + 14, val, 2, 0x07E0);
+    } else {
+      label(44, y1 + 27, "Magene H303 • Tap for guide", 1, uiMuted());
+      display.fillRoundRect(168, y1 + 12, 58, 24, 12, darkTheme ? 0x2124 : 0xCE79);
+      centeredLabel(168, y1 + 18, 58, "GUIDE", 1, uiFg());
+    }
+  }
+
+  // Card 2: Speed Sensor (Magene S314 / CAD70)
+  int y2 = 122 - sensorsScroll;
+  if (y2 >= 24 && y2 < 290) {
+    card(6, y2, 228, 48, uiCard());
+    drawCustomIcon(display, 14, y2 + 12, TEAL, CustomIcon::speedometerIcon, 24, 24);
+    label(44, y2 + 9, "SPEED SENSOR", 1, uiFg());
+    bool spdActive = (bleSpeedReady || (antSpeedMs && millis() - antSpeedMs < 4000));
+    float curSpd = bleSpeedReady ? bleSpeed : antSpeed;
+    if (spdActive) {
+      String sub = antSpdDevId ? ("ANT+ #" + String(antSpdDevId) + " • 2096mm") : "Wheel Hub • 2096mm";
+      label(44, y2 + 27, sub, 1, 0x07E0);
+      String val = String(curSpd, 1) + " KM/H";
+      int vw = textWidth(val, 2);
+      label(226 - vw, y2 + 14, val, 2, TEAL);
+    } else {
+      label(44, y2 + 27, "Wheel Hub • Green LED Mode", 1, uiMuted());
+      display.fillRoundRect(168, y2 + 12, 58, 24, 12, darkTheme ? 0x2124 : 0xCE79);
+      centeredLabel(168, y2 + 18, 58, "GUIDE", 1, uiFg());
+    }
+  }
+
+  // Card 3: Cadence Sensor (Magene S314 / CAD70)
+  int y3 = 176 - sensorsScroll;
+  if (y3 >= 24 && y3 < 290) {
+    card(6, y3, 228, 48, uiCard());
+    drawCustomIcon(display, 14, y3 + 12, 0xFA60, CustomIcon::bikeIcon, 24, 24);
+    label(44, y3 + 9, "CADENCE SENSOR", 1, uiFg());
+    bool cadActive = (bleCadReady || (antCadMs && millis() - antCadMs < 4000));
+    int curCad = bleCadReady ? bleCad : antCad;
+    if (cadActive) {
+      String sub = antCadDevId ? ("ANT+ #" + String(antCadDevId)) : "Crank Arm Connected";
+      label(44, y3 + 27, sub, 1, 0x07E0);
+      String val = String(curCad) + " RPM";
+      int vw = textWidth(val, 2);
+      label(226 - vw, y3 + 14, val, 2, 0xFA60);
+    } else {
+      label(44, y3 + 27, "Crank Arm • Red LED Mode", 1, uiMuted());
+      display.fillRoundRect(168, y3 + 12, 58, 24, 12, darkTheme ? 0x2124 : 0xCE79);
+      centeredLabel(168, y3 + 18, 58, "GUIDE", 1, uiFg());
+    }
+  }
+
+  // Card 4: Power Meter
+  int y4 = 230 - sensorsScroll;
+  if (y4 >= 24 && y4 < 290) {
+    card(6, y4, 228, 48, uiCard());
+    drawCustomIcon(display, 14, y4 + 12, 0xFE20, CustomIcon::powerIcon, 24, 24);
+    label(44, y4 + 9, "POWER METER", 1, uiFg());
+    bool pwrActive = (blePowerReady || (antPowerMs && millis() - antPowerMs < 4000));
+    int curPwr = blePowerReady ? blePower : antPower;
+    if (pwrActive) {
+      String sub = antPowerDevId ? ("ANT+ #" + String(antPowerDevId)) : "Power Meter Connected";
+      label(44, y4 + 27, sub, 1, 0x07E0);
+      String val = String(curPwr) + " W";
+      int vw = textWidth(val, 2);
+      label(226 - vw, y4 + 14, val, 2, 0xFE20);
+    } else {
+      label(44, y4 + 27, "ANT+ Ch 1 • Tap for guide", 1, uiMuted());
+      display.fillRoundRect(168, y4 + 12, 58, 24, 12, darkTheme ? 0x2124 : 0xCE79);
+      centeredLabel(168, y4 + 18, 58, "GUIDE", 1, uiFg());
+    }
+  }
+
+  drawGlobalNav();
+}
+
 static void drawHomeSubpage(){
 
   statusBar();
@@ -1461,13 +1647,14 @@ static void drawHomeSubpage(){
     static const AppItem kApps[] = {
       {"Maps", CustomIcon::mapAppIconLarge, 0x33FB},           // Bright Blue (#3578DD)
       {"Compass", CustomIcon::compassIconLarge, 0xE800},        // Bright Red (#EE0000)
+      {"Sensors", CustomIcon::heartRateIcon, 0x051F},          // Neon Cyan / Royal (#00A2FF)
       {"My Activities", CustomIcon::activitiesIconLarge, 0xFA61}, // Bright Orange (#F4510C)
       {"Past Routes", CustomIcon::routeMapIconLarge, 0x5444},   // Leaf Green (#558920)
       {"Settings", CustomIcon::systemIconLarge, 0x79F7},        // Purple (#7C3AED)
       {"Activity Settings", CustomIcon::configureIconLarge, 0xDBC0}, // Amber (#D97706)
       {"My Files", CustomIcon::folderIconLarge, 0x0CA1}         // Teal (#0D9488)
     };
-    const int kNumApps = 7;
+    const int kNumApps = 8;
     if (appsListView) {
       // LIST VIEW: 1 app per row, large button with label beside, clean minimal background
       const int rowH = 56;
@@ -1525,6 +1712,8 @@ static void drawHomeSubpage(){
     drawMapViewerApp();
   }else if(homePage==HOME_MAP_SEARCH){
     drawMapSearchApp();
+  }else if(homePage==HOME_SENSORS){
+    drawSensorsApp();
   }else{
     if(fileDetailOpen){
       drawFileDetail();
@@ -1723,7 +1912,7 @@ static void toggleRide() {
   if (!rideStarted) {
     if(!gpsStartReady()){activityMessage="Waiting for GPS fix";uiRevision++;return;}
     if(!beginActivityFile()){uiRevision++;return;}
-    distAccum=0; trackLen=0; ride.distanceKm=0;ride.elapsedSec=0;
+    distAccum=0; trackLen=0; ride.distanceKm=0;ride.elevationGainM=0;ride.elapsedSec=0;
     ride.avgSpeedKmh=0;ride.maxSpeedKmh=0;ride.maxPowerW=0;
     resetMaxSpeedTracker();
     hrSum=powerSum=0;hrSamples=powerSamples=0;hrMax=0;lastLat=lastLon=0;distAnchorLat=distAnchorLon=0;
@@ -2109,6 +2298,7 @@ bool drawLifecycleScreen() {
   else if(countdownGoStart) state="countGo:"+String((millis()-countdownGoStart)/40);
   else if(countdownStart) state="count:"+String((millis()-countdownStart)/40);
   else if((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) state="compass:"+String(millis()/16)+":"+String((int)(compass.heading*10))+":"+String(darkTheme);
+  else if((welcomeOpen || quickOpen) && homePage == HOME_SENSORS) state="sensors:"+String(millis()/250)+":"+String(antHR)+":"+String(antCad)+":"+String((int)(antSpeed*10))+":"+String(antPower)+":"+String(bleCount())+":"+String(sensorsGuideSubpage)+":"+String(darkTheme);
   else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(homeHeroClock)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
   if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart && !countdownGoStart){previous="";return false;}
   if(state.isEmpty()){previous="";return false;}
@@ -2396,13 +2586,61 @@ static void quickTap(int x, int y) {
       }
       return;
     }
+    if (homePage == HOME_SENSORS) {
+      if (y < 28 || y >= 290) return;
+      if (sensorsGuideSubpage > 0) {
+        if (x <= 95 && y <= 58) {
+          sensorsGuideSubpage = 0;
+          uiRevision++;
+          return;
+        }
+        if (y >= 245 && y <= 288) {
+          antSearchAll();
+          bleRequest(1);
+          sensorsScanStartMs = millis();
+          sensorsGuideSubpage = 0;
+          uiRevision++;
+          return;
+        }
+        return;
+      }
+      if (x >= 155 && y >= 30 && y <= 66) {
+        antSearchAll();
+        bleRequest(1);
+        sensorsScanStartMs = millis();
+        uiRevision++;
+        return;
+      }
+      int relY = y + sensorsScroll;
+      if (relY >= 66 && relY < 118) {
+        sensorsGuideSubpage = 1;
+        uiRevision++;
+        return;
+      }
+      if (relY >= 120 && relY < 172) {
+        sensorsGuideSubpage = 2;
+        uiRevision++;
+        return;
+      }
+      if (relY >= 174 && relY < 226) {
+        sensorsGuideSubpage = 3;
+        uiRevision++;
+        return;
+      }
+      if (relY >= 228 && relY < 285) {
+        sensorsGuideSubpage = 4;
+        uiRevision++;
+        return;
+      }
+      return;
+    }
     if(homePage==HOME_APPS){
       if(y < 26 || y >= 290) return;
       int hitApp = -1;
       if (appsListView) {
         const int rowH = 56;
         const int rowPitch = 64;
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 8; i++) {
           int cardY = 34 + i * rowPitch - appsScroll;
           if (x >= 10 && x <= 235 && y >= cardY && y <= cardY + rowH) {
             hitApp = i;
@@ -2410,7 +2648,7 @@ static void quickTap(int x, int y) {
           }
         }
       } else {
-        for(int i = 0; i < 7; i++){
+        for(int i = 0; i < 8; i++){
           int col = i % 2;
           int row = i / 2;
           int cx = (col == 0) ? 68 : 172;
@@ -2439,23 +2677,29 @@ static void quickTap(int x, int y) {
           homePage = HOME_COMPASS;
           uiRevision++;
         }
-        else if(hitApp == 2){ // My Activities
+        else if(hitApp == 2){ // Sensors
+          homePage = HOME_SENSORS;
+          sensorsScroll = 0;
+          sensorsGuideSubpage = 0;
+          uiRevision++;
+        }
+        else if(hitApp == 3){ // My Activities
           openLibrary(HOME_ACTIVITY);
         }
-        else if(hitApp == 3){ // Past Routes
+        else if(hitApp == 4){ // Past Routes
           openLibrary(HOME_ROUTES);
         }
-        else if(hitApp == 4){ // Settings
+        else if(hitApp == 5){ // Settings
           homePage = HOME_SETTINGS;
           settingsPage = SET_MAIN;
           settingsScroll = 0;
           uiRevision++;
         }
-        else if(hitApp == 5){ // Activity Settings
+        else if(hitApp == 6){ // Activity Settings
           homePage = HOME_ACTIVITY_SETTINGS;
           uiRevision++;
         }
-        else if(hitApp == 6){ // My Files
+        else if(hitApp == 7){ // My Files
           openBrowser("/");
         }
         return;

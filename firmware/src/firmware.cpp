@@ -796,6 +796,11 @@ static void saveActivity() {
   controlSliderDragging=false;
   resetMaxSpeedTracker();
   resetFusedHeading();
+  trackLen = 0;
+  distAccum = 0;
+  ride.distanceKm = 0;
+  ride.elevationGainM = 0;
+  ride.elapsedSec = 0;
   uiRevision++;
 }
 static bool activityEndConfirm = false;
@@ -1634,6 +1639,12 @@ void setup() {
 
   // 2. Initialize PSRAM FIRST so 8MB external RAM is active for framebuffer
   psramInit();
+  if (psramFound()) {
+    track = (TrackPoint*)ps_malloc(MAX_TRACK * sizeof(TrackPoint));
+    if (track) memset(track, 0, MAX_TRACK * sizeof(TrackPoint));
+  } else {
+    track = (TrackPoint*)malloc(1024 * sizeof(TrackPoint));
+  }
 
   if(prefs.begin("cyclo", true)){
     darkTheme = prefs.getBool("darkTheme", false);
@@ -2214,8 +2225,8 @@ void loop() {
 
   // Auto-Pause & Auto-Resume Detection (3-tier filter with speed hysteresis, temporal & spatial confirmation)
   if (rideStarted && !ridePaused && autoPauseEnabled) {
-    float pauseSpeedThreshold = runningMode ? 0.7f : 1.2f;
-    float resumeSpeedThreshold = runningMode ? 1.2f : 2.0f;
+    float pauseSpeedThreshold = runningMode ? 0.4f : 1.0f;
+    float resumeSpeedThreshold = runningMode ? 0.7f : 1.4f;
     const float highSpeedThreshold = runningMode ? 4.0f : 6.0f;
     float curSpd = speedAvailable() ? ride.speedKmh : 0.0f;
 
@@ -2259,7 +2270,9 @@ void loop() {
 
           // Fast resume if moving fast (>= highSpeedThreshold for 800ms), or standard resume (>= 1.2s sustained with > 3.5m displacement)
           bool highSpeedConfirm = (curSpd >= highSpeedThreshold && moveDuration >= 800);
-          bool normalConfirm = (moveDuration >= 1200 && displacementOk);
+          bool normalConfirm = (moveDuration >= 1000 && displacementOk);
+          bool walkingDisplaceConfirm = (dispMeters >= 2.5f);
+          if (walkingDisplaceConfirm) normalConfirm = true;
 
           if (highSpeedConfirm || normalConfirm) {
             autoPaused = false;

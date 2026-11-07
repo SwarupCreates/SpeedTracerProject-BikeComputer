@@ -869,11 +869,11 @@ static void drawDashScreen() {
   uint16_t mutedCol = uiMuted();
 
   // Top Row: AVG (Left) and MAX (Right)
-  label(18, 38, "AVG", 1, mutedCol);
-  label(18, 48, (ride.elapsedSec ? (runningMode ? paceText(ride.avgSpeedKmh) : String(ride.avgSpeedKmh, 1)) : String("--")), 2, fgCol);
-  label(222 - textWidth("MAX", 1), 38, "MAX", 1, mutedCol);
+  label(18, 35, "AVG", 1, mutedCol);
+  label(18, 52, (ride.elapsedSec ? (runningMode ? paceText(ride.avgSpeedKmh) : String(ride.avgSpeedKmh, 1)) : String("--")), 2, fgCol);
+  label(222 - textWidth("MAX", 1), 35, "MAX", 1, mutedCol);
   String maxSp = (ride.elapsedSec ? (runningMode ? paceText(ride.maxSpeedKmh) : String(ride.maxSpeedKmh, 1)) : String("--"));
-  label(222 - textWidth(maxSp, 2), 48, maxSp, 2, fgCol);
+  label(222 - textWidth(maxSp, 2), 52, maxSp, 2, fgCol);
 
   // Center Circular Arc Gauge with Rounded Caps (cx = 120, cy = 103, R = 61.5, W = 6)
   const int cx = 120, cy = 103;
@@ -945,8 +945,8 @@ static void drawDashScreen() {
   centeredLabel(162, 175, 72, "GRAD", 0, TEAL);
 
   // Heart Rate Row (Frame 27: y = 201..245)
-  label(18, 208, "AVG", 1, mutedCol);
-  label(18, 222, (hrSamples ? String(hrSum / hrSamples) : String("--")), 2, fgCol);
+  label(18, 205, "AVG", 1, mutedCol);
+  label(18, 223, (hrSamples ? String(hrSum / hrSamples) : String("--")), 2, fgCol);
 
   // Center HR Pill (w = 116, h = 44, R = 22)
   int hrVal = bleHRReady ? bleHR : 0;
@@ -968,9 +968,9 @@ static void drawDashScreen() {
   drawCustomIcon(display, hrStartX, 208, hrPillFg, CustomIcon::heartRateIcon, 30, 30);
   label(hrStartX + 36, 209, hrStr, 4, hrPillFg);
 
-  label(222 - textWidth("MAX", 1), 208, "MAX", 1, mutedCol);
+  label(222 - textWidth("MAX", 1), 205, "MAX", 1, mutedCol);
   String maxHrStr = (hrSamples ? String(hrMax) : String("--"));
-  label(222 - textWidth(maxHrStr, 2), 222, maxHrStr, 2, fgCol);
+  label(222 - textWidth(maxHrStr, 2), 223, maxHrStr, 2, fgCol);
 
   // Zone text and pointer (neutral muted grey if no HR reading)
   uint16_t zoneCol = (bleHRReady && hrVal > 0) ? (darkTheme ? zc.textDark : zc.textLight) : mutedCol;
@@ -1544,14 +1544,16 @@ static void drawActivityControlsScreen() {
     display.fillTriangle(195, 186, 195, 200, 204, 193, 0x05E0);
   }
 
-  // Row 4 (y = 230, h = 54): REVERSE SLIDER "Swipe to end"
+  // Row 4 (y = 230, h = 54): REVERSE SLIDER "Swipe to end" (Exact mirror of Home Page slider)
   display.fillRoundRect(8, 230, 224, 54, 27, cardBg);
-  label(32, 253, "Swipe to end", 1, mutedCol);
+  int textW = textWidth("Swipe to end", 0);
+  int trackStartX = 8 + (116 - textW) / 2;
+  label(trackStartX, 230 + 21, "Swipe to end", 0, mutedCol);
 
   int pillX = 124 + controlSliderOffset;
-  display.fillRoundRect(pillX, 230, 108, 54, 27, 0xE800);
-  drawCustomIconFlippedH(display, pillX + 18, 249, 0xFFFF, CustomIcon::goNextIcon, 16, 16);
-  drawCustomIcon(display, pillX + 54, 242, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 30, 30);
+  display.fillRoundRect(pillX, 230, 108, 54, 27, 0xF800);
+  drawCustomIconFlippedH(display, pillX + 27, 230 + 20, 0xFFFF, CustomIcon::goNextIcon, 14, 14);
+  drawCustomIcon(display, pillX + 53, 230 + 13, 0xFFFF, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 28, 28);
 
 
 }

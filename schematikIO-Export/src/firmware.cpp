@@ -45,6 +45,7 @@ struct RideData {
   float    speedKmh     = 0;
   float    distanceKm   = 0;
   float    altM         = 0;
+  float    elevationGainM = 0;
   float    gradePercent = 0;
   float    lat          = 0, lon = 0;
   int      cadenceRpm   = 0;
@@ -357,8 +358,8 @@ static void snapActiveRoute() {
   }
 }
 
-#define MAX_TRACK 1024
-TrackPoint track[MAX_TRACK];
+#define MAX_TRACK 8192
+TrackPoint* track = nullptr;
 int        trackLen = 0;
 
 Btn rmtUp{RMT_UP}, rmtDn{RMT_DN}, rmtLt{RMT_LT}, rmtRt{RMT_RT};
@@ -623,10 +624,12 @@ uint32_t activityPoints = 0;
 #include "activity_fit.h"
 #include "activity_archive.h"
 static String paceText(float kmh){
-  if(kmh < 1.8f) return "0:00";
+  if(kmh < 0.5f) return "--:--";
   unsigned seconds = lroundf(3600.0f / kmh);
-  if(seconds > 1500) return "0:00";
-  return String(seconds / 60) + ":" + (seconds % 60 < 10 ? "0" : "") + String(seconds % 60);
+  if(seconds > 3599) return "59:59";
+  unsigned mm = seconds / 60;
+  unsigned ss = seconds % 60;
+  return String(mm) + ":" + (ss < 10 ? "0" : "") + String(ss);
 }
 static bool beginActivityFile() {
   activityPoints=0;
@@ -844,22 +847,21 @@ static void drawDashScreen() {
   // Center Circular Arc Gauge (cx = 120, cy = 103, radius = 62, 270 deg sweep)
   const int cx = 120, cy = 103;
   uint16_t arcBg = darkTheme ? 0x2945 : 0xCE79;
-  for (int d = 135; d <= 405; d++) {
-    float a = radians((float)d);
+  for (float d = 135.0f; d <= 405.0f; d += 0.5f) {
+    float a = radians(d);
     float ca = cosf(a), sa = sinf(a);
     for (int r = 59; r <= 64; r++) {
       display.drawPixel(cx + (int)lroundf(r * ca), cy + (int)lroundf(r * sa), arcBg);
     }
   }
 
-  // Active Progress Arc
-  float spVal = ride.speedKmh;
-  if (spVal < 1.5f) spVal = 0.0f;
+  // Active Progress Arc (zero out stationary idle jitter)
+  float spVal = (ride.speedKmh >= 1.0f && activityRecording()) ? ride.speedKmh : 0.0f;
   float gaugeMax = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   int fillSpan = (int)(270.0f * constrain(spVal / gaugeMax, 0.0f, 1.0f));
   if (fillSpan > 0) {
-    for (int d = 135; d <= 135 + fillSpan; d++) {
-      float a = radians((float)d);
+    for (float d = 135.0f; d <= 135.0f + (float)fillSpan; d += 0.5f) {
+      float a = radians(d);
       float ca = cosf(a), sa = sinf(a);
       for (int r = 59; r <= 64; r++) {
         display.drawPixel(cx + (int)lroundf(r * ca), cy + (int)lroundf(r * sa), TEAL);
@@ -896,12 +898,18 @@ static void drawDashScreen() {
 
   // Center HR Pill (w = 116, h = 44, R = 22)
   int hrVal = bleHRReady ? bleHR : 0;
-  int zone = calcHrZone(hrVal);
+  int zone = (bleHRReady && hrVal > 0) ? calcHrZone(hrVal) : 1;
   const HrZoneColors &zc = HR_ZONE_PALETTES[zone - 1];
-  uint16_t hrPillBg = darkTheme ? 0x0A20 : 0xDFF0;
-  uint16_t hrPillFg = darkTheme ? 0x7FE0 : 0x0540;
+  uint16_t hrPillBg, hrPillFg;
+  if (bleHRReady && hrVal > 0) {
+    hrPillBg = darkTheme ? zc.bgDark : zc.bgLight;
+    hrPillFg = darkTheme ? zc.textDark : zc.textLight;
+  } else {
+    hrPillBg = darkTheme ? 0x18C3 : 0xEF5D;
+    hrPillFg = mutedCol;
+  }
   display.fillRoundRect(62, 201, 116, 44, 22, hrPillBg);
-  String hrStr = bleHRReady ? String(hrVal) : "--";
+  String hrStr = (bleHRReady && hrVal > 0) ? String(hrVal) : "--";
   int hrTextW = textWidth(hrStr, 4);
   int hrBlockW = 30 + 6 + hrTextW;
   int hrStartX = 62 + (116 - hrBlockW) / 2;
@@ -911,8 +919,8 @@ static void drawDashScreen() {
   label(192, 208, "MAX", 1, mutedCol);
   label(188, 222, (hrSamples ? String(hrMax) : String("--")), 2, fgCol);
 
-  // Zone text and pointer
-  uint16_t zoneCol = darkTheme ? zc.textDark : zc.textLight;
+  // Zone text and pointer (neutral muted grey if no HR reading)
+  uint16_t zoneCol = (bleHRReady && hrVal > 0) ? (darkTheme ? zc.textDark : zc.textLight) : mutedCol;
   int segCenters[5] = {35, 78, 120, 162, 205};
   int ptrX = segCenters[constrain(zone - 1, 0, 4)];
   display.fillTriangle(ptrX - 4, 267, ptrX + 4, 267, ptrX, 272, zoneCol);
@@ -945,12 +953,18 @@ static void drawMetricsScreen() {
   centeredLabel(8, 55, 108, sp, 3, spdFg);
 
   int hrVal = bleHRReady ? bleHR : 0;
-  int zone = calcHrZone(hrVal);
+  int zone = (bleHRReady && hrVal > 0) ? calcHrZone(hrVal) : 1;
   const HrZoneColors &zc = HR_ZONE_PALETTES[zone - 1];
-  uint16_t hrPillBg = darkTheme ? zc.bgDark : zc.bgLight;
-  uint16_t hrPillFg = darkTheme ? zc.textDark : zc.textLight;
+  uint16_t hrPillBg, hrPillFg;
+  if (bleHRReady && hrVal > 0) {
+    hrPillBg = darkTheme ? zc.bgDark : zc.bgLight;
+    hrPillFg = darkTheme ? zc.textDark : zc.textLight;
+  } else {
+    hrPillBg = darkTheme ? 0x18C3 : 0xEF5D;
+    hrPillFg = mutedCol;
+  }
   display.fillRoundRect(124, 38, 108, 54, 27, hrPillBg);
-  String hrStr = bleHRReady ? String(hrVal) : "--";
+  String hrStr = (bleHRReady && hrVal > 0) ? String(hrVal) : "--";
   int hrTextW = textWidth(hrStr, 3);
   int hrBlockW = 30 + 6 + hrTextW;
   int hrStartX = 124 + (108 - hrBlockW) / 2;
@@ -1319,15 +1333,17 @@ static void drawMapScreen() {
     if (ex >= clipX1 - 10 && ex <= clipX2 + 10 && ey >= clipY1 - 10 && ey <= clipY2 + 10) drawFinishNodeIcon(display, ex - 10, ey - 10);
   } else {
     // If NOT navigating: livestream recorded breadcrumbs behind rider in Strava Orange (#FC5200)
-    if (trackLen > 0) {
+    if (trackLen > 0 && track) {
       int tx0, ty0;
       projectLatLon(track[0].lat, track[0].lon, tx0, ty0);
       for (int i = 1; i < trackLen; i++) {
         int tx1, ty1;
         projectLatLon(track[i].lat, track[i].lon, tx1, ty1);
-        clipAndDrawLine(tx0, ty0, tx1, ty1, stravaOrange, 3);
-        tx0 = tx1;
-        ty0 = ty1;
+        if (abs(tx1 - tx0) >= 2 || abs(ty1 - ty0) >= 2 || i == trackLen - 1) {
+          clipAndDrawLine(tx0, ty0, tx1, ty1, stravaOrange, 3);
+          tx0 = tx1;
+          ty0 = ty1;
+        }
       }
       if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
         int cx1, cy1;
@@ -2097,10 +2113,10 @@ void loop() {
         if (!runningMode && bleSpeedReady) curSpd = max(curSpd, bleSpeed);
 
         // Movement conditions:
-        // Accumulate once displaced at least 1.5 meters (0.0015 km) from anchor,
+        // Accumulate once displaced at least 1.0 meter (0.0010 km) from anchor,
         // capturing walking steps (~0.5 to 1.5 m/s) and runs/rides cleanly.
-        bool hasMoved = (delta >= 0.0015f && delta < 0.200f && impliedSpeedKmh < 130.0f);
-        float minMotionSpd = runningMode ? 0.5f : 0.8f;
+        bool hasMoved = (delta >= 0.0010f && delta < 0.200f && impliedSpeedKmh < 130.0f);
+        float minMotionSpd = runningMode ? 0.3f : 0.6f;
         bool isMotion = (curSpd >= minMotionSpd) || (impliedSpeedKmh >= minMotionSpd);
 
         if (goodFixQuality && hasMoved && isMotion) {
@@ -2152,8 +2168,20 @@ void loop() {
     if (rideStarted && !ridePaused && !autoPaused && millis() - lastTrackMs > 3000) {
       lastTrackMs = millis();
       if(activityFile){fitPoint(nLat,nLon);archivePoint(nLat,nLon);}
-      if (trackLen < MAX_TRACK)
+      if (track) {
+        if (trackLen >= MAX_TRACK) {
+          // Decimate older half: discard every 2nd point to compress and make room
+          int half = MAX_TRACK / 2;
+          int newHalf = half / 2;
+          for (int i = 1; i < newHalf; i++) {
+            track[i] = track[i * 2];
+          }
+          int remaining = MAX_TRACK - half;
+          memmove(&track[newHalf], &track[half], remaining * sizeof(TrackPoint));
+          trackLen = newHalf + remaining;
+        }
         track[trackLen++] = {nLat, nLon, ride.altM, ride.elapsedSec};
+      }
     }
   } else if (!gps.location.isValid()) {
     ride.gpsFixed = false;
@@ -2163,9 +2191,8 @@ void loop() {
   float rawGpsSpeed = (ride.gpsFixed && gps.speed.isValid() && gps.speed.age() < 3000) ? (float)gps.speed.kmph() : 0.0f;
   
   // GPS noise deadzones:
-  // In outdoor ride: stationary jitter up to ~1.0 km/h
-  // Stationary drift deadzone
-  float speedDeadzone = runningMode ? 1.4f : 1.8f;
+  // In outdoor ride / walk: stationary jitter up to ~0.6 km/h (running) or 1.2 km/h (cycling)
+  float speedDeadzone = runningMode ? 0.6f : 1.2f;
   if (rawGpsSpeed < speedDeadzone) {
     rawGpsSpeed = 0.0f;
   }
@@ -2185,16 +2212,16 @@ void loop() {
 
   // Auto-Pause & Auto-Resume Detection (3-tier filter with speed hysteresis, temporal & spatial confirmation)
   if (rideStarted && !ridePaused && autoPauseEnabled) {
-    float pauseSpeedThreshold = runningMode ? 1.0f : 1.5f;
-    float resumeSpeedThreshold = runningMode ? 2.8f : 4.0f;
-    const float highSpeedThreshold = 7.0f;
+    float pauseSpeedThreshold = runningMode ? 0.7f : 1.2f;
+    float resumeSpeedThreshold = runningMode ? 1.2f : 2.0f;
+    const float highSpeedThreshold = runningMode ? 4.0f : 6.0f;
     float curSpd = speedAvailable() ? ride.speedKmh : 0.0f;
 
     if (!autoPaused) {
       if (curSpd < pauseSpeedThreshold && millis() > autoPauseOverrideGraceMs) {
         if (nearZeroSpeedStartMs == 0) {
           nearZeroSpeedStartMs = millis();
-        } else if (millis() - nearZeroSpeedStartMs >= 4000) { // 4 seconds idle buffer
+        } else if (millis() - nearZeroSpeedStartMs >= (runningMode ? 5000 : 4000)) { // 5s buffer in run/walk
           autoPaused = true;
           autoPauseStartMs = millis();
           nearZeroSpeedStartMs = 0;
@@ -2210,7 +2237,7 @@ void loop() {
     } else {
       // Auto-resume check:
       // Require HDOP to be reasonable to prevent indoor multipath false triggers
-      bool hdopAcceptable = (!gps.hdop.isValid() || gps.hdop.hdop() <= 4.5f);
+      bool hdopAcceptable = (!gps.hdop.isValid() || gps.hdop.hdop() <= 5.5f);
       bool movingNow = (curSpd >= resumeSpeedThreshold) && hdopAcceptable;
 
       if (!movingNow) {
@@ -2226,11 +2253,11 @@ void loop() {
           if (autoPauseAnchorLat != 0.0f && autoPauseAnchorLon != 0.0f && ride.gpsFixed && gps.location.isValid()) {
             dispMeters = haversineKm(autoPauseAnchorLat, autoPauseAnchorLon, (float)gps.location.lat(), (float)gps.location.lng()) * 1000.0f;
           }
-          bool displacementOk = (dispMeters >= 8.0f) || (autoPauseAnchorLat == 0.0f);
+          bool displacementOk = (dispMeters >= 3.5f) || (autoPauseAnchorLat == 0.0f);
 
-          // Fast resume if riding fast (>= 7 km/h for 1.5s), or standard resume (>= 2.5s sustained with > 8m displacement)
-          bool highSpeedConfirm = (curSpd >= highSpeedThreshold && moveDuration >= 1500);
-          bool normalConfirm = (moveDuration >= 2500 && displacementOk);
+          // Fast resume if moving fast (>= highSpeedThreshold for 800ms), or standard resume (>= 1.2s sustained with > 3.5m displacement)
+          bool highSpeedConfirm = (curSpd >= highSpeedThreshold && moveDuration >= 800);
+          bool normalConfirm = (moveDuration >= 1200 && displacementOk);
 
           if (highSpeedConfirm || normalConfirm) {
             autoPaused = false;
@@ -2309,6 +2336,32 @@ void loop() {
         filteredGpsAlt = (0.80f * filteredGpsAlt) + (0.20f * rawAlt);
       }
       ride.altM = filteredGpsAlt;
+    }
+  }
+
+  // 2.5m climb hysteresis filter on ride.altM to eliminate noise accumulation
+  if (rideStarted && !ridePaused && !autoPaused && isfinite(ride.altM) && ride.altM > -100.0f) {
+    static float s_elevMin = 0.0f, s_elevMax = 0.0f;
+    static bool s_elevInit = false;
+    if (!s_elevInit) {
+      s_elevMin = s_elevMax = ride.altM;
+      s_elevInit = true;
+    } else {
+      if (ride.altM < s_elevMin) {
+        s_elevMin = ride.altM;
+        s_elevMax = ride.altM;
+      } else if (ride.altM > s_elevMax) {
+        if (ride.altM - s_elevMin >= 2.5f) {
+          ride.elevationGainM += (ride.altM - s_elevMin);
+          s_elevMin = ride.altM;
+          s_elevMax = ride.altM;
+        } else {
+          s_elevMax = ride.altM;
+        }
+      } else if (s_elevMax - ride.altM >= 2.0f) {
+        s_elevMin = ride.altM;
+        s_elevMax = ride.altM;
+      }
     }
   }
 
@@ -2416,8 +2469,8 @@ void loop() {
   serviceAppRefresh();
   pollQuickTouch();
 
-  // Target 50 FPS display refresh (20ms period, zero-allocation scalar comparison)
-  if (millis() - lastDispMs >= 20) {
+  // Target 60 FPS display refresh (16ms period, zero-allocation scalar comparison)
+  if (millis() - lastDispMs >= 16) {
     lastDispMs = millis();
     struct UIState {
       uint32_t radarTick;
@@ -2436,7 +2489,7 @@ void loop() {
     };
     int cHeading = (compass.ready && isfinite(compass.heading)) ? (int)roundf(compass.heading) : ride.heading;
     UIState curState = {
-      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || (welcomeOpen && homePage == HOME_COMPASS) || autoPaused) ? (millis() / 25) : 0),
+      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || ((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) || autoPaused) ? (millis() / 16) : 0),
       (uint32_t)(millis() / 500),
       uiRevision,
       ride.elapsedSec / 60,

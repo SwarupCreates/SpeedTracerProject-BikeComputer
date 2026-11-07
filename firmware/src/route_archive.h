@@ -56,7 +56,7 @@ static bool readGPX(String path){
     uint32_t index=0;
     uint32_t stride=1;
     if(pass==1){stride=max(1UL,(unsigned long)((count+MAX_ROUTE-2)/(MAX_ROUTE-1)));}
-    double lastA=0,lastB=0;float lastE=NAN;uint32_t lastTSec=0;
+    double lastA=0,lastB=0;float lastE=NAN;uint32_t lastTSec=0;float gpxElevMin=0,gpxElevMax=0;
     int carry=0;
 
     while(true){
@@ -130,7 +130,22 @@ static bool readGPX(String path){
                 previewKm+=d;
                 if(isfinite(ele)){
                   previewElevation=true;
-                  if(isfinite(lastE)&&ele>lastE) previewGain+=(ele-lastE);
+                  if(!isfinite(lastE)){
+                    lastE=ele; gpxElevMin=ele; gpxElevMax=ele;
+                  }else{
+                    if(ele < gpxElevMin){
+                      gpxElevMin=ele; gpxElevMax=ele;
+                    }else if(ele > gpxElevMax){
+                      if(ele - gpxElevMin >= 2.5f){
+                        previewGain += (ele - gpxElevMin);
+                        gpxElevMin = ele; gpxElevMax = ele;
+                      }else{
+                        gpxElevMax = ele;
+                      }
+                    }else if(gpxElevMax - ele >= 2.0f){
+                      gpxElevMin = ele; gpxElevMax = ele;
+                    }
+                  }
                 }
                 if(lastTSec>0 && tSec>lastTSec){
                   uint32_t dt=tSec-lastTSec;
@@ -213,8 +228,12 @@ static bool readGPX(String path){
     archiveCsvLoaded=true;
     if(!archiveSummary["seconds"].is<uint32_t>() || archiveSummary["seconds"].as<uint32_t>()==0){
       archiveSummary["seconds"]=totalDuration;
-      archiveSummary["distanceKm"]=previewKm;
-      archiveSummary["elevationGainM"]=previewGain;
+      if(!archiveSummary["distanceKm"].is<float>() || archiveSummary["distanceKm"].as<float>() <= 0.001f){
+        archiveSummary["distanceKm"]=previewKm;
+      }
+      if(!archiveSummary["elevationGainM"].is<float>() || archiveSummary["elevationGainM"].as<float>() <= 0.001f){
+        archiveSummary["elevationGainM"]=previewGain;
+      }
       if(gpxHrCount>0){
         float avgHr=(float)gpxHrSum/gpxHrCount;
         archiveSummary["avgHeartRate"]=avgHr;

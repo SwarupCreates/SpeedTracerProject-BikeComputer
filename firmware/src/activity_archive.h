@@ -14,7 +14,7 @@ static void archiveBegin(){
 static void archivePoint(double lat,double lon){
  if(!gpxFile)return;
  gpxFile.printf("<trkpt lat=\"%.7f\" lon=\"%.7f\">",lat,lon);
- if(gps.altitude.isValid()&&gps.altitude.age()<3000)gpxFile.printf("<ele>%.2f</ele>",gps.altitude.meters());
+ if(isfinite(ride.altM))gpxFile.printf("<ele>%.2f</ele>",ride.altM);
  time_t t=time(nullptr);struct tm utc;gmtime_r(&t,&utc);char b[32];strftime(b,sizeof b,"%Y-%m-%dT%H:%M:%SZ",&utc);
  gpxFile.printf("<time>%s</time></trkpt>\n",b);gpxFile.flush();
 }
@@ -22,7 +22,7 @@ static void archiveFinish(bool fitOK){
  if(gpxFile){gpxFile.println("</trkseg></trk></gpx>");gpxFile.flush();gpxFile.close();}
  if(samplesFile){samplesFile.flush();samplesFile.close();}
  if(!fitOK)return;
- JsonDocument d;d["completedEpoch"]=(uint32_t)time(nullptr);d["distanceKm"]=ride.distanceKm;d["seconds"]=ride.elapsedSec;
+ JsonDocument d;d["completedEpoch"]=(uint32_t)time(nullptr);d["distanceKm"]=ride.distanceKm;d["seconds"]=ride.elapsedSec;d["elevationGainM"]=ride.elevationGainM;d["elevationGainM"]=ride.elevationGainM;
  if(calorieSeconds)d["caloriesEstimate"]=calorieEstimate;
  if(ride.vo2est>0)d["vo2Estimate"]=ride.vo2est;
  d["calorieCoverageSeconds"]=calorieSeconds;

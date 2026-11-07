@@ -401,7 +401,10 @@ static void drawLibrary(){
 
         card(123, row2Y, 111, 36, uiCard());
         label(131, row2Y + 5, "AVG GRADIENT", 1, uiMuted());
-        float grad = (previewKm > 0.01f && previewElevation) ? ((previewGain / (previewKm * 1000.0f)) * 100.0f) : 0.0f;
+        float showGain = (archiveSummary["elevationGainM"].is<float>() && archiveSummary["elevationGainM"].as<float>() > 0.0f)
+                     ? archiveSummary["elevationGainM"].as<float>()
+                     : previewGain;
+        float grad = (previewKm > 0.01f && previewElevation) ? ((showGain / (previewKm * 1000.0f)) * 100.0f) : 0.0f;
         label(131, row2Y + 20, (grad > 0.0f ? ("+" + String(grad, 1) + "%") : String("--")), 1, uiFg());
       }
 
@@ -460,7 +463,10 @@ static void drawLibrary(){
     if (topY + 48 >= 68 && topY < 290) {
       display.fillRoundRect(124, topY, 108, 48, 24, uiCard());
       if (!darkTheme) display.drawRoundRect(124, topY, 108, 48, 24, 0xD69A);
-      String distStr = (previewKm > 0.001f) ? (String(previewKm, 2) + "KM") : "--KM";
+      float showDist = (archiveSummary["distanceKm"].is<float>() && archiveSummary["distanceKm"].as<float>() > 0.001f)
+                     ? archiveSummary["distanceKm"].as<float>()
+                     : previewKm;
+      String distStr = (showDist > 0.001f) ? (String(showDist, 2) + "KM") : "--KM";
       centeredLabel(124, topY + 16, 108, distStr, 2, uiFg());
     }
 
@@ -1029,7 +1035,7 @@ static void drawCompassApp() {
     float diff = rawH - s_smoothCompassH;
     while (diff < -180.0f) diff += 360.0f;
     while (diff > 180.0f) diff -= 360.0f;
-    s_smoothCompassH += diff * 0.20f;
+    s_smoothCompassH += diff * 0.35f;
     while (s_smoothCompassH < 0.0f) s_smoothCompassH += 360.0f;
     while (s_smoothCompassH >= 360.0f) s_smoothCompassH -= 360.0f;
   }
@@ -2083,7 +2089,7 @@ bool drawLifecycleScreen() {
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
   else if(countdownGoStart) state="countGo:"+String((millis()-countdownGoStart)/40);
   else if(countdownStart) state="count:"+String((millis()-countdownStart)/40);
-  else if(welcomeOpen && !quickOpen && homePage == HOME_COMPASS) state="compass:"+String(millis()/25)+":"+String((int)(compass.heading*10))+":"+String(darkTheme);
+  else if((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) state="compass:"+String(millis()/16)+":"+String((int)(compass.heading*10))+":"+String(darkTheme);
   else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(homeHeroClock)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
   if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart && !countdownGoStart){previous="";return false;}
   if(state.isEmpty()){previous="";return false;}

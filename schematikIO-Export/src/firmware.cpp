@@ -558,6 +558,11 @@ static String durationText() {
 
 #include "ble_sensors.h"
 
+// Live Battery State (Frame 27 Parity with Level & Charging Animations)
+static int batteryPercent = 76;
+static bool batteryCharging = true;
+static bool batteryAlert = false;
+
 static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
   if (clearPage) display.fillScreen(uiBg());
   else display.fillRect(0, 0, DISP_W, 29, uiBg());
@@ -609,12 +614,30 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
 
   }
 
-  // Battery Status
-  const String batteryText = "N/A";
-  label(206 - 4 - textWidth(batteryText, 1), 9, batteryText, 1, uiMuted());
-  drawBatteryIcon(display, 206, 7, 0, uiFg());
-  display.drawLine(206, 6, 228, 19, uiMuted());
-  display.drawLine(206, 19, 228, 6, uiMuted()); // Status unavailable, not proof of disconnection
+  // Battery Status (Frame 27 Parity with Animated & Level-Switched States)
+  String batteryText;
+  uint16_t batCol;
+  if (batteryCharging) {
+    batteryText = String(batteryPercent) + "%";
+    batCol = 0x3CE0; // Charging green
+  } else if (batteryAlert || batteryPercent < 10) {
+    batteryText = String(batteryPercent) + "%";
+    batCol = 0xF800; // Red alert
+  } else if (batteryPercent < 25) {
+    batteryText = String(batteryPercent) + "%";
+    batCol = 0xF800; // Red low
+  } else if (batteryPercent < 50) {
+    batteryText = String(batteryPercent) + "%";
+    batCol = 0xFA60; // Amber
+  } else {
+    batteryText = String(batteryPercent) + "%";
+    batCol = uiFg(); // Crisp white in dark theme
+  }
+
+  int batX = 208;
+  int batY = 8;
+  label(batX - 4 - textWidth(batteryText, 1), 9, batteryText, 1, batCol);
+  drawBatteryIcon(display, batX, batY, batteryPercent, batteryCharging, batteryAlert);
 }
 
 // One binary FIT activity per SD file; finalized on Save.
@@ -1838,6 +1861,27 @@ static void handleSerialTransfer() {
   }
   if (line == "CMD:PING") {
     Serial.println("PONG");
+    return;
+  }
+  if (line.startsWith("CMD:BAT ") || line.startsWith("BAT:")) {
+    String arg = line.startsWith("CMD:BAT ") ? line.substring(8) : line.substring(4);
+    arg.trim();
+    if (arg == "CHG" || arg == "CHARGE") {
+      batteryCharging = true;
+      batteryAlert = false;
+      Serial.println("OK:BAT_CHARGING");
+    } else if (arg == "ALERT") {
+      batteryCharging = false;
+      batteryAlert = true;
+      Serial.println("OK:BAT_ALERT");
+    } else {
+      int val = arg.toInt();
+      batteryPercent = constrain(val, 0, 100);
+      batteryCharging = false;
+      batteryAlert = (batteryPercent < 10);
+      Serial.printf("OK:BAT_SET %d\n", batteryPercent);
+    }
+    uiRevision++;
     return;
   }
   if (line == "CMD:SYS_INFO") {

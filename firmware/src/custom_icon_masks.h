@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-enum class CustomIcon { bikeIcon,bluetoothConnectedIcon,bluetoothDisconnectedIcon,caloriesIcon,configureIcon,elevationIcon,heartRateIcon,powerIcon,routeMapIcon,runIcon,satelliteIcon,systemIcon,themeSwitcherIcon,wifiConnectedIcon,wifiDisconnectedIcon,GoBackIcon,HomeIcon,allAppsIcon,brightnessIcon,downArrowIcon,folderIcon,goNextIcon,refreshIcon,sdCardIcon,bikeIconLarge,goNextIconLarge,runIconLarge,historyIcon,satelliteIconLarge, caloryGoalAchievedIcon, directionIcon, fontIcon, hotSpotIcon, languageIcon, locationPinIcon, lockIcon, uploadIcon, warningIcon, lockIconLarge, compassIcon, mapAppIcon, speedometerIcon, stravaIcon, mapAppIconLarge, compassIconLarge, activitiesIconLarge, routeMapIconLarge, systemIconLarge, configureIconLarge, folderIconLarge, switchIcon };
+enum class CustomIcon { bikeIcon,bluetoothConnectedIcon,bluetoothDisconnectedIcon,caloriesIcon,configureIcon,elevationIcon,heartRateIcon,powerIcon,routeMapIcon,runIcon,satelliteIcon,systemIcon,themeSwitcherIcon,wifiConnectedIcon,wifiDisconnectedIcon,GoBackIcon,HomeIcon,allAppsIcon,brightnessIcon,downArrowIcon,folderIcon,goNextIcon,refreshIcon,sdCardIcon,bikeIconLarge,goNextIconLarge,runIconLarge,historyIcon,satelliteIconLarge, caloryGoalAchievedIcon, directionIcon, fontIcon, hotSpotIcon, languageIcon, locationPinIcon, lockIcon, uploadIcon, warningIcon, lockIconLarge, compassIcon, mapAppIcon, speedometerIcon, stravaIcon, mapAppIconLarge, compassIconLarge, activitiesIconLarge, routeMapIconLarge, systemIconLarge, configureIconLarge, folderIconLarge, switchIcon, batteryFullIcon, battery75Icon, battery50Icon, battery25Icon, batteryChargeIcon, batteryAlertIcon };
 static const uint8_t bikeIconMask[256] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,100,163,16,0,0,0,0,0,0,0,0,0,0,0,0,0,239,255,88,0,0,0,0,0,0,0,0,0,0,0,84,100,92,143,12,0,0,0,0,0,0,0,0,0,0,112,255,255,143,0,0,0,0,0,0,0,0,0,0,0,112,255,255,120,195,163,24,0,0,0,0,0,0,0,0,12,255,255,112,0,12,155,243,112,0,0,0,0,0,0,0,0,139,255,143,0,0,0,8,16,0,0,0,0,36,163,191,151,32,96,247,88,0,32,151,191,163,36,0,32,235,116,64,124,227,20,131,128,20,227,124,64,116,235,32,139,131,0,0,0,155,120,128,128,120,155,0,0,0,131,139,159,96,0,0,0,104,151,128,128,151,104,0,0,0,96,159,108,183,0,0,4,195,92,64,64,92,195,4,0,0,183,108,8,191,199,139,207,171,4,0,0,4,171,207,139,199,191,8,0,4,76,124,72,0,0,0,0,0,0,72,124,76,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static const uint8_t bluetoothConnectedIconMask[256] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,48,24,0,0,0,0,0,0,0,0,0,0,0,0,0,0,128,215,24,0,0,0,0,0,0,0,0,0,4,44,0,0,128,215,215,24,0,0,0,0,0,0,0,0,44,231,60,0,128,128,112,215,24,0,0,0,0,0,0,0,0,60,231,60,128,128,60,235,56,0,0,0,0,0,0,0,0,0,60,231,183,183,231,60,0,0,0,0,0,0,0,40,187,28,0,60,243,243,60,0,28,187,40,0,0,0,0,40,187,28,0,60,243,243,60,0,28,187,40,0,0,0,0,0,0,0,60,231,183,183,231,60,0,0,0,0,0,0,0,0,0,60,231,60,128,128,60,235,56,0,0,0,0,0,0,0,44,231,60,0,128,128,112,215,24,0,0,0,0,0,0,0,4,44,0,0,128,215,215,24,0,0,0,0,0,0,0,0,0,0,0,0,128,215,24,0,0,0,0,0,0,0,0,0,0,0,0,0,48,24,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static const uint8_t bluetoothDisconnectedIconMask[256] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,48,24,0,0,0,0,0,0,0,0,68,167,4,0,0,0,128,215,24,0,0,0,0,0,0,0,12,195,171,4,0,0,128,215,215,24,0,0,0,0,0,0,0,12,195,171,4,0,128,128,112,215,24,0,0,0,0,0,0,0,12,195,171,4,104,128,60,235,56,0,0,0,0,0,0,0,0,12,195,171,4,76,231,60,0,0,0,0,0,0,0,0,0,0,12,195,171,4,36,0,0,0,0,0,0,0,0,0,0,0,0,72,255,171,4,0,0,0,0,0,0,0,0,0,0,0,60,231,183,251,171,4,0,0,0,0,0,0,0,0,0,60,231,60,128,139,195,171,4,0,0,0,0,0,0,0,44,231,60,0,128,128,120,251,171,4,0,0,0,0,0,0,4,44,0,0,128,215,215,36,195,171,4,0,0,0,0,0,0,0,0,0,128,215,24,0,12,195,171,4,0,0,0,0,0,0,0,0,48,24,0,0,0,12,171,32,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -792,6 +792,102 @@ static const uint8_t switchIconMask[900] = {
 };
 
 
-static const uint8_t *const customMasks[] = {bikeIconMask,bluetoothConnectedIconMask,bluetoothDisconnectedIconMask,caloriesIconMask,configureIconMask,elevationIconMask,heartRateIconMask,powerIconMask,routeMapIconMask,runIconMask,satelliteIconMask,systemIconMask,themeSwitcherIconMask,wifiConnectedIconMask,wifiDisconnectedIconMask,GoBackIconMask,HomeIconMask,allAppsIconMask,brightnessIconMask,downArrowIconMask,folderIconMask,goNextIconMask,refreshIconMask,sdCardIconMask,bikeIconLargeMask,goNextIconLargeMask,runIconLargeMask,historyIconMask,satelliteIconLargeMask, caloryGoalAchievedIconMask, directionIconMask, fontIconMask, hotSpotIconMask, languageIconMask, locationPinIconMask, lockIconMask, uploadIconMask, warningIconMask, lockIconLargeMask, compassIconMask, mapAppIconMask, speedometerIconMask, stravaIconMask, mapAppIconLargeMask, compassIconLargeMask, activitiesIconLargeMask, routeMapIconLargeMask, systemIconLargeMask, configureIconLargeMask, folderIconLargeMask, switchIconMask};
-static const uint8_t customWidths[] = {16,16,16,24,16,16,24,32,16,16,16,16,16,16,16,17,16,16,16,24,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24, 16, 16, 30, 21, 40, 40, 40, 40, 40, 40, 40, 30};
-static const uint8_t customHeights[] = {16,16,16,24,16,16,24,32,16,16,16,16,16,16,16,17,16,16,16,8,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24, 16, 16, 30, 31, 40, 40, 40, 40, 40, 40, 40, 30};
+// batteryFullIconMask: 24x12 (288 bytes)
+static const uint8_t batteryFullIconMask[288] = {
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,248,206, 69,  0,  0,  0,  0,
+      0,133,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,254,255,236, 31,  0,  0,  0,
+      0,218,253,253,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,255,111,  0,  0,  0,
+     15,238,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,254,116, 58, 95,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,255,103,122,255,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,255,106,109,253,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,255,107,108,254,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,255,103,123,254,  0,
+      0,237,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,254,118, 60, 87,  0,
+      0,223,253,253,255,255,255,255,255,255,255,255,255,255,255,255,255,255,250,255,111,  0,  0,  0,
+      0,129,255,254,255,255,255,255,255,255,255,255,255,255,255,255,255,254,255,232, 28,  0,  0,  0,
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,248,206, 56,  0,  0,  0,  0,
+};
+
+// battery75IconMask: 24x12 (288 bytes)
+static const uint8_t battery75IconMask[288] = {
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,252,206, 69,  0,  0,  0,  0,
+      0,133,255,254,255,255,255,255,255,255,255,255,255,255,255,254,242,242,255,236, 31,  0,  0,  0,
+      0,218,253,253,255,255,255,255,255,255,255,255,255,254,255,242, 26, 18,170,255,108,  0,  0,  0,
+     15,238,255,254,255,255,255,255,255,255,255,255,255,254,255,241, 15,  0,119,254,111, 58, 95,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,254,255,241, 19,  0,125,255, 98,122,255,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,254,255,241, 18,  0,124,255,101,109,253,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,254,255,241, 18,  0,124,255,102,108,254,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,254,255,241, 19,  0,125,255, 98,123,254,  0,
+      0,237,255,254,255,255,255,255,255,255,255,255,255,254,255,241, 15,  0,120,254,114, 60, 87,  0,
+      0,223,253,253,255,255,255,255,255,255,255,255,255,254,255,243, 25, 19,183,255,109,  0,  0,  0,
+      0,129,255,254,255,255,255,255,255,255,255,255,255,255,255,255,242,243,255,232, 28,  0,  0,  0,
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,252,205, 56,  0,  0,  0,  0,
+};
+
+// battery50IconMask: 24x12 (288 bytes)
+static const uint8_t battery50IconMask[288] = {
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,252,206, 69,  0,  0,  0,  0,
+      0,133,255,254,255,255,255,255,255,255,255,254,242,242,242,242,241,243,255,236, 31,  0,  0,  0,
+      0,218,253,253,255,255,255,255,255,254,255,242, 26,  0,  0,  0, 15, 19,169,255,108,  0,  0,  0,
+     15,238,255,254,255,255,255,255,255,254,255,241,  0,  0,  0,  0,  0,  0,118,254,111, 58, 95,  0,
+      0,238,255,254,255,255,255,255,255,254,255,241, 15,  0,  0,  0,  0,  0,124,255, 98,122,255,  0,
+      0,238,255,254,255,255,255,255,255,254,255,241,  0,  0,  0,  0,  0,  0,123,255,101,109,253,  0,
+      0,238,255,254,255,255,255,255,255,254,255,241,  0,  0,  0,  0,  0,  0,123,255,102,108,254,  0,
+      0,238,255,254,255,255,255,255,255,254,255,241, 15,  0,  0,  0,  0,  0,124,255, 98,123,254,  0,
+      0,237,255,254,255,255,255,255,255,254,255,241,  0,  0,  0,  0,  0,  0,119,254,114, 60, 87,  0,
+      0,223,253,253,255,255,255,255,255,254,255,242, 26,  0,  0,  0,  0, 21,182,255,109,  0,  0,  0,
+      0,129,255,254,255,255,255,255,255,255,255,254,242,242,242,242,241,243,255,232, 28,  0,  0,  0,
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,252,205, 56,  0,  0,  0,  0,
+};
+
+// battery25IconMask: 24x12 (288 bytes)
+static const uint8_t battery25IconMask[288] = {
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,252,206, 69,  0,  0,  0,  0,
+      0,133,255,254,255,254,242,242,242,242,242,242,242,242,242,242,241,243,255,236, 31,  0,  0,  0,
+      0,218,253,252,255,242, 26,  0,  0,  0,  0,  0,  0,  0,  0,  0, 15, 19,169,255,108,  0,  0,  0,
+     15,238,255,253,255,241,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,118,254,111, 58, 95,  0,
+      0,238,255,253,255,241, 15,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,124,255, 98,122,255,  0,
+      0,238,255,253,255,241,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,123,255,101,109,253,  0,
+      0,238,255,253,255,241,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,123,255,102,108,254,  0,
+      0,238,255,253,255,241, 15,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,124,255, 98,123,254,  0,
+      0,237,255,253,255,241,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,119,254,114, 60, 87,  0,
+      0,223,253,252,255,242, 26,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 21,182,255,109,  0,  0,  0,
+      0,129,255,254,255,254,242,242,242,242,242,242,242,242,242,242,241,243,255,232, 28,  0,  0,  0,
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,255,252,205, 56,  0,  0,  0,  0,
+};
+
+// batteryChargeIconMask: 24x12 (288 bytes)
+static const uint8_t batteryChargeIconMask[288] = {
+      0,  0,146,244,255,255,255,255,255,255,255,255,255,255,255,255,255,160,  0,  0,  0,  0,  0,  0,
+      0,132,255,252,238,238,238,238,238,238,238,238,238,238,235,238,196, 23,  0,152, 74,  0,  0,  0,
+      0,218,253, 82, 26, 29, 26, 27, 27, 27, 27, 26, 27, 26, 26, 25,  0,  0,106,255, 23,  0,  0,  0,
+      0,242,243, 19,220,238,236,237,237,237,237,237,236,234,238, 69,  0, 67,255,219,  0,  0,  0,  0,
+      0,242,242, 28,242,255,255,255,255,255,255,255,255,255,121,  0, 24,228,254,177,  0,  0, 22,  0,
+      0,242,242, 26,236,254,253,254,254,254,254,250,255,165,  0,  0,203,255,254,250,238,247,138,  0,
+      0,242,242, 26,236,254,253,254,254,254,252,255,204, 18,  0,145,249,238,250,254,255,195,  0,  0,
+      0,242,242, 28,242,255,255,255,255,255,255,236, 35,  0,  0, 22,  0,  0,178,255,229, 22,  0,  0,
+      0,241,243, 18,220,238,236,237,237,235,235, 73,  0,  0,  0,  0,  0,  0,214,250, 55,  0,  0,  0,
+      0,223,253, 88, 26, 28, 26, 27, 26, 27, 26,  0,  0,  0,  0, 15,  0, 28,255,103,  0,  0,  0,  0,
+      0,128,255,254,238,238,238,238,238,238,238,243,242,239,242,175,  0, 76,152,  0,  0,  0,  0,  0,
+      0,  0,146,243,255,255,255,255,255,255,255,255,255,255,255,137,  0,  0,  0,  0,  0,  0,  0,  0,
+};
+
+// batteryAlertIconMask: 24x12 (288 bytes)
+static const uint8_t batteryAlertIconMask[288] = {
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,254,255,241,  0,  0, 15,  0,  0,  0,
+      0,133,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,242,  0,  0,229,229,  0,  0,
+      0,218,253,253,255,255,255,255,255,255,255,255,255,255,255,254,255,242,  0,  0,251,251,  0,  0,
+     15,238,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,242,  0,  0,245,245,  0,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,242,  0,  0,245,245,  0,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,242,  0,  0,250,250,  0,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,242,  0,  0,236,236,  0,  0,
+      0,238,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,241,  0,  0,  0,  0,  0,  0,
+      0,237,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,242, 15,  0, 75, 84,  0,  0,
+      0,223,253,253,255,255,255,255,255,255,255,255,255,255,255,254,255,242,  0,  0,239,249,  0,  0,
+      0,129,255,254,255,255,255,255,255,255,255,255,255,255,255,254,255,248, 33,  0, 73, 74,  0,  0,
+      0,  0,147,243,254,255,255,255,255,255,255,255,255,255,255,255,252,255,117,  0,  0,  0,  0,  0,
+};
+
+static const uint8_t *const customMasks[] = {bikeIconMask,bluetoothConnectedIconMask,bluetoothDisconnectedIconMask,caloriesIconMask,configureIconMask,elevationIconMask,heartRateIconMask,powerIconMask,routeMapIconMask,runIconMask,satelliteIconMask,systemIconMask,themeSwitcherIconMask,wifiConnectedIconMask,wifiDisconnectedIconMask,GoBackIconMask,HomeIconMask,allAppsIconMask,brightnessIconMask,downArrowIconMask,folderIconMask,goNextIconMask,refreshIconMask,sdCardIconMask,bikeIconLargeMask,goNextIconLargeMask,runIconLargeMask,historyIconMask,satelliteIconLargeMask, caloryGoalAchievedIconMask, directionIconMask, fontIconMask, hotSpotIconMask, languageIconMask, locationPinIconMask, lockIconMask, uploadIconMask, warningIconMask, lockIconLargeMask, compassIconMask, mapAppIconMask, speedometerIconMask, stravaIconMask, mapAppIconLargeMask, compassIconLargeMask, activitiesIconLargeMask, routeMapIconLargeMask, systemIconLargeMask, configureIconLargeMask, folderIconLargeMask, switchIconMask, batteryFullIconMask, battery75IconMask, battery50IconMask, battery25IconMask, batteryChargeIconMask, batteryAlertIconMask};
+static const uint8_t customWidths[] = {16,16,16,24,16,16,24,32,16,16,16,16,16,16,16,17,16,16,16,24,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24, 16, 16, 30, 21, 40, 40, 40, 40, 40, 40, 40, 30, 24, 24, 24, 24, 24, 24};
+static const uint8_t customHeights[] = {16,16,16,24,16,16,24,32,16,16,16,16,16,16,16,17,16,16,16,8,16,16,16,16,36,36,36,16,32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 24, 16, 16, 30, 31, 40, 40, 40, 40, 40, 40, 40, 30, 12, 12, 12, 12, 12, 12};

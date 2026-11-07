@@ -560,7 +560,7 @@ static String durationText() {
 
 // Live Battery State (Frame 27 Parity with Level & Charging Animations)
 static int batteryPercent = 76;
-static bool batteryCharging = true;
+static bool batteryCharging = false;
 static bool batteryAlert = false;
 
 static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
@@ -636,7 +636,7 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
 
   int batX = 208;
   int batY = 8;
-  label(batX - 4 - textWidth(batteryText, 1), 9, batteryText, 1, batCol);
+  label(batX - 4 - textWidth(batteryText, 0), 10, batteryText, 0, batCol);
   drawBatteryIcon(display, batX, batY, batteryPercent, batteryCharging, batteryAlert);
 }
 

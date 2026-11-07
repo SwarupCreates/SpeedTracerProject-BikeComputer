@@ -1027,17 +1027,30 @@ static const char* getCardinalDirection(float deg) {
 static void drawCompassApp() {
   display.fillRect(0, 28, 240, 262, uiBg());
 
-  const int cx = 120, cy = 120, r = 88;
+  const int cx = 120, cy = 133;
+  const int rOuter = 89;
+  const int rDial = 69;
 
-  // Outer circular dial
-  display.drawCircle(cx, cy, r, uiFg());
-  display.drawCircle(cx, cy, r - 1, uiFg());
+  // Outer circular dial boundary (Frame 35)
+  display.drawCircle(cx, cy, rOuter, uiFg());
 
-  // Cardinal letters: N in Red, others in White
-  label(cx - 5, cy - r + 8, "N", 2, 0xF800);
-  label(cx - 5, cy + r - 22, "S", 2, uiFg());
-  label(cx + r - 20, cy - 7, "E", 2, uiFg());
-  label(cx - r + 8, cy - 7, "W", 2, uiFg());
+  // Fixed solid red up-headed needle pointing to 12 o'clock
+  // Vertex 1: Tip at (cx, 80)
+  // Vertex 2: Base left at (cx - 10, 111)
+  // Vertex 3: Base right at (cx + 10, 111)
+  display.fillTriangle(cx, 80, cx - 10, 111, cx + 10, 111, 0xF800);
+
+  // Reticle / Hub at center
+  // 1. Center disc (radius 14): dark gray #292929 in dark mode, light gray #D6D6D6 in light mode
+  uint16_t hubDiscColor = darkTheme ? 0x2945 : 0xD69A;
+  display.fillCircle(cx, cy, 14, hubDiscColor);
+
+  // 2. Inner ring outline (radius 23)
+  display.drawCircle(cx, cy, 23, uiFg());
+
+  // 3. Crosshair lines extending across the inner ring
+  display.drawFastHLine(cx - 23, cy, 47, uiFg());
+  display.drawFastVLine(cx, cy - 23, 47, uiFg());
 
   // Current heading with smooth low-pass interpolation
   static float s_smoothCompassH = 0.0f;
@@ -1063,47 +1076,64 @@ static void drawCompassApp() {
     while (s_smoothCompassH >= 360.0f) s_smoothCompassH -= 360.0f;
   }
   float h = s_smoothCompassH;
-  float rad = radians(h);
-  float dx = sinf(rad), dy = -cosf(rad);
-  float px = -dy, py = dx;
 
-  float L = 66.0f;
-  float hw = 6.0f;
+  // Rotating Dial with 12 Steppings (4 Cardinals + 2 Intermediate dots between each)
+  // Stepping angle d in degrees: 0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330
+  // When device faces heading h, direction d is at angle (d - h) from top (12 o'clock)
+  uint16_t dotColor = darkTheme ? 0x632C : 0xA514;
+  for (int i = 0; i < 12; i++) {
+    float d = i * 30.0f;
+    float rad = radians(d - h);
+    int px = cx + (int)lroundf(rDial * sinf(rad));
+    int py = cy - (int)lroundf(rDial * cosf(rad));
 
-  int ntx = lroundf((float)cx + L * dx);
-  int nty = lroundf((float)cy + L * dy);
-  int stx = lroundf((float)cx - L * dx);
-  int sty = lroundf((float)cy - L * dy);
-  int s1x = lroundf((float)cx + hw * px);
-  int s1y = lroundf((float)cy + hw * py);
-  int s2x = lroundf((float)cx - hw * px);
-  int s2y = lroundf((float)cy - hw * py);
+    if (i == 0) {
+      // North: vibrant red
+      int w = textWidth("N", 2);
+      label(px - w / 2, py - 6, "N", 2, 0xF800);
+    } else if (i == 3) {
+      // East: uiFg
+      int w = textWidth("E", 2);
+      label(px - w / 2, py - 6, "E", 2, uiFg());
+    } else if (i == 6) {
+      // South: uiFg
+      int w = textWidth("S", 2);
+      label(px - w / 2, py - 6, "S", 2, uiFg());
+    } else if (i == 9) {
+      // West: uiFg
+      int w = textWidth("W", 2);
+      label(px - w / 2, py - 6, "W", 2, uiFg());
+    } else {
+      // 8 Intermediate stepping dots
+      display.fillCircle(px, py, 2, dotColor);
+    }
+  }
 
-  // Red North half
-  display.fillTriangle(ntx, nty, s1x, s1y, s2x, s2y, 0xF800);
-  // White South half
-  display.fillTriangle(stx, sty, s1x, s1y, s2x, s2y, uiFg());
-
-  // Center pivot (dark hole with white rim)
-  display.fillCircle(cx, cy, 6, uiBg());
-  display.drawCircle(cx, cy, 6, uiFg());
-  display.drawCircle(cx, cy, 7, uiFg());
-
-  // Large heading readout at bottom (Frame 16: "20°N")
+  // Large heading readout at bottom (Frame 35: e.g. "346°N")
   int deg = (int)lroundf(fmodf(h + 360.0f, 360.0f)) % 360;
   const char* card = getCardinalDirection(deg);
   String degStr = String(deg);
-  int wNum = textWidth(degStr, 3);
-  int wCard = textWidth(card, 3);
-  int degGap = 12;
-  int totalW = wNum + degGap + wCard;
+  int wNum = textWidth(degStr, 4);
+  int wCard = textWidth(card, 4);
+  const int degSymbolWidth = 14;
+  int totalW = wNum + degSymbolWidth + wCard;
   int startX = (DISP_W - totalW) / 2;
-  int yText = 246;
+  int yText = 241;
 
-  label(startX, yText, degStr, 3, uiFg());
-  display.drawCircle(startX + wNum + 5, yText + 5, 3, uiFg());
-  display.drawCircle(startX + wNum + 5, yText + 5, 2, uiFg());
-  label(startX + wNum + degGap, yText, card, 3, uiFg());
+  // Numerical heading
+  label(startX, yText, degStr, 4, uiFg());
+
+  // Degree symbol: clean 2-pixel hollow circle at the top-right of the number
+  int degCx = startX + wNum + 6;
+  int degCy = yText + 6;
+  display.drawCircle(degCx, degCy, 3, uiFg());
+  display.drawCircle(degCx, degCy, 4, uiFg());
+
+  // Cardinal direction text
+  label(startX + wNum + degSymbolWidth, yText, card, 4, uiFg());
+
+  // Redraw global navigation bar
+  drawGlobalNav();
 }
 
 static void drawMapViewerApp() {

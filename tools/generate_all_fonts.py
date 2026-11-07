@@ -2,12 +2,12 @@ import os
 import re
 
 FONTS = [
-    ("Metro", "font/Metropolis-Medium.ttf", "Metropolis Medium", [(10, 7), (12, 9), (18, 13), (28, 20)]),
-    ("GoogleSans", "font/GoogleSans-Medium.ttf", "Google Sans Medium", [(10, 7), (12, 9), (18, 13), (28, 20)]),
-    ("Galano", "font/Galano Grotesque Semi Bold.otf", "Galano Grotesque SemiBold", [(10, 7), (12, 9), (18, 13), (28, 20)]),
-    ("GalanoItalic", "font/Galano Grotesque Semi Bold Italic.otf", "Galano Grotesque Italic", [(10, 7), (12, 9), (18, 13), (28, 20)]),
-    ("SpaceGrotesk", "font/SpaceGrotesk-SemiBold.ttf", "Space Grotesk SemiBold", [(10, 7), (12, 9), (18, 13), (28, 20)]),
-    ("Tektur", "font/Tektur-Medium.ttf", "Tektur Medium", [(10, 8), (12, 9), (18, 13), (28, 20)])
+    ("Metro", "font/Metropolis-Medium.ttf", "Metropolis Medium", [(10, 7), (12, 9), (18, 13), (28, 20), (36, 26)]),
+    ("GoogleSans", "font/GoogleSans-Medium.ttf", "Google Sans Medium", [(10, 7), (12, 9), (18, 13), (28, 20), (36, 26)]),
+    ("Galano", "font/Galano Grotesque Semi Bold.otf", "Galano Grotesque SemiBold", [(10, 7), (12, 9), (18, 13), (28, 20), (36, 26)]),
+    ("GalanoItalic", "font/Galano Grotesque Semi Bold Italic.otf", "Galano Grotesque Italic", [(10, 7), (12, 9), (18, 13), (28, 20), (36, 26)]),
+    ("SpaceGrotesk", "font/SpaceGrotesk-SemiBold.ttf", "Space Grotesk SemiBold", [(10, 7), (12, 9), (18, 13), (28, 20), (36, 26)]),
+    ("Tektur", "font/Tektur-Medium.ttf", "Tektur Medium", [(10, 8), (12, 9), (18, 13), (28, 20), (36, 26)])
 ]
 
 def parse_font_c(filepath):
@@ -84,7 +84,7 @@ for prefix, font_path, name, sizes_caps in FONTS:
         header_code += f'static const SmoothFont smoothFont_{prefix}_{sz} = {{ smoothBits_{prefix}_{sz}, smoothGlyphs_{prefix}_{sz}, {cap} }};\n\n'
 
 # Backward-compatibility alias for Metropolis
-for sz in [10, 12, 18, 28]:
+for sz in [10, 12, 18, 28, 36]:
     header_code += f'static const SmoothFont& smoothFont{sz} = smoothFont_Metro_{sz};\n'
 header_code += '\n'
 

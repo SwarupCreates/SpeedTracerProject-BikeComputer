@@ -507,18 +507,18 @@ static const uint16_t TEAL = 0x3DF7, ORANGE = 0xFA60, RED = 0xF800, GREEN = 0x07
 static const SmoothFont& textFont(int size) {
   switch (activeFontId) {
     case FONT_GOOGLE_SANS:
-      return size == 0 ? smoothFont_GoogleSans_12 : size <= 1 ? smoothFont_GoogleSans_10 : size == 2 ? smoothFont_GoogleSans_18 : smoothFont_GoogleSans_28;
+      return size == 0 ? smoothFont_GoogleSans_12 : size <= 1 ? smoothFont_GoogleSans_10 : size == 2 ? smoothFont_GoogleSans_18 : size == 3 ? smoothFont_GoogleSans_28 : smoothFont_GoogleSans_36;
     case FONT_GALANO:
-      return size == 0 ? smoothFont_Galano_12 : size <= 1 ? smoothFont_Galano_10 : size == 2 ? smoothFont_Galano_18 : smoothFont_Galano_28;
+      return size == 0 ? smoothFont_Galano_12 : size <= 1 ? smoothFont_Galano_10 : size == 2 ? smoothFont_Galano_18 : size == 3 ? smoothFont_Galano_28 : smoothFont_Galano_36;
     case FONT_GALANO_ITALIC:
-      return size == 0 ? smoothFont_GalanoItalic_12 : size <= 1 ? smoothFont_GalanoItalic_10 : size == 2 ? smoothFont_GalanoItalic_18 : smoothFont_GalanoItalic_28;
+      return size == 0 ? smoothFont_GalanoItalic_12 : size <= 1 ? smoothFont_GalanoItalic_10 : size == 2 ? smoothFont_GalanoItalic_18 : size == 3 ? smoothFont_GalanoItalic_28 : smoothFont_GalanoItalic_36;
     case FONT_SPACE_GROTESK:
-      return size == 0 ? smoothFont_SpaceGrotesk_12 : size <= 1 ? smoothFont_SpaceGrotesk_10 : size == 2 ? smoothFont_SpaceGrotesk_18 : smoothFont_SpaceGrotesk_28;
+      return size == 0 ? smoothFont_SpaceGrotesk_12 : size <= 1 ? smoothFont_SpaceGrotesk_10 : size == 2 ? smoothFont_SpaceGrotesk_18 : size == 3 ? smoothFont_SpaceGrotesk_28 : smoothFont_SpaceGrotesk_36;
     case FONT_TEKTUR:
-      return size == 0 ? smoothFont_Tektur_12 : size <= 1 ? smoothFont_Tektur_10 : size == 2 ? smoothFont_Tektur_18 : smoothFont_Tektur_28;
+      return size == 0 ? smoothFont_Tektur_12 : size <= 1 ? smoothFont_Tektur_10 : size == 2 ? smoothFont_Tektur_18 : size == 3 ? smoothFont_Tektur_28 : smoothFont_Tektur_36;
     case FONT_METROPOLIS:
     default:
-      return size == 0 ? smoothFont_Metro_12 : size <= 1 ? smoothFont_Metro_10 : size == 2 ? smoothFont_Metro_18 : smoothFont_Metro_28;
+      return size == 0 ? smoothFont_Metro_12 : size <= 1 ? smoothFont_Metro_10 : size == 2 ? smoothFont_Metro_18 : size == 3 ? smoothFont_Metro_28 : smoothFont_Metro_36;
   }
 }
 static int textWidth(const String& v,int size){const auto& f=textFont(size);int w=0;for(unsigned char c:v){if(c<32||c>126)c='?';w+=f.glyphs[c-32].advance;}return (w+8)/16;}
@@ -854,38 +854,41 @@ static void drawDashScreen() {
 
   // Active Progress Arc
   float spVal = ride.speedKmh;
+  if (spVal < 1.5f) spVal = 0.0f;
   float gaugeMax = runningMode ? cfg.maxSpeedRun : cfg.maxSpeedRide;
   int fillSpan = (int)(270.0f * constrain(spVal / gaugeMax, 0.0f, 1.0f));
-  for (int d = 135; d <= 135 + fillSpan; d++) {
-    float a = radians((float)d);
-    float ca = cosf(a), sa = sinf(a);
-    for (int r = 59; r <= 64; r++) {
-      display.drawPixel(cx + (int)lroundf(r * ca), cy + (int)lroundf(r * sa), TEAL);
+  if (fillSpan > 0) {
+    for (int d = 135; d <= 135 + fillSpan; d++) {
+      float a = radians((float)d);
+      float ca = cosf(a), sa = sinf(a);
+      for (int r = 59; r <= 64; r++) {
+        display.drawPixel(cx + (int)lroundf(r * ca), cy + (int)lroundf(r * sa), TEAL);
+      }
     }
   }
 
-  // Bike / Run Icon inside Arc (Frame 27: 30x30 square icon at x=105, y=54)
-  drawCustomIcon(display, 105, 54, TEAL, runningMode ? CustomIcon::runIcon : CustomIcon::bikeIcon, 30, 30);
+  // Bike / Run Icon inside Arc (Frame 27: 30x30 square icon at x=105, lowered to y=62)
+  drawCustomIcon(display, 105, 62, TEAL, runningMode ? CustomIcon::runIconLarge : CustomIcon::bikeIconLarge, 30, 30);
 
-  // Large Speed Digits & Unit inside Arc
+  // Large Speed Digits & Unit inside Arc (36px font, lowered to y=96)
   String sp = speedAvailable() ? (runningMode ? paceText(ride.speedKmh) : String(ride.speedKmh, 1)) : (runningMode ? String("0:00") : String("0.0"));
-  centeredLabel(40, 88, 160, sp, 3, fgCol);
-  centeredLabel(40, 122, 160, (ride.gpsFixed || (!runningMode && (bleSpeedReady || (sensors.speedPhysical && millis() - externalSensorMs < 5000)))) ? (runningMode ? "MIN/KM" : "KM/H") : "NO DATA", 1, mutedCol);
+  centeredLabel(40, 96, 160, sp, 4, fgCol);
+  centeredLabel(40, 132, 160, (ride.gpsFixed || (!runningMode && (bleSpeedReady || (sensors.speedPhysical && millis() - externalSensorMs < 5000)))) ? (runningMode ? "MIN/KM" : "KM/H") : "NO DATA", 1, mutedCol);
 
-  // Complications Row (Frame 27: 3 columns at y = 158..180)
+  // Complications Row (Frame 27: 3 columns at y = 156..184)
   // Col 1: Distance
   String distStr = (rideStarted || activityPoints ? String(ride.distanceKm, 2) : String("--"));
-  centeredLabel(10, 158, 64, distStr, 2, fgCol);
-  centeredLabel(10, 175, 64, "DISTANCE (KM)", 0, mutedCol);
+  centeredLabel(6, 156, 72, distStr, 2, TEAL);
+  centeredLabel(6, 175, 72, "DIST(KM)", 0, TEAL);
 
   // Col 2: Total Time
-  centeredLabel(78, 158, 84, durationText(), 2, fgCol);
-  centeredLabel(78, 175, 84, "TOTAL TIME", 0, mutedCol);
+  centeredLabel(80, 156, 80, durationText(), 2, TEAL);
+  centeredLabel(80, 175, 80, "TIME", 0, TEAL);
 
   // Col 3: Gradient
   String gradStr = (ride.gpsFixed && trackLen > 1 ? String(ride.gradePercent, 0) + "%" : String("--"));
-  centeredLabel(166, 158, 64, gradStr, 2, fgCol);
-  centeredLabel(166, 175, 64, "GRADIENT", 0, mutedCol);
+  centeredLabel(162, 156, 72, gradStr, 2, TEAL);
+  centeredLabel(162, 175, 72, "GRAD", 0, TEAL);
 
   // Heart Rate Row (Frame 27: y = 201..245)
   label(18, 208, "AVG", 1, mutedCol);
@@ -899,22 +902,26 @@ static void drawDashScreen() {
   uint16_t hrPillFg = darkTheme ? 0x7FE0 : 0x0540;
   display.fillRoundRect(62, 201, 116, 44, 22, hrPillBg);
   String hrStr = bleHRReady ? String(hrVal) : "--";
-  int hrTextW = textWidth(hrStr, 3);
+  int hrTextW = textWidth(hrStr, 4);
   int hrBlockW = 30 + 6 + hrTextW;
   int hrStartX = 62 + (116 - hrBlockW) / 2;
   drawCustomIcon(display, hrStartX, 208, hrPillFg, CustomIcon::heartRateIcon, 30, 30);
-  label(hrStartX + 36, 213, hrStr, 3, hrPillFg);
+  label(hrStartX + 36, 209, hrStr, 4, hrPillFg);
 
   label(192, 208, "MAX", 1, mutedCol);
   label(188, 222, (hrSamples ? String(hrMax) : String("--")), 2, fgCol);
 
   // Zone text and pointer
   uint16_t zoneCol = darkTheme ? zc.textDark : zc.textLight;
-  centeredLabel(60, 255, 120, "ZONE " + String(zone), 1, zoneCol);
-
   int segCenters[5] = {35, 78, 120, 162, 205};
   int ptrX = segCenters[constrain(zone - 1, 0, 4)];
   display.fillTriangle(ptrX - 4, 267, ptrX + 4, 267, ptrX, 272, zoneCol);
+
+  // Indicator text sits directly on top of the down arrow marker
+  String zoneStr = "ZONE " + String(zone);
+  int zw = textWidth(zoneStr, 1);
+  int zx = constrain(ptrX - zw / 2, 6, 234 - zw);
+  label(zx, 255, zoneStr, 1, zoneCol);
 
   // 5-Segment Colored Bar at y = 278..282
   display.fillRoundRect(17, 278, 38, 4, 2, 0x4208); // Zone 1: Grey
@@ -978,7 +985,7 @@ static void drawMetricsScreen() {
   centeredLabel(8, 183, 108, distStr, 3, fgCol);
 
   display.fillRoundRect(124, 166, 108, 54, 27, cardBg);
-  String pwrStr = runningMode ? paceText(ride.speedKmh) : (blePowerReady ? String(ride.powerW) : "104");
+  String pwrStr = runningMode ? paceText(ride.speedKmh) : (blePowerReady ? String(ride.powerW) : "0");
   int pwrTextW = textWidth(pwrStr, 3);
   int pwrBlockW = 30 + 6 + pwrTextW;
   int pwrStartX = 124 + (108 - pwrBlockW) / 2;
@@ -2157,8 +2164,8 @@ void loop() {
   
   // GPS noise deadzones:
   // In outdoor ride: stationary jitter up to ~1.0 km/h
-  // In outdoor run/walk: stationary drift up to 0.8 km/h
-  float speedDeadzone = runningMode ? 0.8f : 1.0f;
+  // Stationary drift deadzone
+  float speedDeadzone = runningMode ? 1.4f : 1.8f;
   if (rawGpsSpeed < speedDeadzone) {
     rawGpsSpeed = 0.0f;
   }
@@ -2429,7 +2436,7 @@ void loop() {
     };
     int cHeading = (compass.ready && isfinite(compass.heading)) ? (int)roundf(compass.heading) : ride.heading;
     UIState curState = {
-      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || (welcomeOpen && homePage == HOME_COMPASS) || autoPaused) ? (millis() / 80) : 0),
+      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || (welcomeOpen && homePage == HOME_COMPASS) || autoPaused) ? (millis() / 25) : 0),
       (uint32_t)(millis() / 500),
       uiRevision,
       ride.elapsedSec / 60,

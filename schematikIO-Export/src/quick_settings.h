@@ -64,30 +64,51 @@ String fileDetailDate = "";
 bool fileDetailIsFit = false;
 bool fileDetailIsGpx = false;
 bool fileDeleteConfirm = false;
-static void drawLoadingScreen(const char* title = "Loading assets...", const char* subtitle = "Please wait!") {
+static void getAppLoadingMeta(HomePage page, CustomIcon &icon, uint16_t &color) {
+  switch (page) {
+    case HOME_MAPS:
+    case HOME_MAP_SEARCH:
+      icon = CustomIcon::mapAppIconLarge; color = 0x33FB; break;
+    case HOME_COMPASS:
+      icon = CustomIcon::compassIconLarge; color = 0xE800; break;
+    case HOME_ACTIVITY:
+    case HOME_RIDES:
+      icon = CustomIcon::activitiesIconLarge; color = 0xFA61; break;
+    case HOME_ROUTES:
+      icon = CustomIcon::routeMapIconLarge; color = 0x5444; break;
+    case HOME_SETTINGS:
+      icon = CustomIcon::systemIconLarge; color = 0x79F7; break;
+    case HOME_ACTIVITY_SETTINGS:
+      icon = CustomIcon::configureIconLarge; color = 0xDBC0; break;
+    case HOME_FILES:
+      icon = CustomIcon::folderIconLarge; color = 0x0CA1; break;
+    default:
+      icon = CustomIcon::activitiesIconLarge; color = 0xFA61; break;
+  }
+}
+
+static void drawLoadingScreen(const char* title = "Loading asset ...", const char* subtitle = "Please wait!") {
   statusBar(true, true);
   display.fillRect(0, 28, 240, 292, uiBg());
 
-  const int cardX = 20, cardY = 95, cardW = 200, cardH = 130, cardR = 12;
-  display.fillRoundRect(cardX, cardY, cardW, cardH, cardR, uiCard());
-  if (!darkTheme) display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, 0xD6BA);
+  CustomIcon appIcon;
+  uint16_t appColor;
+  getAppLoadingMeta(homePage, appIcon, appColor);
 
-  const int cx = 120, cy = 132, r = 16;
-  display.drawCircle(cx, cy, r, darkTheme ? 0x2945 : 0xCE79);
-  display.drawCircle(cx, cy, r - 1, darkTheme ? 0x2945 : 0xCE79);
-  for (int a = 30; a <= 210; a += 15) {
-    float rad = radians((float)a);
-    int px = cx + (int)lround(cosf(rad) * (float)r);
-    int py = cy + (int)lround(sinf(rad) * (float)r);
-    int px1 = cx + (int)lround(cosf(rad) * (float)(r - 1));
-    int py1 = cy + (int)lround(sinf(rad) * (float)(r - 1));
-    display.drawPixel(px, py, TEAL);
-    display.drawPixel(px1, py1, TEAL);
+  const int cx = 120, cy = 135;
+  const int circleR = 34;
+
+  // Circular container of that app color in the screen center
+  display.fillCircle(cx, cy, circleR, appColor);
+
+  // White app icon in the center of the circular container
+  drawCustomIcon(display, cx - 18, cy - 18, 0xFFFF, appIcon, 36, 36);
+
+  // "Loading asset ..." in a bigger font than now (font size 2 = 18pt smooth font)
+  centeredLabel(10, 186, 220, "Loading asset ...", 2, uiFg());
+  if (subtitle && strlen(subtitle) > 0) {
+    centeredLabel(10, 212, 220, subtitle, 1, uiMuted());
   }
-  display.fillCircle(cx, cy, 3, TEAL);
-
-  centeredLabel(cardX, cardY + 68, cardW, title, 1, uiFg());
-  centeredLabel(cardX, cardY + 90, cardW, subtitle, 1, uiMuted());
 
   display.refresh();
 }
@@ -997,8 +1018,22 @@ static void drawCompassApp() {
   label(cx + r - 20, cy - 7, "E", 2, uiFg());
   label(cx - r + 8, cy - 7, "W", 2, uiFg());
 
-  // Current heading
-  float h = (compass.ready && isfinite(compass.heading)) ? compass.heading : (ride.gpsFixed ? (float)ride.heading : 0.0f);
+  // Current heading with smooth low-pass interpolation
+  static float s_smoothCompassH = 0.0f;
+  static bool s_compassInit = false;
+  float rawH = (compass.ready && isfinite(compass.heading)) ? compass.heading : (ride.gpsFixed ? (float)ride.heading : 0.0f);
+  if (!s_compassInit) {
+    s_smoothCompassH = rawH;
+    s_compassInit = true;
+  } else {
+    float diff = rawH - s_smoothCompassH;
+    while (diff < -180.0f) diff += 360.0f;
+    while (diff > 180.0f) diff -= 360.0f;
+    s_smoothCompassH += diff * 0.20f;
+    while (s_smoothCompassH < 0.0f) s_smoothCompassH += 360.0f;
+    while (s_smoothCompassH >= 360.0f) s_smoothCompassH -= 360.0f;
+  }
+  float h = s_smoothCompassH;
   float rad = radians(h);
   float dx = sinf(rad), dy = -cosf(rad);
   float px = -dy, py = dx;
@@ -2048,6 +2083,7 @@ bool drawLifecycleScreen() {
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/40)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
   else if(countdownGoStart) state="countGo:"+String((millis()-countdownGoStart)/40);
   else if(countdownStart) state="count:"+String((millis()-countdownStart)/40);
+  else if(welcomeOpen && !quickOpen && homePage == HOME_COMPASS) state="compass:"+String(millis()/25)+":"+String((int)(compass.heading*10))+":"+String(darkTheme);
   else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(homeHeroClock)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
   if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart && !countdownGoStart){previous="";return false;}
   if(state.isEmpty()){previous="";return false;}
@@ -2811,7 +2847,7 @@ static void pollQuickTouch() {
         int offset=constrain(startScroll+startY-y,0,maxS);
         if(offset!=appsScroll){appsScroll=offset;uiRevision++;}
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
-        int offset=constrain(startScroll+startY-y,0,88);
+        int offset=constrain(startScroll+startY-y,0,140);
         if(offset!=settingsScroll){settingsScroll=offset;uiRevision++;}
       } else if (quickOpen) {
         int offset=constrain(startScroll+startY-y,0,140);

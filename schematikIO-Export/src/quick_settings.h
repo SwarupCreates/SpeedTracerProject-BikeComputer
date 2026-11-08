@@ -1038,27 +1038,6 @@ static void drawCompassApp() {
   const int rOuter = 89;
   const int rDial = 69;
 
-  // Outer circular dial boundary (Frame 35)
-  display.drawCircle(cx, cy, rOuter, uiFg());
-
-  // Fixed solid red up-headed needle pointing to 12 o'clock
-  // Vertex 1: Tip at (cx, 80)
-  // Vertex 2: Base left at (cx - 10, 111)
-  // Vertex 3: Base right at (cx + 10, 111)
-  display.fillTriangle(cx, 80, cx - 10, 111, cx + 10, 111, 0xF800);
-
-  // Reticle / Hub at center
-  // 1. Center disc (radius 14): dark gray #292929 in dark mode, light gray #D6D6D6 in light mode
-  uint16_t hubDiscColor = darkTheme ? 0x2945 : 0xD69A;
-  display.fillCircle(cx, cy, 14, hubDiscColor);
-
-  // 2. Inner ring outline (radius 23)
-  display.drawCircle(cx, cy, 23, uiFg());
-
-  // 3. Crosshair lines extending across the inner ring
-  display.drawFastHLine(cx - 23, cy, 47, uiFg());
-  display.drawFastVLine(cx, cy - 23, 47, uiFg());
-
   // Current heading with spring-damped physical animation
   static float s_smoothCompassH = 0.0f;
   static float s_compassVelocity = 0.0f;
@@ -1106,6 +1085,30 @@ static void drawCompassApp() {
     while (s_smoothCompassH >= 360.0f) s_smoothCompassH -= 360.0f;
   }
   float h = s_smoothCompassH;
+  int deg = (int)lroundf(fmodf(h + 360.0f, 360.0f)) % 360;
+  bool isNorth = (deg >= 338 || deg <= 22);
+
+  // Outer circular dial boundary (Frame 35)
+  display.drawCircle(cx, cy, rOuter, uiFg());
+
+  // Fixed solid red up-headed needle pointing to 12 o'clock
+  // Vertex 1: Tip at (cx, 80)
+  // Vertex 2: Base left at (cx - 10, 111)
+  // Vertex 3: Base right at (cx + 10, 111)
+  display.fillTriangle(cx, 80, cx - 10, 111, cx + 10, 111, 0xF800);
+
+  // Reticle / Hub at center
+  // 1. Center disc (radius 14): red accented #2D0000 when headed North, or dark gray/light gray otherwise
+  uint16_t hubDiscColor = isNorth ? (darkTheme ? 0x2800 : 0xFDB8) : (darkTheme ? 0x2945 : 0xD69A);
+  display.fillCircle(cx, cy, 14, hubDiscColor);
+
+  // 2. Inner ring outline (radius 23): red accented when headed North, uiFg() otherwise
+  uint16_t reticleColor = isNorth ? 0xF800 : uiFg();
+  display.drawCircle(cx, cy, 23, reticleColor);
+
+  // 3. Crosshair lines extending across the inner ring: red accented when headed North, uiFg() otherwise
+  display.drawFastHLine(cx - 23, cy, 47, reticleColor);
+  display.drawFastVLine(cx, cy - 23, 47, reticleColor);
 
   // Rotating Dial with 12 Steppings (4 Cardinals + 2 Intermediate dots between each)
   // Stepping angle d in degrees: 0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330
@@ -1140,7 +1143,7 @@ static void drawCompassApp() {
   }
 
   // Large heading readout at bottom (Frame 35: e.g. "346°N")
-  int deg = (int)lroundf(fmodf(h + 360.0f, 360.0f)) % 360;
+  // deg already computed above
   const char* card = getCardinalDirection(deg);
   String degStr = String(deg);
   int wNum = textWidth(degStr, 4);

@@ -3394,11 +3394,13 @@ static void drawQuickSettings() {
       label(16, 248, sdOk?activityMessage:"SD not ready");
     }
     if (quickDetail == 5) {
-      const char* names[] = {"Touch CST3530", "GPS u-blox M10", "Compass QMC5883L", "BMP390 Baro", "Buttons Expander", "SD Card FAT32"};
-      bool ok[] = {touchReady, gpsDataReady, compass.ready && (compass.lastSample == 0 || (millis() - compass.lastSample < 3000)), bmpOk, buttonsOk, sdOk};
+      extern bool isBaroAvailable;
+      extern bool isBmp581;
+      const char* names[] = {"Touch CST3530", "GPS u-blox M10", "Compass QMC5883L", isBmp581 ? "BMP581 Baro" : "7Semi Baro (0x46)", "Buttons Expander", "SD Card FAT32"};
+      bool ok[] = {touchReady, gpsDataReady, compass.ready && (compass.lastSample == 0 || (millis() - compass.lastSample < 3000)), isBaroAvailable, buttonsOk, sdOk};
       for (int i = 0; i < 6; i++) {
         label(14, 76 + i * 27, names[i]);
-        label(14, 88 + i * 27, ok[i] ? "READY" : "OFFLINE / NOT FOUND", 1, ok[i] ? 0x2564 : 0xFA08);
+        label(14, 88 + i * 27, ok[i] ? "READY" : "OFFLINE / WAITING", 1, ok[i] ? 0x2564 : 0xFA08);
       }
       label(14, 246, sdStatus, 1, uiMuted());
       label(14, 258, time(nullptr)>=1704067200?"Clock synced (IST)":"Clock: open 192.168.4.1", 1, uiMuted());

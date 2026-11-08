@@ -280,9 +280,13 @@ public:
 
 #include "icons.h"
 #include "map_tile_cache.h"
+#include <SparkFun_BMP581_Arduino_Library.h>
 MapTileCache g_mapCache;
 Adafruit_MCP23X17 buttons;
 Adafruit_BMP3XX bmp;
+BMP581 bmp581;
+bool isBaroAvailable = false;
+bool isBmp581 = false;
 bool buttonsOk=false, bmpOk=false, externalBusReady=false;
 static bool externalPresent(uint8_t address){
  if(!externalBusReady)return false;
@@ -298,6 +302,50 @@ static bool externalPresent(uint8_t address){
 }
 static bool beginBarometer(){
   bool ok = false;
+
+  // 1. Scan for 7Semi BMP581 at 0x46 (SDO->GND) or 0x47 (SDO->3V3/float)
+  if (externalPresent(BMP581_I2C_ADDRESS_SECONDARY)) { // 0x46
+    if (bmp581.beginI2C(BMP581_I2C_ADDRESS_SECONDARY, Wire) == BMP5_OK) {
+      isBmp581 = true;
+      ok = true;
+    }
+  } else if (externalPresent(BMP581_I2C_ADDRESS_DEFAULT)) { // 0x47
+    if (bmp581.beginI2C(BMP581_I2C_ADDRESS_DEFAULT, Wire) == BMP5_OK) {
+      isBmp581 = true;
+      ok = true;
+    }
+  }
+
+  if (ok && isBmp581) {
+    // 7Semi BMP581 Precision Cycling Configuration:
+    // 1. Set Oversampling to 8x pressure, 2x temperature (Balances high accuracy with fast response)
+    bmp5_osr_odr_press_config osrConfig = {
+      .osr_t = BMP5_OVERSAMPLING_2X,
+      .osr_p = BMP5_OVERSAMPLING_8X,
+      0, 0
+    };
+    bmp581.setOSRMultipliers(&osrConfig);
+
+    // 2. Set Output Data Rate (ODR) to 50Hz
+    bmp581.setODRFrequency(BMP5_ODR_50_HZ);
+
+    // 3. Set IIR Filter Coefficient to 3 (Dampens slight air pressure vibrations)
+    bmp5_iir_config iirConfig = {
+      .set_iir_t = BMP5_IIR_FILTER_COEFF_3,
+      .set_iir_p = BMP5_IIR_FILTER_COEFF_3,
+      .shdw_set_iir_t = BMP5_ENABLE,
+      .shdw_set_iir_p = BMP5_ENABLE,
+      .iir_flush_forced_en = BMP5_DISABLE
+    };
+    bmp581.setFilterConfig(&iirConfig);
+
+    Serial.println("7Semi BMP581 Barometer initialized successfully (8x OSR, IIR 3, 50Hz)!");
+    isBaroAvailable = true;
+    bmpOk = true;
+    return true;
+  }
+
+  // 2. Fallback to BMP3XX (0x77 / 0x76) if present
   if(externalPresent(0x77)) ok = bmp.begin_I2C(0x77, &Wire);
   else if(externalPresent(0x76)) ok = bmp.begin_I2C(0x76, &Wire);
   if(ok){
@@ -306,9 +354,28 @@ static bool beginBarometer(){
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);
     Serial.println("BMP3XX Barometer initialized successfully!");
+    isBmp581 = false;
+    isBaroAvailable = true;
+    bmpOk = true;
     return true;
   }
+
+  isBmp581 = false;
+  isBaroAvailable = false;
+  bmpOk = false;
   return false;
+}
+
+extern RideData ride;
+float getSystemAltitude() {
+  return ride.altM;
+}
+
+float calculateGradePercentage() {
+  if (!isBaroAvailable) {
+    return 0.0f; // Return flat grade state on UI layout until hardware is active
+  }
+  return ride.gradePercent;
 }
 uint32_t sensorMs=0, gpsByteMs=0;
 bool gpsDataReady=false;
@@ -1647,7 +1714,7 @@ static void handleStatus() {
   if(ride.vo2est>0)doc["vo2maxEstimate"]=ride.vo2est;else doc["vo2maxEstimate"]=nullptr;
   if(calorieSeconds)doc["caloriesEstimate"]=calorieEstimate;else doc["caloriesEstimate"]=nullptr;
   doc["calorieCoverageSeconds"]=calorieSeconds;
-  doc["compassReady"]=compass.ready; doc["compassCalibrated"]=compass.calibrated; doc["compassCalibrating"]=compass.calibrating; doc["headingSource"]=compass.usable()?"magnetic-level-only":"GPS course"; doc["compassX"]=compass.raw[0]; doc["compassY"]=compass.raw[1]; doc["compassZ"]=compass.raw[2]; doc["touchReady"]=touchReady; doc["blePairingReady"]=bleReady; doc["bleConnected"]=bleCount(); doc["heartRate"]=bleHRReady?bleHR:0; doc["heartRateReady"]=bleHRReady; doc["powerMeasured"]=!runningMode && blePowerReady; doc["cadenceMeasured"]=!runningMode && bleCadReady; doc["speedMeasured"]=runningMode?ride.gpsFixed:bleSpeedReady; doc["barometerReady"]=bmpOk; doc["gpsDataReady"]=gpsDataReady; doc["buttonsReady"]=buttonsOk; doc["imuReady"]=false;
+  doc["compassReady"]=compass.ready; doc["compassCalibrated"]=compass.calibrated; doc["compassCalibrating"]=compass.calibrating; doc["headingSource"]=compass.usable()?"magnetic-level-only":"GPS course"; doc["compassX"]=compass.raw[0]; doc["compassY"]=compass.raw[1]; doc["compassZ"]=compass.raw[2]; doc["touchReady"]=touchReady; doc["blePairingReady"]=bleReady; doc["bleConnected"]=bleCount(); doc["heartRate"]=bleHRReady?bleHR:0; doc["heartRateReady"]=bleHRReady; doc["powerMeasured"]=!runningMode && blePowerReady; doc["cadenceMeasured"]=!runningMode && bleCadReady; doc["speedMeasured"]=runningMode?ride.gpsFixed:bleSpeedReady; doc["barometerReady"]=isBaroAvailable; doc["barometerType"]=isBmp581 ? "BMP581" : (bmpOk ? "BMP390" : "none"); doc["gpsDataReady"]=gpsDataReady; doc["buttonsReady"]=buttonsOk; doc["imuReady"]=false;
   doc["heading"]         = ride.heading;
   doc["lat"]             = ride.lat;
   doc["lon"]             = ride.lon;
@@ -1823,7 +1890,7 @@ void setup() {
   Wire.setTimeOut(30);
   buttonsOk = externalPresent(0x20) && buttons.begin_I2C(0x20, &Wire);
   if(buttonsOk) for(int i = 0; i < 4; i++) buttons.pinMode(i, INPUT_PULLUP);
-  bmpOk = beginBarometer();
+  bmpOk = isBaroAvailable = beginBarometer();
   if(externalPresent(0x0D)) compass.begin();
   gpsSerial.setRxBufferSize(2048);
   gpsSerial.begin(115200, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
@@ -2071,7 +2138,7 @@ static void handleSerialTransfer() {
       Serial.printf("0x7E reg 0x00: 0x%02X\n", Wire.read());
     }
 
-    Serial.printf("bmpOk: %d\n", (int)bmpOk);
+    Serial.printf("baroOk: %d (isBmp581:%d, bmpOk:%d)\n", (int)isBaroAvailable, (int)isBmp581, (int)bmpOk);
     Serial.println("I2C_SCAN_END");
     return;
   }
@@ -2495,26 +2562,43 @@ void loop() {
   }
   static float filteredGpsAlt = 0.0f;
 
-  // Barometer reading + GPS pressure calibration (iPhone-grade fusion)
-  if(bmpOk && millis()-sensorMs>500){
+  // Barometer reading + GPS pressure calibration (iPhone-grade fusion with 7Semi BMP581 & BMP3XX support)
+  if(isBaroAvailable && millis()-sensorMs>100){
     sensorMs=millis();
-    if(bmp.performReading()&&isfinite(bmp.pressure)&&bmp.pressure>=30000&&bmp.pressure<=125000){
+    float currentPressure = 0.0f;
+    bool readSuccess = false;
+
+    if (isBmp581) {
+      bmp5_sensor_data bData = {0, 0};
+      if (bmp581.getSensorData(&bData) == BMP5_OK && isfinite(bData.pressure) && bData.pressure >= 30000.0f && bData.pressure <= 125000.0f) {
+        currentPressure = bData.pressure;
+        readSuccess = true;
+      }
+    } else {
+      if(bmp.performReading() && isfinite(bmp.pressure) && bmp.pressure >= 30000.0f && bmp.pressure <= 125000.0f){
+        currentPressure = bmp.pressure;
+        readSuccess = true;
+      }
+    }
+
+    if(readSuccess){
       // Continuous slow drift calibration once baseline is established or when GPS is exceptionally solid
       if (ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age() < 2500 && startSatellites() >= 8 && ((gps.hdop.isValid() && gps.hdop.hdop() < 1.2f) || (geprcGps.lastPvt && geprcGps.pdop < 1.6f))) {
         float gpsAlt = (float)gps.altitude.meters();
         if (gpsAlt > -200.0f && gpsAlt < 9000.0f) {
-          float pTarget = bmp.pressure / powf(1.0f - (gpsAlt / 44330.0f), 5.255f);
+          float pTarget = currentPressure / powf(1.0f - (gpsAlt / 44330.0f), 5.255f);
           if (pTarget >= 87000.0f && pTarget <= 112000.0f) {
             dynamicSeaLevelPa = (0.998f * dynamicSeaLevelPa) + (0.002f * pTarget);
             altCalibrated = true;
           }
         }
       }
-      // Use the dynamically calibrated sea level pressure instead of hardcoded default
-      float baroAlt = 44330.0f * (1.0f - powf(bmp.pressure / dynamicSeaLevelPa, 0.1903f));
+      // Use the dynamically calibrated sea level pressure
+      float baroAlt = 44330.0f * (1.0f - powf(currentPressure / dynamicSeaLevelPa, 0.1903f));
       ride.altM = baroAlt;
     } else {
-      bmpOk=false;
+      isBaroAvailable = false;
+      bmpOk = false;
       uiRevision++;
     }
   }
@@ -2523,7 +2607,7 @@ void loop() {
   static uint32_t retryMs=0;
   if(millis()-retryMs>5000){
     retryMs=millis();
-    if(!bmpOk)bmpOk=beginBarometer();
+    if(!isBaroAvailable) isBaroAvailable = beginBarometer();
     bool present=externalPresent(0x20);
     if(!present)buttonsOk=false;
     else if(!buttonsOk){buttonsOk=externalPresent(0x20) && buttons.begin_I2C(0x20,&Wire);if(buttonsOk)for(int i=0;i<4;i++)buttons.pinMode(i,INPUT_PULLUP);}
@@ -2533,7 +2617,7 @@ void loop() {
   }
 
   // Filtered GPS altitude fallback when barometer is offline or in running mode
-  if(!bmpOk || runningMode) {
+  if(!isBaroAvailable || runningMode) {
     if (ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age() < 3000) {
       float rawAlt = (float)gps.altitude.meters();
       if (filteredGpsAlt == 0.0f || !isfinite(filteredGpsAlt)) {

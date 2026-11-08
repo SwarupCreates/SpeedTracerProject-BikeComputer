@@ -778,7 +778,7 @@ extern bool ridePaused;
 // ═══════════════════════════════════════════════════════════════════════════════
 //  INTELLIGENT HEADING FUSION (Compass & GPS Course Over Ground)
 // ═══════════════════════════════════════════════════════════════════════════════
-static float s_fusedHeading = 0.0f;
+float s_fusedHeading = 0.0f;
 static bool  s_fusedHeadingInit = false;
 static uint32_t s_gpsMovingStartMs = 0;
 static bool  s_gpsHeadingLocked = false;
@@ -2783,7 +2783,7 @@ void loop() {
     int cHeading = (compass.ready && isfinite(compass.heading)) ? (int)roundf(compass.heading) : ride.heading;
     int16_t activeScroll = (int16_t)(quickOpen ? quickScroll : (welcomeOpen ? (homePage == HOME_APPS ? appsScroll : (homePage == HOME_SETTINGS ? settingsScroll : archiveScroll)) : 0));
     UIState curState = {
-      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || ((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) || autoPaused || isScrollingActive()) ? (millis() / 16) : 0),
+      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || ((welcomeOpen || quickOpen) && (homePage == HOME_COMPASS || homePage == HOME_MAPS)) || autoPaused || isScrollingActive()) ? (millis() / 16) : 0),
       (uint32_t)(millis() / 500),
       uiRevision,
       ride.elapsedSec / 60,

@@ -139,6 +139,18 @@ static const uint8_t snapReticleMask18x18[] PROGMEM = {
   0x00, 0xC0, 0x00, 0x00, 0xC0, 0x00,
 };
 
+// Crisp vector reticle for Snap-to-location button (anti-aliased geometry, mathematically centered)
+static inline void drawVectorReticle(Adafruit_GFX &gfx, int cx, int cy, uint16_t color = 0xFFFF) {
+  gfx.fillCircle(cx, cy, 2, color);
+  gfx.drawCircle(cx, cy, 6, color);
+  gfx.drawCircle(cx, cy, 7, color);
+  gfx.drawFastVLine(cx, cy - 11, 4, color);
+  gfx.drawFastVLine(cx, cy + 8,  4, color);
+  gfx.drawFastHLine(cx - 11, cy, 4, color);
+  gfx.drawFastHLine(cx + 8,  cy, 4, color);
+}
+
+
 // 16x16 Search Button Magnifying Glass Mask from searchButtonIcon.svg
 static const uint8_t searchIconMask16x16[] PROGMEM = {
   0x00, 0x00, 0x0F, 0x00, 0x1F, 0x80, 0x30, 0xC0, 0x60, 0x60, 0x60, 0x60,
@@ -154,7 +166,7 @@ static const uint8_t bkspArrowMask16x12[] PROGMEM = {
 
 // Rotating Self-Location Puck from selfLocIcon.svg:
 // Center of rotation inside the blue disc, with white outer ring and rotating blue heading arrowhead.
-static inline void drawMapHeadingMarker(Adafruit_GFX &gfx, int cx, int cy, float headingDeg, float scale = 0.55f) {
+static inline void drawMapHeadingMarker(Adafruit_GFX &gfx, int cx, int cy, float headingDeg, float scale = 0.75f) {
   float rad = radians(headingDeg);
   float fx = sinf(rad), fy = -cosf(rad);
   float rx = cosf(rad), ry = sinf(rad);
@@ -182,7 +194,7 @@ static inline void drawMapHeadingMarker(Adafruit_GFX &gfx, int cx, int cy, float
   gfx.fillCircle(cx, cy, rInner, 0x335F);
 }
 
-static inline void drawSelfLocPuck(Adafruit_GFX &gfx, int cx, int cy, float headingDeg, float scale = 0.55f) {
+static inline void drawSelfLocPuck(Adafruit_GFX &gfx, int cx, int cy, float headingDeg, float scale = 0.75f) {
   drawMapHeadingMarker(gfx, cx, cy, headingDeg, scale);
 }
 

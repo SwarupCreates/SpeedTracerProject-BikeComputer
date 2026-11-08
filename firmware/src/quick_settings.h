@@ -54,6 +54,7 @@ static bool mapHasDest = false;
 static double mapDestLat = 22.5726;
 static double mapDestLon = 22.5726;
 static bool mapSelfLocOpen = false;
+static int mapDetailsTarget = 0; // 0 = Self Loc Details, 1 = Dropped Pin Details
 String browserPath="/", browserError, selectedFile;
 String browserNames[4];
 bool browserDirs[4];
@@ -1218,7 +1219,9 @@ static void drawCompassApp() {
 }
 
 // Shared vector tile renderer for full-screen and slender card viewports
-static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int cardCenterX, int cardCenterY, double centerLat, double centerLon, float scale) {
+extern float s_fusedHeading;
+
+static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int cardCenterX, int cardCenterY, double centerLat, double centerLon, float scale, float rotHeading = 0.0f) {
   // Align PSRAM sliding window around current position
   g_mapCache.updatePosition(centerLat, centerLon);
 
@@ -1232,8 +1235,18 @@ static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int c
   float metersPerUnit = (float)((40075016.686 * cos(latRad) / 16384.0) / 4096.0);
   float pxPerUnit = metersPerUnit * scale;
 
-  int maxDxU = (int)(((clipX2 - clipX1) / 2.0f + 10.0f) / pxPerUnit) + 120;
-  int maxDyU = (int)(((clipY2 - clipY1) / 2.0f + 10.0f) / pxPerUnit) + 120;
+  float rad = radians(rotHeading);
+  float cosA = cosf(rad);
+  float sinA = sinf(rad);
+  float cosP = cosA * pxPerUnit;
+  float sinP = sinA * pxPerUnit;
+
+  int maxDistU = (int)(180.0f / pxPerUnit) + 120;
+
+  auto projectTilePoint = [&](int du, int dv, int &outX, int &outY) {
+    outX = cardCenterX + (int)lroundf(du * cosP + dv * sinP);
+    outY = cardCenterY + (int)lroundf(-du * sinP + dv * cosP);
+  };
 
   static int s_viewerPolyX[256];
   static int s_viewerPolyY[256];
@@ -1342,8 +1355,8 @@ static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int c
       int p0Y = tileDeltaY + pts[off].v;
       int pEndX = tileDeltaX + pts[off + cnt - 1].u;
       int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+      if ((p0X > maxDistU && pEndX > maxDistU) || (p0X < -maxDistU && pEndX < -maxDistU) ||
+          (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
 
       bool hasJump = false;
       for (uint8_t k = 1; k < cnt; k++) {
@@ -1356,8 +1369,7 @@ static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int c
       bool isClosed = (cnt >= 3 && abs(pts[off].u - pts[off + cnt - 1].u) <= 35 &&
                                    abs(pts[off].v - pts[off + cnt - 1].v) <= 35);
       for (uint8_t k = 0; k < cnt; k++) {
-        s_viewerPolyX[k] = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
-        s_viewerPolyY[k] = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+        projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, s_viewerPolyX[k], s_viewerPolyY[k]);
       }
       if (ft == FEAT_PARK || isClosed) {
         uint16_t fCol = (ft == FEAT_PARK) ? parkFill : waterFill;
@@ -1406,24 +1418,21 @@ static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int c
       int p0Y = tileDeltaY + pts[off].v;
       int pEndX = tileDeltaX + pts[off + cnt - 1].u;
       int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+      if ((p0X > maxDistU && pEndX > maxDistU) || (p0X < -maxDistU && pEndX < -maxDistU) ||
+          (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
 
       bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
       int w = isMajor ? majorCasingW : minorCasingW;
 
-      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
-      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      int sx0, sy0;
+      projectTilePoint(p0X, p0Y, sx0, sy0);
       for (uint8_t k = 1; k < cnt; k++) {
         if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
-          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
-          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx0, sy0);
           continue;
         }
-        int pkX = tileDeltaX + pts[off + k].u;
-        int pkY = tileDeltaY + pts[off + k].v;
-        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
-        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        int sx1, sy1;
+        projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx1, sy1);
         clipAndDrawLine(sx0, sy0, sx1, sy1, roadCasing, w);
         sx0 = sx1;
         sy0 = sy1;
@@ -1431,7 +1440,7 @@ static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int c
     }
   }
 
-  // 2B. Road Inner Fills
+  // 2B. Road Fills
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
     int tx = g_mapCache.tiles[s].tileX;
@@ -1457,24 +1466,21 @@ static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int c
       int p0Y = tileDeltaY + pts[off].v;
       int pEndX = tileDeltaX + pts[off + cnt - 1].u;
       int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-      if ((p0X > maxDxU && pEndX > maxDxU) || (p0X < -maxDxU && pEndX < -maxDxU) ||
-          (p0Y > maxDyU && pEndY > maxDyU) || (p0Y < -maxDyU && pEndY < -maxDyU)) continue;
+      if ((p0X > maxDistU && pEndX > maxDistU) || (p0X < -maxDistU && pEndX < -maxDistU) ||
+          (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
 
       bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
       int w = isMajor ? majorFillW : minorFillW;
 
-      int sx0 = cardCenterX + (int)(p0X * pxPerUnit);
-      int sy0 = cardCenterY + (int)(p0Y * pxPerUnit);
+      int sx0, sy0;
+      projectTilePoint(p0X, p0Y, sx0, sy0);
       for (uint8_t k = 1; k < cnt; k++) {
         if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
-          sx0 = cardCenterX + (int)((tileDeltaX + pts[off + k].u) * pxPerUnit);
-          sy0 = cardCenterY + (int)((tileDeltaY + pts[off + k].v) * pxPerUnit);
+          projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx0, sy0);
           continue;
         }
-        int pkX = tileDeltaX + pts[off + k].u;
-        int pkY = tileDeltaY + pts[off + k].v;
-        int sx1 = cardCenterX + (int)(pkX * pxPerUnit);
-        int sy1 = cardCenterY + (int)(pkY * pxPerUnit);
+        int sx1, sy1;
+        projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx1, sy1);
         clipAndDrawLine(sx0, sy0, sx1, sy1, roadFill, w);
         sx0 = sx1;
         sy0 = sy1;
@@ -1500,15 +1506,37 @@ static void drawMapViewerApp() {
   double centerLat = mapViewerLat;
   double centerLon = mapViewerLon;
 
-  renderMapTiles(clipX1, clipY1, clipX2, clipY2, cardCenterX, cardCenterY, centerLat, centerLon, scale);
+  float rotHeading = activityMapNorthUp ? 0.0f : s_fusedHeading;
+  float markerHeading = activityMapNorthUp ? s_fusedHeading : 0.0f;
+  float compassH = activityMapNorthUp ? 0.0f : fmodf(360.0f - s_fusedHeading + 360.0f, 360.0f);
 
-  // If destination is active:
+  renderMapTiles(clipX1, clipY1, clipX2, clipY2, cardCenterX, cardCenterY, centerLat, centerLon, scale, rotHeading);
+
+  double userLat = (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) ? ride.lat : 22.5726;
+  double userLon = (ride.gpsFixed && isfinite(ride.lon) && ride.lon != 0.0) ? ride.lon : 88.4258;
+  bool mapPannedAway = (fabs(mapViewerLat - userLat) > 0.0001 || fabs(mapViewerLon - userLon) > 0.0001);
+
+  float rad = radians(rotHeading);
+  float cosA = cosf(rad);
+  float sinA = sinf(rad);
+  double latRad = centerLat * (PI / 180.0);
+
+  // 1. Destination Pin and Top-Left Pill
   if (mapHasDest) {
-    // 1. Red Dropped Pin at center (tip anchored at cardCenterX, cardCenterY)
-    display.drawBitmap(cardCenterX - 14, cardCenterY - 34, destPinMask28x35, 28, 35, 0xF9A4);
+    // Project destination pin relative to current map center
+    double dDestLatM = (mapDestLat - centerLat) * 111320.0;
+    double dDestLonM = (mapDestLon - centerLon) * (111320.0 * cos(latRad));
+    float unrotDestX = (float)(dDestLonM * scale);
+    float unrotDestY = -(float)(dDestLatM * scale);
+    int pinScreenX = cardCenterX + (int)lroundf(unrotDestX * cosA + unrotDestY * sinA);
+    int pinScreenY = cardCenterY + (int)lroundf(-unrotDestX * sinA + unrotDestY * cosA);
 
-    // 2. Red Distance Pill at top-left (x=18, y=40, w=90, h=33, r=16)
-    display.fillRoundRect(18, 40, 90, 33, 16, 0xF9A4);
+    if (pinScreenX >= -30 && pinScreenX <= 270 && pinScreenY >= 0 && pinScreenY <= 320) {
+      display.drawBitmap(pinScreenX - 14, pinScreenY - 34, destPinMask28x35, 28, 35, 0xF9A4);
+    }
+
+    // Red Distance Pill at top-left (x=8, y=37, w=96, h=32, r=16)
+    display.fillRoundRect(8, 37, 96, 32, 16, 0xF9A4);
     String distStr = "600m";
     if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
       double dLat = (mapDestLat - ride.lat) * (PI / 180.0);
@@ -1521,59 +1549,52 @@ static void drawMapViewerApp() {
       float distM = (float)(6371000.0 * c);
       distStr = (distM < 1000.0f) ? (String((int)lroundf(distM)) + "m") : (String(distM / 1000.0f, 1) + "km");
     }
-    centeredLabel(18, 48, 90, distStr, 2, 0xFFFF);
-
-    // 3. Simultaneously render user's live self-location puck if within view
-    double latRad = centerLat * (PI / 180.0);
-    double dLatM = (ride.lat - centerLat) * 111320.0;
-    double dLonM = (ride.lon - centerLon) * (111320.0 * cos(latRad));
-    int userScreenX = cardCenterX + (int)(dLonM * scale);
-    int userScreenY = cardCenterY - (int)(dLatM * scale);
-
-    if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
-      if (userScreenX >= -20 && userScreenX <= 260 && userScreenY >= 10 && userScreenY <= 300) {
-        drawSelfLocPuck(display, userScreenX, userScreenY, ride.heading, 0.55f);
-      }
-    } else {
-      // Mock preview puck position from Figma Frame 402331
-      drawSelfLocPuck(display, 153, 263, 280.0f, 0.55f);
-    }
-  } else {
-    // Normal map mode (no destination): user puck at center
-    drawSelfLocPuck(display, cardCenterX, cardCenterY, ride.heading, 0.55f);
+    centeredLabel(8, 45, 96, distStr, 2, 0xFFFF);
+  } else if (mapPannedAway) {
+    // Drop Pin Pill at top-left (x=8, y=37, w=96, h=32, r=16)
+    display.fillRoundRect(8, 37, 96, 32, 16, 0xF9A4);
+    centeredLabel(8, 48, 96, "Drop Pin", 1, 0xFFFF);
   }
 
-  // Floating Circular Controls
-  // Top-Right: Zoom In [+] at (202, 59)
-  display.fillCircle(202, 59, 15, uiCard());
-  display.drawCircle(202, 59, 15, darkTheme ? 0x39E7 : 0xC618);
-  display.drawFastHLine(197, 59, 11, uiFg());
-  display.drawFastHLine(197, 60, 11, uiFg());
-  display.drawFastVLine(202, 54, 11, uiFg());
-  display.drawFastVLine(201, 54, 11, uiFg());
+  // 2. User self-location puck: projected relative to map center
+  double dUserLatM = (userLat - centerLat) * 111320.0;
+  double dUserLonM = (userLon - centerLon) * (111320.0 * cos(latRad));
+  float unrotUserX = (float)(dUserLonM * scale);
+  float unrotUserY = -(float)(dUserLatM * scale);
+  int userScreenX = cardCenterX + (int)lroundf(unrotUserX * cosA + unrotUserY * sinA);
+  int userScreenY = cardCenterY + (int)lroundf(-unrotUserX * sinA + unrotUserY * cosA);
 
-  // Top-Right: Zoom Out [-] at (202, 96)
-  display.fillCircle(202, 96, 15, uiCard());
-  display.drawCircle(202, 96, 15, darkTheme ? 0x39E7 : 0xC618);
-  display.drawFastHLine(197, 96, 11, uiFg());
-  display.drawFastHLine(197, 97, 11, uiFg());
+  if (userScreenX >= -25 && userScreenX <= 265 && userScreenY >= 5 && userScreenY <= 315) {
+    drawSelfLocPuck(display, userScreenX, userScreenY, markerHeading, 0.75f);
+  }
 
-  // Top-Right: Compass Button at (202, 131)
-  display.fillCircle(202, 131, 14, 0xFFFF);
-  display.drawCircle(202, 131, 14, 0xCE79);
-  display.fillTriangle(202, 122, 197, 138, 202, 136, 0xF9A4);
-  display.fillTriangle(202, 122, 207, 138, 202, 136, 0xF9A4);
-  display.drawLine(202, 122, 202, 136, 0xF9A4);
+  // 3. Floating Circular Controls (Consistent 8px gutter)
+  // Top-Right: Zoom In [+] at (216, 51)
+  display.fillCircle(216, 51, 15, uiCard());
+  display.drawCircle(216, 51, 15, darkTheme ? 0x39E7 : 0xC618);
+  display.drawFastHLine(211, 51, 11, uiFg());
+  display.drawFastHLine(211, 52, 11, uiFg());
+  display.drawFastVLine(216, 46, 11, uiFg());
+  display.drawFastVLine(215, 46, 11, uiFg());
 
-  // Bottom-Left: Search Button at (38, 262)
-  display.fillCircle(38, 262, 15, uiCard());
-  display.drawCircle(38, 262, 15, darkTheme ? 0x39E7 : 0xC618);
-  display.drawBitmap(30, 254, searchIconMask16x16, 16, 16, 0xB2B2);
+  // Top-Right: Zoom Out [-] at (216, 87)
+  display.fillCircle(216, 87, 15, uiCard());
+  display.drawCircle(216, 87, 15, darkTheme ? 0x39E7 : 0xC618);
+  display.drawFastHLine(211, 87, 11, uiFg());
+  display.drawFastHLine(211, 88, 11, uiFg());
 
-  // Bottom-Right: Snap to my location at (202, 262)
-  display.fillCircle(202, 262, 15, 0x335F);
-  display.drawCircle(202, 262, 15, 0x541F);
-  display.drawBitmap(193, 253, snapReticleMask18x18, 18, 18, 0xFFFF);
+  // Top-Right: Compass Button at (216, 123)
+  drawCompassCoin(display, 216, 123, compassH);
+
+  // Bottom-Left: Search Button at (24, 267)
+  display.fillCircle(24, 267, 15, uiCard());
+  display.drawCircle(24, 267, 15, darkTheme ? 0x39E7 : 0xC618);
+  display.drawBitmap(16, 259, searchIconMask16x16, 16, 16, 0xB2B2);
+
+  // Bottom-Right: Snap to my location at (216, 267)
+  display.fillCircle(216, 267, 15, 0x335F);
+  display.drawCircle(216, 267, 15, 0x541F);
+  drawVectorReticle(display, 216, 267, 0xFFFF);
 
   display.fillRect(0, 290, 240, 30, uiBg());
   drawGlobalNav();
@@ -1582,9 +1603,9 @@ static void drawMapViewerApp() {
 static void drawMapSearchApp() {
   statusBar();
 
-  // Top display capsule (x=6, y=37, w=228, h=55, r=27)
-  display.fillRoundRect(6, 37, 228, 55, 27, uiCard());
-  display.drawRoundRect(6, 37, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
+  // Top display capsule (x=8, y=37, w=224, h=54, r=27)
+  display.fillRoundRect(8, 37, 224, 54, 27, uiCard());
+  display.drawRoundRect(8, 37, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
 
   String fieldLabel = (mapSearchField == 0) ? "LAT: " : "LON: ";
   String& fieldVal = (mapSearchField == 0) ? mapSearchLat : mapSearchLon;
@@ -1592,37 +1613,37 @@ static void drawMapSearchApp() {
   label(24, 55, fieldLabel, 2, uiMuted());
   label(24 + textWidth(fieldLabel, 2), 55, fieldVal, 2, 0xFFFF);
 
-  // Blue Snap to my location circular button at (200, 64), radius 15
-  display.fillCircle(200, 64, 15, 0x335F);
-  display.drawCircle(200, 64, 15, 0x541F);
-  display.drawBitmap(191, 55, snapReticleMask18x18, 18, 18, 0xFFFF);
+  // Blue Snap to my location circular button at (202, 64), radius 15
+  display.fillCircle(202, 64, 15, 0x335F);
+  display.drawCircle(202, 64, 15, 0x541F);
+  drawVectorReticle(display, 202, 64, 0xFFFF);
 
-  // Keypad Row 1 (y=101, h=55, r=27)
-  display.fillRoundRect(6, 101, 228, 55, 27, uiCard());
-  display.drawRoundRect(6, 101, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(6 + 0 * 57, 119, 57, "1", 2, uiFg());
-  centeredLabel(6 + 1 * 57, 119, 57, "2", 2, uiFg());
-  centeredLabel(6 + 2 * 57, 119, 57, "3", 2, uiFg());
-  centeredLabel(6 + 3 * 57, 119, 57, "4", 2, uiFg());
+  // Keypad Row 1 (y=101, h=54, r=27)
+  display.fillRoundRect(8, 101, 224, 54, 27, uiCard());
+  display.drawRoundRect(8, 101, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(8 + 0 * 56, 119, 56, "1", 2, uiFg());
+  centeredLabel(8 + 1 * 56, 119, 56, "2", 2, uiFg());
+  centeredLabel(8 + 2 * 56, 119, 56, "3", 2, uiFg());
+  centeredLabel(8 + 3 * 56, 119, 56, "4", 2, uiFg());
 
-  // Keypad Row 2 (y=166, h=55, r=27)
-  display.fillRoundRect(6, 166, 228, 55, 27, uiCard());
-  display.drawRoundRect(6, 166, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(6 + 0 * 57, 184, 57, "5", 2, uiFg());
-  centeredLabel(6 + 1 * 57, 184, 57, "6", 2, uiFg());
-  centeredLabel(6 + 2 * 57, 184, 57, "7", 2, uiFg());
-  centeredLabel(6 + 3 * 57, 184, 57, "8", 2, uiFg());
+  // Keypad Row 2 (y=163, h=54, r=27)
+  display.fillRoundRect(8, 163, 224, 54, 27, uiCard());
+  display.drawRoundRect(8, 163, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(8 + 0 * 56, 181, 56, "5", 2, uiFg());
+  centeredLabel(8 + 1 * 56, 181, 56, "6", 2, uiFg());
+  centeredLabel(8 + 2 * 56, 181, 56, "7", 2, uiFg());
+  centeredLabel(8 + 3 * 56, 181, 56, "8", 2, uiFg());
 
-  // Keypad Row 3 (y=230, h=55, r=27)
-  display.fillRoundRect(6, 230, 228, 55, 27, uiCard());
-  display.drawRoundRect(6, 230, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(6 + 0 * 57, 248, 57, "9", 2, uiFg());
-  centeredLabel(6 + 1 * 57, 248, 57, "0", 2, uiFg());
-  centeredLabel(6 + 2 * 57, 248, 57, ".", 2, uiFg());
+  // Keypad Row 3 (y=225, h=54, r=27)
+  display.fillRoundRect(8, 225, 224, 54, 27, uiCard());
+  display.drawRoundRect(8, 225, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(8 + 0 * 56, 243, 56, "9", 2, uiFg());
+  centeredLabel(8 + 1 * 56, 243, 56, "0", 2, uiFg());
+  centeredLabel(8 + 2 * 56, 243, 56, ".", 2, uiFg());
 
-  // Red Circular Backspace button at (200, 257), radius 22
-  display.fillCircle(200, 257, 22, 0x8800);
-  display.drawBitmap(192, 251, bkspArrowMask16x12, 16, 12, 0xFFFF);
+  // Red Circular Backspace button at (200, 252), radius 22
+  display.fillCircle(200, 252, 22, 0x8800);
+  display.drawBitmap(192, 246, bkspArrowMask16x12, 16, 12, 0xFFFF);
 
   display.fillRect(0, 290, 240, 30, uiBg());
   drawGlobalNav();
@@ -1631,48 +1652,88 @@ static void drawMapSearchApp() {
 static void drawMapSelfLocApp() {
   statusBar();
 
-  // Top slender map window (x=6, y=38, w=228, h=118, r=16)
+  // Top slender map window (x=8, y=37, w=224, h=118, r=16)
   uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
-  display.fillRoundRect(6, 38, 228, 118, 16, terrainBg);
+  display.fillRoundRect(8, 37, 224, 118, 16, terrainBg);
 
-  const int clipX1 = 7, clipY1 = 39, clipX2 = 233, clipY2 = 154;
-  const int cardCenterX = 120, cardCenterY = 97;
+  const int clipX1 = 9, clipY1 = 38, clipX2 = 231, clipY2 = 153;
+  const int cardCenterX = 120, cardCenterY = 96;
 
   float scale = 0.48f; // Street View scale for slender preview
-  double centerLat = (ride.gpsFixed && ride.lat != 0.0) ? ride.lat : 22.5726;
-  double centerLon = (ride.gpsFixed && ride.lon != 0.0) ? ride.lon : 88.4258;
 
-  renderMapTiles(clipX1, clipY1, clipX2, clipY2, cardCenterX, cardCenterY, centerLat, centerLon, scale);
+  if (mapDetailsTarget == 1) {
+    // Dropped Pin Details
+    double centerLat = mapDestLat;
+    double centerLon = mapDestLon;
+    renderMapTiles(clipX1, clipY1, clipX2, clipY2, cardCenterX, cardCenterY, centerLat, centerLon, scale, 0.0f);
+    // Red destination pin at center of slender preview window
+    display.drawBitmap(cardCenterX - 14, cardCenterY - 34, destPinMask28x35, 28, 35, 0xF9A4);
 
-  // Self location puck at center (120, 97)
-  drawSelfLocPuck(display, cardCenterX, cardCenterY, ride.heading, 0.55f);
+    // Clean corner triangles and rounded border for slender window
+    display.fillTriangle(8, 37, 24, 37, 8, 53, uiBg());
+    display.fillTriangle(231, 37, 215, 37, 231, 53, uiBg());
+    display.fillTriangle(8, 154, 24, 154, 8, 138, uiBg());
+    display.fillTriangle(231, 154, 215, 154, 231, 138, uiBg());
+    display.drawRoundRect(8, 37, 224, 118, 16, darkTheme ? 0x39E7 : 0xC618);
 
-  // Clean corner triangles and rounded border for slender window
-  display.fillTriangle(6, 38, 16, 38, 6, 48, uiBg());
-  display.fillTriangle(233, 38, 223, 38, 233, 48, uiBg());
-  display.fillTriangle(6, 155, 16, 155, 6, 145, uiBg());
-  display.fillTriangle(233, 155, 223, 155, 233, 145, uiBg());
-  display.drawRoundRect(6, 38, 228, 118, 16, darkTheme ? 0x39E7 : 0xC618);
+    // Middle capsule: LAT (x=8, y=163, w=224, h=54, r=27)
+    display.fillRoundRect(8, 163, 224, 54, 27, uiCard());
+    display.drawRoundRect(8, 163, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
+    String latValStr = String(mapDestLat, 4);
+    String latFull = "LAT: " + latValStr;
+    int latW = textWidth(latFull, 2);
+    int startX = (240 - latW) / 2;
+    label(startX, 181, "LAT: ", 2, uiMuted());
+    label(startX + textWidth("LAT: ", 2), 181, latValStr, 2, 0xFFFF);
 
-  // Middle capsule: LAT (x=6, y=164, w=228, h=55, r=27)
-  display.fillRoundRect(6, 164, 228, 55, 27, uiCard());
-  display.drawRoundRect(6, 164, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
-  String latValStr = (ride.gpsFixed && ride.lat != 0.0) ? String(ride.lat, 4) : "22.5726";
-  String latFull = "LAT: " + latValStr;
-  int latW = textWidth(latFull, 2);
-  int startX = (240 - latW) / 2;
-  label(startX, 182, "LAT: ", 2, uiMuted());
-  label(startX + textWidth("LAT: ", 2), 182, latValStr, 2, 0xFFFF);
+    // Bottom capsule: LON (x=8, y=225, w=224, h=54, r=27)
+    display.fillRoundRect(8, 225, 224, 54, 27, uiCard());
+    display.drawRoundRect(8, 225, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
+    String lonValStr = String(mapDestLon, 4);
+    String lonFull = "LON: " + lonValStr;
+    int lonW = textWidth(lonFull, 2);
+    int startX2 = (240 - lonW) / 2;
+    label(startX2, 243, "LON: ", 2, uiMuted());
+    label(startX2 + textWidth("LON: ", 2), 243, lonValStr, 2, 0xFFFF);
+  } else {
+    // User Self-Location Details
+    double centerLat = (ride.gpsFixed && ride.lat != 0.0) ? ride.lat : 22.5726;
+    double centerLon = (ride.gpsFixed && ride.lon != 0.0) ? ride.lon : 88.4258;
+    float markerHeading = activityMapNorthUp ? s_fusedHeading : 0.0f;
+    float rotHeading = activityMapNorthUp ? 0.0f : s_fusedHeading;
 
-  // Bottom capsule: LON (x=6, y=228, w=228, h=55, r=27)
-  display.fillRoundRect(6, 228, 228, 55, 27, uiCard());
-  display.drawRoundRect(6, 228, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
-  String lonValStr = (ride.gpsFixed && ride.lon != 0.0) ? String(ride.lon, 4) : "22.5726";
-  String lonFull = "LON: " + lonValStr;
-  int lonW = textWidth(lonFull, 2);
-  int startX2 = (240 - lonW) / 2;
-  label(startX2, 246, "LON: ", 2, uiMuted());
-  label(startX2 + textWidth("LON: ", 2), 246, lonValStr, 2, 0xFFFF);
+    renderMapTiles(clipX1, clipY1, clipX2, clipY2, cardCenterX, cardCenterY, centerLat, centerLon, scale, rotHeading);
+
+    // Self location puck at center
+    drawSelfLocPuck(display, cardCenterX, cardCenterY, markerHeading, 0.75f);
+
+    // Clean corner triangles and rounded border for slender window
+    display.fillTriangle(8, 37, 24, 37, 8, 53, uiBg());
+    display.fillTriangle(231, 37, 215, 37, 231, 53, uiBg());
+    display.fillTriangle(8, 154, 24, 154, 8, 138, uiBg());
+    display.fillTriangle(231, 154, 215, 154, 231, 138, uiBg());
+    display.drawRoundRect(8, 37, 224, 118, 16, darkTheme ? 0x39E7 : 0xC618);
+
+    // Middle capsule: LAT (x=8, y=163, w=224, h=54, r=27)
+    display.fillRoundRect(8, 163, 224, 54, 27, uiCard());
+    display.drawRoundRect(8, 163, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
+    String latValStr = (ride.gpsFixed && ride.lat != 0.0) ? String(ride.lat, 4) : "22.5726";
+    String latFull = "LAT: " + latValStr;
+    int latW = textWidth(latFull, 2);
+    int startX = (240 - latW) / 2;
+    label(startX, 181, "LAT: ", 2, uiMuted());
+    label(startX + textWidth("LAT: ", 2), 181, latValStr, 2, 0xFFFF);
+
+    // Bottom capsule: LON (x=8, y=225, w=224, h=54, r=27)
+    display.fillRoundRect(8, 225, 224, 54, 27, uiCard());
+    display.drawRoundRect(8, 225, 224, 54, 27, darkTheme ? 0x2945 : 0xD6BA);
+    String lonValStr = (ride.gpsFixed && ride.lon != 0.0) ? String(ride.lon, 4) : "22.5726";
+    String lonFull = "LON: " + lonValStr;
+    int lonW = textWidth(lonFull, 2);
+    int startX2 = (240 - lonW) / 2;
+    label(startX2, 243, "LON: ", 2, uiMuted());
+    label(startX2 + textWidth("LON: ", 2), 243, lonValStr, 2, 0xFFFF);
+  }
 
   display.fillRect(0, 290, 240, 30, uiBg());
   drawGlobalNav();
@@ -2663,23 +2724,25 @@ static void quickTap(int x, int y) {
       if (mapSelfLocOpen) {
         return;
       }
-      // Zoom in [+] (center 202, 59, radius 18)
-      if ((x - 202)*(x - 202) + (y - 59)*(y - 59) <= 324) {
+      // Zoom in [+] (center 216, 51, radius 19)
+      if ((x - 216)*(x - 216) + (y - 51)*(y - 51) <= 361) {
         if (mapViewerZoom < 4) { mapViewerZoom++; uiRevision++; }
         return;
       }
-      // Zoom out [-] (center 202, 96, radius 18)
-      if ((x - 202)*(x - 202) + (y - 96)*(y - 96) <= 324) {
+      // Zoom out [-] (center 216, 87, radius 19)
+      if ((x - 216)*(x - 216) + (y - 87)*(y - 87) <= 361) {
         if (mapViewerZoom > 1) { mapViewerZoom--; uiRevision++; }
         return;
       }
-      // Compass button (center 202, 131, radius 18)
-      if ((x - 202)*(x - 202) + (y - 131)*(y - 131) <= 324) {
+      // Compass button (center 216, 123, radius 19)
+      if ((x - 216)*(x - 216) + (y - 123)*(y - 123) <= 361) {
+        activityMapNorthUp = !activityMapNorthUp;
+        saveMapNorthUpPref();
         uiRevision++;
         return;
       }
-      // Snap to my location (center 202, 262, radius 19)
-      if ((x - 202)*(x - 202) + (y - 262)*(y - 262) <= 361) {
+      // Snap to my location (center 216, 267, radius 19)
+      if ((x - 216)*(x - 216) + (y - 267)*(y - 267) <= 361) {
         if (ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0) {
           mapViewerLat = ride.lat;
           mapViewerLon = ride.lon;
@@ -2691,8 +2754,8 @@ static void quickTap(int x, int y) {
         uiRevision++;
         return;
       }
-      // Search button (center 38, 262, radius 19)
-      if ((x - 38)*(x - 38) + (y - 262)*(y - 262) <= 361) {
+      // Search button (center 24, 267, radius 19)
+      if ((x - 24)*(x - 24) + (y - 267)*(y - 267) <= 361) {
         mapSearchField = 0;
         if (mapSearchLat.length() == 0) {
           mapSearchLat = (ride.gpsFixed && ride.lat != 0.0) ? String(ride.lat, 4) : "22.5726";
@@ -2704,21 +2767,44 @@ static void quickTap(int x, int y) {
         uiRevision++;
         return;
       }
-      // Tapping Self-Location Puck opens Screen 5 (Self-Location Details View)
-      int puckX = 120, puckY = 158;
-      if (mapHasDest) {
-        float s = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
-        double latRad = mapViewerLat * (PI / 180.0);
-        double dLatM = (ride.lat - mapViewerLat) * 111320.0;
-        double dLonM = (ride.lon - mapViewerLon) * (111320.0 * cos(latRad));
-        if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
-          puckX = 120 + (int)(dLonM * s);
-          puckY = 158 - (int)(dLatM * s);
-        } else {
-          puckX = 153; puckY = 263;
+      // Top-Left Pill: "Drop Pin" (when panned) OR Red Distance Pill (when destination dropped)
+      double userLat = (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) ? ride.lat : 22.5726;
+      double userLon = (ride.gpsFixed && isfinite(ride.lon) && ride.lon != 0.0) ? ride.lon : 88.4258;
+      bool mapPannedAway = (fabs(mapViewerLat - userLat) > 0.0001 || fabs(mapViewerLon - userLon) > 0.0001);
+
+      if (x >= 6 && x <= 110 && y >= 32 && y <= 72) {
+        if (mapHasDest) {
+          // Tap red distance pill -> Open dropped pin coordinate details!
+          mapDetailsTarget = 1;
+          mapSelfLocOpen = true;
+          uiRevision++;
+          return;
+        } else if (mapPannedAway) {
+          // Tap "Drop Pin" pill -> Drop red pin at center of viewport!
+          mapDestLat = mapViewerLat;
+          mapDestLon = mapViewerLon;
+          mapHasDest = true;
+          uiRevision++;
+          return;
         }
       }
-      if ((x - puckX)*(x - puckX) + (y - puckY)*(y - puckY) <= 441) { // radius 21
+
+      // Tapping Self-Location Puck opens Screen 5 (Self-Location Details View)
+      float scale = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
+      float rotHeading = activityMapNorthUp ? 0.0f : s_fusedHeading;
+      float rad = radians(rotHeading);
+      float cosA = cosf(rad);
+      float sinA = sinf(rad);
+      double latRad = mapViewerLat * (PI / 180.0);
+      double dUserLatM = (userLat - mapViewerLat) * 111320.0;
+      double dUserLonM = (userLon - mapViewerLon) * (111320.0 * cos(latRad));
+      float unrotUserX = (float)(dUserLonM * scale);
+      float unrotUserY = -(float)(dUserLatM * scale);
+      int userScreenX = 120 + (int)lroundf(unrotUserX * cosA + unrotUserY * sinA);
+      int userScreenY = 158 + (int)lroundf(-unrotUserX * sinA + unrotUserY * cosA);
+
+      if ((x - userScreenX)*(x - userScreenX) + (y - userScreenY)*(y - userScreenY) <= 484) { // radius 22
+        mapDetailsTarget = 0;
         mapSelfLocOpen = true;
         uiRevision++;
         return;
@@ -2726,8 +2812,8 @@ static void quickTap(int x, int y) {
       return;
     }
     if(homePage==HOME_MAP_SEARCH){
-      // Top card Snap button (center 200, 64, radius 19)
-      if ((x - 200)*(x - 200) + (y - 64)*(y - 64) <= 361) {
+      // Top card Snap button (center 202, 64, radius 19)
+      if ((x - 202)*(x - 202) + (y - 64)*(y - 64) <= 361) {
         if (mapSearchField == 0) {
           mapSearchLat = (ride.gpsFixed && ride.lat != 0.0) ? String(ride.lat, 4) : "22.5726";
         } else {
@@ -2740,27 +2826,27 @@ static void quickTap(int x, int y) {
       String& target = (mapSearchField == 0) ? mapSearchLat : mapSearchLon;
 
       // Keypad Row 1 (y=101..156): 1, 2, 3, 4
-      if (y >= 101 && y <= 156 && x >= 6 && x <= 234) {
-        int col = constrain((x - 6) / 57, 0, 3);
+      if (y >= 101 && y <= 156 && x >= 8 && x <= 232) {
+        int col = constrain((x - 8) / 56, 0, 3);
         const char* r1Keys[4] = {"1", "2", "3", "4"};
         if (target.length() < 10) target += r1Keys[col];
         uiRevision++;
         return;
       }
 
-      // Keypad Row 2 (y=166..221): 5, 6, 7, 8
-      if (y >= 166 && y <= 221 && x >= 6 && x <= 234) {
-        int col = constrain((x - 6) / 57, 0, 3);
+      // Keypad Row 2 (y=163..218): 5, 6, 7, 8
+      if (y >= 163 && y <= 218 && x >= 8 && x <= 232) {
+        int col = constrain((x - 8) / 56, 0, 3);
         const char* r2Keys[4] = {"5", "6", "7", "8"};
         if (target.length() < 10) target += r2Keys[col];
         uiRevision++;
         return;
       }
 
-      // Keypad Row 3 (y=230..285): 9, 0, ., and BKSP
-      if (y >= 230 && y <= 285 && x >= 6 && x <= 234) {
-        int col = constrain((x - 6) / 57, 0, 3);
-        if (col == 3 || ((x - 200)*(x - 200) + (y - 257)*(y - 257) <= 576)) {
+      // Keypad Row 3 (y=225..280): 9, 0, ., and BKSP
+      if (y >= 225 && y <= 280 && x >= 8 && x <= 232) {
+        int col = constrain((x - 8) / 56, 0, 3);
+        if (col == 3 || ((x - 200)*(x - 200) + (y - 252)*(y - 252) <= 576)) {
           if (target.length() > 0) target.remove(target.length() - 1);
           uiRevision++;
           return;
@@ -3378,9 +3464,17 @@ static void pollQuickTouch() {
       } else if(welcomeOpen && !quickOpen && homePage == HOME_MAPS){
         if (mapPanGesture) {
           float scale = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
+          float rotHeading = activityMapNorthUp ? 0.0f : s_fusedHeading;
+          float rad = radians(rotHeading);
+          float cosA = cosf(rad);
+          float sinA = sinf(rad);
+          float dXs = (float)(x - startX);
+          float dYs = (float)(y - startY);
+          float dX_unrot = dXs * cosA - dYs * sinA;
+          float dY_unrot = dXs * sinA + dYs * cosA;
           double co = cos(radians(startPanLat));
-          double dXm = (x - startX) / max(0.0001f, scale);
-          double dYm = (y - startY) / max(0.0001f, scale);
+          double dXm = dX_unrot / max(0.0001f, scale);
+          double dYm = dY_unrot / max(0.0001f, scale);
           mapViewerLon = startPanLon - (dXm / max(0.0001, co * 111320.0));
           mapViewerLat = startPanLat + (dYm / 111320.0);
           g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
@@ -3477,7 +3571,10 @@ static void pollQuickTouch() {
     } else if(welcomeOpen && !quickOpen && homePage == HOME_MAPS && y >= 28 && y < 290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
-      bool inButtons = mapSelfLocOpen || (x >= 180 && y <= 155) || (x <= 60 && y >= 240) || (x >= 180 && y >= 240);
+      double userLat = (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) ? ride.lat : 22.5726;
+      double userLon = (ride.gpsFixed && isfinite(ride.lon) && ride.lon != 0.0) ? ride.lon : 88.4258;
+      bool mapPannedAway = (fabs(mapViewerLat - userLat) > 0.0001 || fabs(mapViewerLon - userLon) > 0.0001);
+      bool inButtons = mapSelfLocOpen || (x >= 195 && y <= 145) || (x <= 45 && y >= 245) || (x >= 195 && y >= 245) || (x <= 110 && y >= 32 && y <= 72 && (mapHasDest || mapPannedAway));
       mapPanGesture = !inButtons;
       if (mapPanGesture) {
         startPanLat = mapViewerLat;

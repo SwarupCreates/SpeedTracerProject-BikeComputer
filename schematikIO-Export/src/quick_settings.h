@@ -1081,6 +1081,7 @@ static const char* getCardinalDirection(float deg) {
 }
 
 static void drawCompassApp() {
+  statusBar(true, false);
   display.fillRect(0, 28, 240, 262, uiBg());
 
   const int cx = 120, cy = 133;
@@ -1490,6 +1491,7 @@ static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int c
 }
 
 static void drawMapViewerApp() {
+  statusBar(true, false);
   uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
   display.fillRect(0, 28, 240, 262, terrainBg);
 
@@ -2522,7 +2524,7 @@ bool drawLifecycleScreen() {
   else if(gpsWaiting || gpsRadarInspector) state="gpsRadar:"+String(millis()/16)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(gpsScroll)+":"+String(gpsRadarInspector)+":"+String(darkTheme);
   else if(countdownGoStart) state="countGo:"+String((millis()-countdownGoStart)/40);
   else if(countdownStart) state="count:"+String((millis()-countdownStart)/40);
-  else if((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) state="compass:"+String(millis()/16)+":"+String((int)(compass.heading*10))+":"+String(darkTheme);
+  else if((welcomeOpen || quickOpen) && (homePage == HOME_COMPASS || homePage == HOME_MAPS)) state="fast:"+String(millis()/16)+":"+String((int)(compass.heading*10))+":"+String(darkTheme);
   else if((welcomeOpen || quickOpen) && homePage == HOME_SENSORS) state="sensors:"+String(millis()/250)+":"+String(antHR)+":"+String(antCad)+":"+String((int)(antSpeed*10))+":"+String(antPower)+":"+String(bleCount())+":"+String(sensorsGuideSubpage)+":"+String(darkTheme);
   else if(welcomeOpen && !quickOpen) {
     char sbuf[64];

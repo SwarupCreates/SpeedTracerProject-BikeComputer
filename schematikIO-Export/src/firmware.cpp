@@ -2088,6 +2088,7 @@ static void handleSerialTransfer() {
   if (line == "CMD:SYS_INFO") {
     Serial.printf("RESET_REASON:%d\n", (int)esp_reset_reason());
     Serial.printf("GPS_READY:%d\n", (int)gpsDataReady);
+    Serial.printf("GPS_FIXED:%d\n", (int)ride.gpsFixed);
     Serial.printf("GPS_SATS:%u\n", startSatellites());
     Serial.printf("GEPRC_SATS:%u\n", (unsigned)geprcGps.satellitesUsed);
     Serial.printf("GEPRC_PVT_AGE_MS:%lu\n", (unsigned long)(geprcGps.lastPvt ? (millis() - geprcGps.lastPvt) : 999999));

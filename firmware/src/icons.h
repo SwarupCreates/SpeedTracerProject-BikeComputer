@@ -114,40 +114,76 @@ static inline void drawCompassCoin(Adafruit_GFX &gfx,int cx,int cy,float heading
   gfx.fillTriangle(ntx,nty,bx1,by1,bx2,by2,0xF9A7); gfx.fillTriangle(stx,sty,bx1,by1,bx2,by2,0xCE79); gfx.fillCircle(cx,cy,2,0x3186);
 }
 
-// 36x36 Map Heading Navigation Marker (#326BF9 Royal Blue Circle with Crisp White Heading Chevron from SVG)
-static inline void drawMapHeadingMarker(Adafruit_GFX &gfx, int cx, int cy, float headingDeg) {
-  const int R = 18;
-  const uint16_t blueCircleColor = 0x335F; // #326BF9 Figma royal blue
+// 28x35 Destination Pin Mask from destPinIcon.svg
+static const uint8_t destPinMask28x35[] PROGMEM = {
+  0x00, 0x7F, 0xE0, 0x00, 0x01, 0xFF, 0xF8, 0x00, 0x03, 0xFF, 0xFC, 0x00,
+  0x0F, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0xFF, 0x00, 0x1F, 0xFF, 0xFF, 0x80,
+  0x3F, 0xFF, 0xFF, 0xC0, 0x7F, 0xFF, 0xFF, 0xE0, 0x7F, 0xFF, 0xFF, 0xE0,
+  0x7F, 0xFF, 0xFF, 0xE0, 0xFF, 0xFF, 0xFF, 0xF0, 0xFF, 0xF0, 0xFF, 0xF0,
+  0xFF, 0xE0, 0x7F, 0xF0, 0xFF, 0xE0, 0x7F, 0xF0, 0xFF, 0xE0, 0x7F, 0xF0,
+  0xFF, 0xE0, 0x7F, 0xF0, 0xFF, 0xF0, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xF0,
+  0x7F, 0xFF, 0xFF, 0xE0, 0x7F, 0xFF, 0xFF, 0xE0, 0x7F, 0xFF, 0xFF, 0xE0,
+  0x3F, 0xFF, 0xFF, 0xC0, 0x3F, 0xFF, 0xFF, 0x80, 0x1F, 0xFF, 0xFF, 0x80,
+  0x0F, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0xFF, 0x00, 0x07, 0xFF, 0xFE, 0x00,
+  0x03, 0xFF, 0xFC, 0x00, 0x01, 0xFF, 0xF8, 0x00, 0x00, 0xFF, 0xF0, 0x00,
+  0x00, 0x7F, 0xE0, 0x00, 0x00, 0x3F, 0xC0, 0x00, 0x00, 0x1F, 0x80, 0x00,
+  0x00, 0x0F, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00,
+};
 
-  // Outer Blue Circle (diameter 36px)
-  gfx.fillCircle(cx, cy, R, blueCircleColor);
-  gfx.drawCircle(cx, cy, R, 0xFFFF); // 1px clean white rim
+// 18x18 Snap To Self Location Reticle Mask from snapToSelfLocIcon.svg
+static const uint8_t snapReticleMask18x18[] PROGMEM = {
+  0x00, 0xC0, 0x00, 0x03, 0xE0, 0x00, 0x0F, 0xF8, 0x00, 0x1C, 0xDC, 0x00,
+  0x38, 0x0E, 0x00, 0x30, 0x06, 0x00, 0x61, 0xC3, 0x00, 0x63, 0xE3, 0x00,
+  0xF3, 0xE3, 0xC0, 0xF3, 0xE3, 0xC0, 0x61, 0xC3, 0x00, 0x30, 0x06, 0x00,
+  0x38, 0x0E, 0x00, 0x1C, 0x1C, 0x00, 0x0F, 0xF8, 0x00, 0x03, 0xE0, 0x00,
+  0x00, 0xC0, 0x00, 0x00, 0xC0, 0x00,
+};
 
-  // Inner White Arrowhead Polygon from SVG (36x36 viewBox):
+// 16x16 Search Button Magnifying Glass Mask from searchButtonIcon.svg
+static const uint8_t searchIconMask16x16[] PROGMEM = {
+  0x00, 0x00, 0x0F, 0x00, 0x1F, 0x80, 0x30, 0xC0, 0x60, 0x60, 0x60, 0x60,
+  0x60, 0x60, 0x60, 0x60, 0x30, 0xC0, 0x1F, 0xA0, 0x0F, 0x70, 0x00, 0x38,
+  0x00, 0x1C, 0x00, 0x0E, 0x00, 0x07, 0x00, 0x02,
+};
+
+// 16x12 Keypad Backspace Arrow Mask
+static const uint8_t bkspArrowMask16x12[] PROGMEM = {
+  0x00, 0x00, 0x01, 0x00, 0x03, 0x80, 0x07, 0x00, 0x0E, 0x00, 0x1C, 0x00,
+  0x3F, 0xFC, 0x1F, 0xFC, 0x0E, 0x00, 0x07, 0x00, 0x03, 0x80, 0x01, 0xC0,
+};
+
+// Rotating Self-Location Puck from selfLocIcon.svg:
+// Center of rotation inside the blue disc, with white outer ring and rotating blue heading arrowhead.
+static inline void drawMapHeadingMarker(Adafruit_GFX &gfx, int cx, int cy, float headingDeg, float scale = 0.55f) {
   float rad = radians(headingDeg);
   float fx = sinf(rad), fy = -cosf(rad);
   float rx = cosf(rad), ry = sinf(rad);
 
-  auto getX = [&](float r, float f) -> int { return cx + (int)lroundf(r * rx + f * fx); };
-  auto getY = [&](float r, float f) -> int { return cy + (int)lroundf(r * ry + f * fy); };
+  float tipDist = 21.0f * scale;
+  float baseDist = 6.0f * scale;
+  float baseW = 10.0f * scale;
 
-  int pTipX = getX(0.0f, 10.82f),    pTipY = getY(0.0f, 10.82f);
-  int pRwtX = getX(10.36f, -6.13f),  pRwtY = getY(10.36f, -6.13f);
-  int pRicX = getX(9.05f, -7.52f),   pRicY = getY(9.05f, -7.52f);
-  int pNotX = getX(0.0f, -3.22f),    pNotY = getY(0.0f, -3.22f);
-  int pLicX = getX(-9.05f, -7.52f),  pLicY = getY(-9.05f, -7.52f);
-  int pLwtX = getX(-10.36f, -6.13f), pLwtY = getY(-10.36f, -6.13f);
+  int tipX = cx + (int)lroundf(tipDist * fx);
+  int tipY = cy + (int)lroundf(tipDist * fy);
+  int leftX = cx + (int)lroundf(baseDist * fx - baseW * rx);
+  int leftY = cy + (int)lroundf(baseDist * fy - baseW * ry);
+  int rightX = cx + (int)lroundf(baseDist * fx + baseW * rx);
+  int rightY = cy + (int)lroundf(baseDist * fy + baseW * ry);
 
-  // Decompose concave 6-vertex polygon into 4 convex triangles in pure white (0xFFFF):
-  gfx.fillTriangle(pTipX, pTipY, pRwtX, pRwtY, pNotX, pNotY, 0xFFFF);
-  gfx.fillTriangle(pRwtX, pRwtY, pRicX, pRicY, pNotX, pNotY, 0xFFFF);
-  gfx.fillTriangle(pTipX, pTipY, pNotX, pNotY, pLwtX, pLwtY, 0xFFFF);
-  gfx.fillTriangle(pLwtX, pLwtY, pNotX, pNotY, pLicX, pLicY, 0xFFFF);
+  // 1. Blue arrowhead triangle pointing along heading
+  gfx.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY, 0x335F);
 
-  // Solidify internal seams
-  gfx.drawLine(pTipX, pTipY, pNotX, pNotY, 0xFFFF);
-  gfx.drawLine(pRwtX, pRwtY, pNotX, pNotY, 0xFFFF);
-  gfx.drawLine(pLwtX, pLwtY, pNotX, pNotY, 0xFFFF);
+  // 2. Pure white outer ring
+  int rOuter = (int)lroundf(13.0f * scale);
+  gfx.fillCircle(cx, cy, rOuter, 0xFFFF);
+
+  // 3. Royal blue inner disc
+  int rInner = (int)lroundf(9.0f * scale);
+  gfx.fillCircle(cx, cy, rInner, 0x335F);
+}
+
+static inline void drawSelfLocPuck(Adafruit_GFX &gfx, int cx, int cy, float headingDeg, float scale = 0.55f) {
+  drawMapHeadingMarker(gfx, cx, cy, headingDeg, scale);
 }
 
 static inline void drawBluetoothStateIcon(Adafruit_GFX &g,int x,int y,uint16_t c,bool connected, int targetW = 0, int targetH = 0){drawCustomIcon(g,x,y,c,connected?CustomIcon::bluetoothConnectedIcon:CustomIcon::bluetoothDisconnectedIcon, targetW, targetH);}

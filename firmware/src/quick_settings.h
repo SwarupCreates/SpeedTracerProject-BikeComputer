@@ -47,9 +47,13 @@ static int appsPage = 0;
 static double mapViewerLat = 22.594637;
 static double mapViewerLon = 88.425853;
 static int mapViewerZoom = 2; // 1..4
-static String mapSearchLat = "22.5946";
-static String mapSearchLon = "88.4258";
+static String mapSearchLat = "22.5726";
+static String mapSearchLon = "22.5726";
 static int mapSearchField = 0; // 0 for LAT, 1 for LON
+static bool mapHasDest = false;
+static double mapDestLat = 22.5726;
+static double mapDestLon = 22.5726;
+static bool mapSelfLocOpen = false;
 String browserPath="/", browserError, selectedFile;
 String browserNames[4];
 bool browserDirs[4];
@@ -721,6 +725,7 @@ static bool globalHasNext(){
   if(!welcomeOpen) return true;
   if(quickOpen || shutdownDialog || countdownStart || countdownGoStart)return false;
   if(homePage==HOME_FILES && fileDetailOpen)return false;
+  if(homePage==HOME_MAP_SEARCH) return true;
   if(homePage==HOME_APPS) return false;
   if(isLibrary()){
     if(homePage==HOME_ROUTES && librarySelection.length()) return false;
@@ -730,6 +735,27 @@ static bool globalHasNext(){
 }
 static void globalNext(){
   if(!globalHasNext())return;
+  if(homePage == HOME_MAP_SEARCH) {
+    if (mapSearchField == 0) {
+      mapSearchField = 1;
+      uiRevision++;
+      return;
+    } else {
+      double lat = mapSearchLat.toDouble();
+      double lon = mapSearchLon.toDouble();
+      if (isfinite(lat) && isfinite(lon) && (lat != 0.0 || lon != 0.0)) {
+        mapDestLat = lat;
+        mapDestLon = lon;
+        mapHasDest = true;
+        mapViewerLat = lat;
+        mapViewerLon = lon;
+        g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+      }
+      homePage = HOME_MAPS;
+      uiRevision++;
+      return;
+    }
+  }
   if(gpsWaiting){
     gpsWaiting = false;
     countdownStart = millis();
@@ -798,8 +824,22 @@ static void globalBack(){
     if(homePage == HOME_ACTIVITY_SETTINGS) {
       homePage = HOME_APPS;
     }
-    else if(homePage == HOME_COMPASS || homePage == HOME_MAPS) {
+    else if(homePage == HOME_COMPASS) {
       homePage = HOME_APPS;
+    }
+    else if(homePage == HOME_MAPS) {
+      if (mapSelfLocOpen) {
+        mapSelfLocOpen = false;
+        uiRevision++;
+        return;
+      }
+      if (mapHasDest) {
+        mapHasDest = false;
+        uiRevision++;
+        return;
+      }
+      homePage = HOME_APPS;
+      return;
     }
     else if(homePage == HOME_SENSORS) {
       if (sensorsGuideSubpage > 0) {
@@ -810,7 +850,15 @@ static void globalBack(){
       uiRevision++;
     }
     else if(homePage == HOME_MAP_SEARCH) {
-      homePage = HOME_MAPS;
+      if (mapSearchField == 1) {
+        mapSearchField = 0;
+        uiRevision++;
+        return;
+      } else {
+        homePage = HOME_MAPS;
+        uiRevision++;
+        return;
+      }
     }
     else if(homePage == HOME_APPS) {
       homePage = HOME_MAIN;
@@ -1169,24 +1217,9 @@ static void drawCompassApp() {
   drawGlobalNav();
 }
 
-static void drawMapViewerApp() {
-  uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
-  display.fillRect(0, 28, 240, 262, terrainBg);
-
-  const int clipX1 = 0, clipY1 = 28, clipX2 = 239, clipY2 = 289;
-  const int cardCenterX = 120, cardCenterY = 158;
-
-  // 4 Preset Zoom Levels:
-  // Level 1: 0.15 (District, ~1.5 km across)
-  // Level 2: 0.27 (Neighborhood, ~900 m across)
-  // Level 3: 0.48 (Street View, ~500 m across)
-  // Level 4: 0.85 (Max Zoom, ~280 m across)
-  float scale = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
-
-  double centerLat = mapViewerLat;
-  double centerLon = mapViewerLon;
-
-  // Align PSRAM sliding window around current pin position
+// Shared vector tile renderer for full-screen and slender card viewports
+static void renderMapTiles(int clipX1, int clipY1, int clipX2, int clipY2, int cardCenterX, int cardCenterY, double centerLat, double centerLon, float scale) {
+  // Align PSRAM sliding window around current position
   g_mapCache.updatePosition(centerLat, centerLon);
 
   int centerTX, centerTY;
@@ -1199,8 +1232,8 @@ static void drawMapViewerApp() {
   float metersPerUnit = (float)((40075016.686 * cos(latRad) / 16384.0) / 4096.0);
   float pxPerUnit = metersPerUnit * scale;
 
-  int maxDxU = (int)(130.0f / pxPerUnit) + 120;
-  int maxDyU = (int)(140.0f / pxPerUnit) + 120;
+  int maxDxU = (int)(((clipX2 - clipX1) / 2.0f + 10.0f) / pxPerUnit) + 120;
+  int maxDyU = (int)(((clipY2 - clipY1) / 2.0f + 10.0f) / pxPerUnit) + 120;
 
   static int s_viewerPolyX[256];
   static int s_viewerPolyY[256];
@@ -1342,10 +1375,10 @@ static void drawMapViewerApp() {
   }
 
   // PASS 2: ROADS
-  int minorCasingW = (mapViewerZoom == 4) ? 5 : (mapViewerZoom == 3) ? 4 : (mapViewerZoom == 2) ? 3 : 2;
-  int minorFillW   = (mapViewerZoom == 4) ? 3 : (mapViewerZoom == 3) ? 2 : (mapViewerZoom == 2) ? 1 : 1;
-  int majorCasingW = (mapViewerZoom == 4) ? 7 : (mapViewerZoom == 3) ? 5 : (mapViewerZoom == 2) ? 4 : 3;
-  int majorFillW   = (mapViewerZoom == 4) ? 5 : (mapViewerZoom == 3) ? 3 : (mapViewerZoom == 2) ? 2 : 1;
+  int minorCasingW = (scale >= 0.8f) ? 5 : (scale >= 0.45f) ? 4 : (scale >= 0.25f) ? 3 : 2;
+  int minorFillW   = (scale >= 0.8f) ? 3 : (scale >= 0.45f) ? 2 : (scale >= 0.25f) ? 1 : 1;
+  int majorCasingW = (scale >= 0.8f) ? 7 : (scale >= 0.45f) ? 5 : (scale >= 0.25f) ? 4 : 3;
+  int majorFillW   = (scale >= 0.8f) ? 5 : (scale >= 0.45f) ? 3 : (scale >= 0.25f) ? 2 : 1;
 
   // 2A. Road Casings
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
@@ -1448,93 +1481,200 @@ static void drawMapViewerApp() {
       }
     }
   }
+}
 
-  // Dropped Pin at center
-  drawCustomIcon(display, cardCenterX - 8, cardCenterY - 16, 0x03FF, CustomIcon::locationPinIcon);
-  display.fillCircle(cardCenterX, cardCenterY, 3, 0x03FF);
-  display.drawCircle(cardCenterX, cardCenterY, 3, 0xFFFF);
+static void drawMapViewerApp() {
+  uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
+  display.fillRect(0, 28, 240, 262, terrainBg);
 
-  // Floating Search Button (top-left)
-  display.fillRoundRect(10, 36, 68, 30, 8, uiCard());
-  display.drawRoundRect(10, 36, 68, 30, 8, darkTheme ? 0x39E7 : 0xC618);
-  drawCustomIcon(display, 16, 43, uiFg(), CustomIcon::locationPinIcon);
-  label(36, 44, "FIND", 1, uiFg());
+  const int clipX1 = 0, clipY1 = 28, clipX2 = 239, clipY2 = 289;
+  const int cardCenterX = 120, cardCenterY = 158;
 
-  // Floating Zoom In [+]
-  display.fillRoundRect(196, 36, 34, 30, 8, uiCard());
-  display.drawRoundRect(196, 36, 34, 30, 8, darkTheme ? 0x39E7 : 0xC618);
-  label(208, 43, "+", 2, mapViewerZoom < 4 ? uiFg() : uiMuted());
+  // 4 Preset Zoom Levels:
+  // Level 1: 0.15 (District, ~1.5 km across)
+  // Level 2: 0.27 (Neighborhood, ~900 m across)
+  // Level 3: 0.48 (Street View, ~500 m across)
+  // Level 4: 0.85 (Max Zoom, ~280 m across)
+  float scale = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
 
-  // Floating Zoom Out [-]
-  display.fillRoundRect(196, 72, 34, 30, 8, uiCard());
-  display.drawRoundRect(196, 72, 34, 30, 8, darkTheme ? 0x39E7 : 0xC618);
-  label(210, 78, "-", 2, mapViewerZoom > 1 ? uiFg() : uiMuted());
+  double centerLat = mapViewerLat;
+  double centerLon = mapViewerLon;
 
-  // Floating GPS Recenter
-  display.fillRoundRect(196, 108, 34, 30, 8, uiCard());
-  display.drawRoundRect(196, 108, 34, 30, 8, darkTheme ? 0x39E7 : 0xC618);
-  drawCustomIcon(display, 205, 115, ride.gpsFixed ? TEAL : uiMuted(), CustomIcon::satelliteIcon);
+  renderMapTiles(clipX1, clipY1, clipX2, clipY2, cardCenterX, cardCenterY, centerLat, centerLon, scale);
 
-  // Zoom badge (bottom-left)
-  display.fillRoundRect(10, 262, 40, 22, 11, uiCard());
-  display.drawRoundRect(10, 262, 40, 22, 11, darkTheme ? 0x39E7 : 0xC618);
-  centeredLabel(10, 267, 40, String(mapViewerZoom) + "/4", 0, uiMuted());
+  // If destination is active:
+  if (mapHasDest) {
+    // 1. Red Dropped Pin at center (tip anchored at cardCenterX, cardCenterY)
+    display.drawBitmap(cardCenterX - 14, cardCenterY - 34, destPinMask28x35, 28, 35, 0xF9A4);
 
-  // Dropped Pin coords pill (bottom-center)
-  int pillW = 150, pillH = 22;
-  int pillX = (DISP_W - pillW) / 2 + 10, pillY = 262;
-  display.fillRoundRect(pillX, pillY, pillW, pillH, 11, uiCard());
-  display.drawRoundRect(pillX, pillY, pillW, pillH, 11, darkTheme ? 0x39E7 : 0xC618);
-  String coordStr = String(mapViewerLat, 4) + ", " + String(mapViewerLon, 4);
-  centeredLabel(pillX, pillY + 5, pillW, coordStr, 0, uiFg());
+    // 2. Red Distance Pill at top-left (x=18, y=40, w=90, h=33, r=16)
+    display.fillRoundRect(18, 40, 90, 33, 16, 0xF9A4);
+    String distStr = "600m";
+    if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
+      double dLat = (mapDestLat - ride.lat) * (PI / 180.0);
+      double dLon = (mapDestLon - ride.lon) * (PI / 180.0);
+      double lat1 = ride.lat * (PI / 180.0);
+      double lat2 = mapDestLat * (PI / 180.0);
+      double a = sin(dLat / 2.0) * sin(dLat / 2.0) +
+                 cos(lat1) * cos(lat2) * sin(dLon / 2.0) * sin(dLon / 2.0);
+      double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+      float distM = (float)(6371000.0 * c);
+      distStr = (distM < 1000.0f) ? (String((int)lroundf(distM)) + "m") : (String(distM / 1000.0f, 1) + "km");
+    }
+    centeredLabel(18, 48, 90, distStr, 2, 0xFFFF);
+
+    // 3. Simultaneously render user's live self-location puck if within view
+    double latRad = centerLat * (PI / 180.0);
+    double dLatM = (ride.lat - centerLat) * 111320.0;
+    double dLonM = (ride.lon - centerLon) * (111320.0 * cos(latRad));
+    int userScreenX = cardCenterX + (int)(dLonM * scale);
+    int userScreenY = cardCenterY - (int)(dLatM * scale);
+
+    if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
+      if (userScreenX >= -20 && userScreenX <= 260 && userScreenY >= 10 && userScreenY <= 300) {
+        drawSelfLocPuck(display, userScreenX, userScreenY, ride.heading, 0.55f);
+      }
+    } else {
+      // Mock preview puck position from Figma Frame 402331
+      drawSelfLocPuck(display, 153, 263, 280.0f, 0.55f);
+    }
+  } else {
+    // Normal map mode (no destination): user puck at center
+    drawSelfLocPuck(display, cardCenterX, cardCenterY, ride.heading, 0.55f);
+  }
+
+  // Floating Circular Controls
+  // Top-Right: Zoom In [+] at (202, 59)
+  display.fillCircle(202, 59, 15, uiCard());
+  display.drawCircle(202, 59, 15, darkTheme ? 0x39E7 : 0xC618);
+  display.drawFastHLine(197, 59, 11, uiFg());
+  display.drawFastHLine(197, 60, 11, uiFg());
+  display.drawFastVLine(202, 54, 11, uiFg());
+  display.drawFastVLine(201, 54, 11, uiFg());
+
+  // Top-Right: Zoom Out [-] at (202, 96)
+  display.fillCircle(202, 96, 15, uiCard());
+  display.drawCircle(202, 96, 15, darkTheme ? 0x39E7 : 0xC618);
+  display.drawFastHLine(197, 96, 11, uiFg());
+  display.drawFastHLine(197, 97, 11, uiFg());
+
+  // Top-Right: Compass Button at (202, 131)
+  display.fillCircle(202, 131, 14, 0xFFFF);
+  display.drawCircle(202, 131, 14, 0xCE79);
+  display.fillTriangle(202, 122, 197, 138, 202, 136, 0xF9A4);
+  display.fillTriangle(202, 122, 207, 138, 202, 136, 0xF9A4);
+  display.drawLine(202, 122, 202, 136, 0xF9A4);
+
+  // Bottom-Left: Search Button at (38, 262)
+  display.fillCircle(38, 262, 15, uiCard());
+  display.drawCircle(38, 262, 15, darkTheme ? 0x39E7 : 0xC618);
+  display.drawBitmap(30, 254, searchIconMask16x16, 16, 16, 0xB2B2);
+
+  // Bottom-Right: Snap to my location at (202, 262)
+  display.fillCircle(202, 262, 15, 0x335F);
+  display.drawCircle(202, 262, 15, 0x541F);
+  display.drawBitmap(193, 253, snapReticleMask18x18, 18, 18, 0xFFFF);
+
+  display.fillRect(0, 290, 240, 30, uiBg());
+  drawGlobalNav();
 }
 
 static void drawMapSearchApp() {
   statusBar();
 
-  // Input boxes
-  display.fillRoundRect(12, 34, 216, 26, 6, uiCard());
-  display.drawRoundRect(12, 34, 216, 26, 6, mapSearchField == 0 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
-  label(18, 40, "LAT: " + mapSearchLat + (mapSearchField == 0 ? "_" : ""), 1, uiFg());
+  // Top display capsule (x=6, y=37, w=228, h=55, r=27)
+  display.fillRoundRect(6, 37, 228, 55, 27, uiCard());
+  display.drawRoundRect(6, 37, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
 
-  display.fillRoundRect(12, 64, 216, 26, 6, uiCard());
-  display.drawRoundRect(12, 64, 216, 26, 6, mapSearchField == 1 ? TEAL : (darkTheme ? 0x2945 : 0xD6BA));
-  label(18, 70, "LON: " + mapSearchLon + (mapSearchField == 1 ? "_" : ""), 1, uiFg());
+  String fieldLabel = (mapSearchField == 0) ? "LAT: " : "LON: ";
+  String& fieldVal = (mapSearchField == 0) ? mapSearchLat : mapSearchLon;
 
-  // Keypad: 4 rows x 3 columns
-  const char* keys[4][3] = {
-    {"1", "2", "3"},
-    {"4", "5", "6"},
-    {"7", "8", "9"},
-    {".", "0", "DEL"}
-  };
-  for (int r = 0; r < 4; r++) {
-    for (int c = 0; c < 3; c++) {
-      int kx = 14 + c * 72;
-      int ky = 96 + r * 32;
-      display.fillRoundRect(kx, ky, 68, 28, 6, uiCard());
-      display.drawRoundRect(kx, ky, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
-      centeredLabel(kx, ky + 7, 68, keys[r][c], 1, (r == 3 && c == 2) ? 0xFA08 : uiFg());
-    }
-  }
+  label(24, 55, fieldLabel, 2, uiMuted());
+  label(24 + textWidth(fieldLabel, 2), 55, fieldVal, 2, 0xFFFF);
 
-  // Action Buttons row at y = 232
-  // CLEAR
-  display.fillRoundRect(14, 232, 68, 28, 6, uiCard());
-  display.drawRoundRect(14, 232, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(14, 240, 68, "CLEAR", 1, uiMuted());
+  // Blue Snap to my location circular button at (200, 64), radius 15
+  display.fillCircle(200, 64, 15, 0x335F);
+  display.drawCircle(200, 64, 15, 0x541F);
+  display.drawBitmap(191, 55, snapReticleMask18x18, 18, 18, 0xFFFF);
 
-  // MY LOC
-  display.fillRoundRect(86, 232, 68, 28, 6, uiCard());
-  display.drawRoundRect(86, 232, 68, 28, 6, darkTheme ? 0x2945 : 0xD6BA);
-  centeredLabel(86, 240, 68, "MY LOC", 1, uiFg());
+  // Keypad Row 1 (y=101, h=55, r=27)
+  display.fillRoundRect(6, 101, 228, 55, 27, uiCard());
+  display.drawRoundRect(6, 101, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(6 + 0 * 57, 119, 57, "1", 2, uiFg());
+  centeredLabel(6 + 1 * 57, 119, 57, "2", 2, uiFg());
+  centeredLabel(6 + 2 * 57, 119, 57, "3", 2, uiFg());
+  centeredLabel(6 + 3 * 57, 119, 57, "4", 2, uiFg());
 
-  // SEARCH
-  display.fillRoundRect(158, 232, 68, 28, 6, TEAL);
-  display.drawRoundRect(158, 232, 68, 28, 6, TEAL);
-  centeredLabel(158, 240, 68, "SEARCH", 1, 0xFFFF);
+  // Keypad Row 2 (y=166, h=55, r=27)
+  display.fillRoundRect(6, 166, 228, 55, 27, uiCard());
+  display.drawRoundRect(6, 166, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(6 + 0 * 57, 184, 57, "5", 2, uiFg());
+  centeredLabel(6 + 1 * 57, 184, 57, "6", 2, uiFg());
+  centeredLabel(6 + 2 * 57, 184, 57, "7", 2, uiFg());
+  centeredLabel(6 + 3 * 57, 184, 57, "8", 2, uiFg());
 
-  display.fillRect(0, 286, 240, 34, uiBg());
+  // Keypad Row 3 (y=230, h=55, r=27)
+  display.fillRoundRect(6, 230, 228, 55, 27, uiCard());
+  display.drawRoundRect(6, 230, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
+  centeredLabel(6 + 0 * 57, 248, 57, "9", 2, uiFg());
+  centeredLabel(6 + 1 * 57, 248, 57, "0", 2, uiFg());
+  centeredLabel(6 + 2 * 57, 248, 57, ".", 2, uiFg());
+
+  // Red Circular Backspace button at (200, 257), radius 22
+  display.fillCircle(200, 257, 22, 0x8800);
+  display.drawBitmap(192, 251, bkspArrowMask16x12, 16, 12, 0xFFFF);
+
+  display.fillRect(0, 290, 240, 30, uiBg());
+  drawGlobalNav();
+}
+
+static void drawMapSelfLocApp() {
+  statusBar();
+
+  // Top slender map window (x=6, y=38, w=228, h=118, r=16)
+  uint16_t terrainBg = darkTheme ? 0x18E3 : 0xF79D;
+  display.fillRoundRect(6, 38, 228, 118, 16, terrainBg);
+
+  const int clipX1 = 7, clipY1 = 39, clipX2 = 233, clipY2 = 154;
+  const int cardCenterX = 120, cardCenterY = 97;
+
+  float scale = 0.48f; // Street View scale for slender preview
+  double centerLat = (ride.gpsFixed && ride.lat != 0.0) ? ride.lat : 22.5726;
+  double centerLon = (ride.gpsFixed && ride.lon != 0.0) ? ride.lon : 88.4258;
+
+  renderMapTiles(clipX1, clipY1, clipX2, clipY2, cardCenterX, cardCenterY, centerLat, centerLon, scale);
+
+  // Self location puck at center (120, 97)
+  drawSelfLocPuck(display, cardCenterX, cardCenterY, ride.heading, 0.55f);
+
+  // Clean corner triangles and rounded border for slender window
+  display.fillTriangle(6, 38, 16, 38, 6, 48, uiBg());
+  display.fillTriangle(233, 38, 223, 38, 233, 48, uiBg());
+  display.fillTriangle(6, 155, 16, 155, 6, 145, uiBg());
+  display.fillTriangle(233, 155, 223, 155, 233, 145, uiBg());
+  display.drawRoundRect(6, 38, 228, 118, 16, darkTheme ? 0x39E7 : 0xC618);
+
+  // Middle capsule: LAT (x=6, y=164, w=228, h=55, r=27)
+  display.fillRoundRect(6, 164, 228, 55, 27, uiCard());
+  display.drawRoundRect(6, 164, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
+  String latValStr = (ride.gpsFixed && ride.lat != 0.0) ? String(ride.lat, 4) : "22.5726";
+  String latFull = "LAT: " + latValStr;
+  int latW = textWidth(latFull, 2);
+  int startX = (240 - latW) / 2;
+  label(startX, 182, "LAT: ", 2, uiMuted());
+  label(startX + textWidth("LAT: ", 2), 182, latValStr, 2, 0xFFFF);
+
+  // Bottom capsule: LON (x=6, y=228, w=228, h=55, r=27)
+  display.fillRoundRect(6, 228, 228, 55, 27, uiCard());
+  display.drawRoundRect(6, 228, 228, 55, 27, darkTheme ? 0x2945 : 0xD6BA);
+  String lonValStr = (ride.gpsFixed && ride.lon != 0.0) ? String(ride.lon, 4) : "22.5726";
+  String lonFull = "LON: " + lonValStr;
+  int lonW = textWidth(lonFull, 2);
+  int startX2 = (240 - lonW) / 2;
+  label(startX2, 246, "LON: ", 2, uiMuted());
+  label(startX2 + textWidth("LON: ", 2), 246, lonValStr, 2, 0xFFFF);
+
+  display.fillRect(0, 290, 240, 30, uiBg());
   drawGlobalNav();
 }
 
@@ -1784,7 +1924,7 @@ static void drawHomeSubpage(){
   }else if(homePage==HOME_COMPASS){
     drawCompassApp();
   }else if(homePage==HOME_MAPS){
-    drawMapViewerApp();
+    if (mapSelfLocOpen) drawMapSelfLocApp(); else drawMapViewerApp();
   }else if(homePage==HOME_MAP_SEARCH){
     drawMapSearchApp();
   }else if(homePage==HOME_SENSORS){
@@ -2520,101 +2660,121 @@ static void quickTap(int x, int y) {
       return;
     }
     if(homePage==HOME_MAPS){
-      // SEARCH button (x=10..78, y=36..66)
-      if (x >= 8 && x <= 85 && y >= 34 && y <= 68) {
+      if (mapSelfLocOpen) {
+        return;
+      }
+      // Zoom in [+] (center 202, 59, radius 18)
+      if ((x - 202)*(x - 202) + (y - 59)*(y - 59) <= 324) {
+        if (mapViewerZoom < 4) { mapViewerZoom++; uiRevision++; }
+        return;
+      }
+      // Zoom out [-] (center 202, 96, radius 18)
+      if ((x - 202)*(x - 202) + (y - 96)*(y - 96) <= 324) {
+        if (mapViewerZoom > 1) { mapViewerZoom--; uiRevision++; }
+        return;
+      }
+      // Compass button (center 202, 131, radius 18)
+      if ((x - 202)*(x - 202) + (y - 131)*(y - 131) <= 324) {
+        uiRevision++;
+        return;
+      }
+      // Snap to my location (center 202, 262, radius 19)
+      if ((x - 202)*(x - 202) + (y - 262)*(y - 262) <= 361) {
+        if (ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0) {
+          mapViewerLat = ride.lat;
+          mapViewerLon = ride.lon;
+        } else {
+          mapViewerLat = 22.5726;
+          mapViewerLon = 88.4258;
+        }
+        g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
+        uiRevision++;
+        return;
+      }
+      // Search button (center 38, 262, radius 19)
+      if ((x - 38)*(x - 38) + (y - 262)*(y - 262) <= 361) {
         mapSearchField = 0;
+        if (mapSearchLat.length() == 0) {
+          mapSearchLat = (ride.gpsFixed && ride.lat != 0.0) ? String(ride.lat, 4) : "22.5726";
+        }
+        if (mapSearchLon.length() == 0) {
+          mapSearchLon = (ride.gpsFixed && ride.lon != 0.0) ? String(ride.lon, 4) : "22.5726";
+        }
         homePage = HOME_MAP_SEARCH;
         uiRevision++;
         return;
       }
-      // Zoom in [+] (x=196..230, y=36..66)
-      if (x >= 190 && x <= 236 && y >= 34 && y <= 68) {
-        if (mapViewerZoom < 4) { mapViewerZoom++; uiRevision++; }
-        return;
-      }
-      // Zoom out [-] (x=196..230, y=72..102)
-      if (x >= 190 && x <= 236 && y >= 70 && y <= 104) {
-        if (mapViewerZoom > 1) { mapViewerZoom--; uiRevision++; }
-        return;
-      }
-      // GPS Recenter (x=196..230, y=108..138)
-      if (x >= 190 && x <= 236 && y >= 106 && y <= 142) {
-        if (ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0) {
-          mapViewerLat = ride.lat;
-          mapViewerLon = ride.lon;
-          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
-          uiRevision++;
+      // Tapping Self-Location Puck opens Screen 5 (Self-Location Details View)
+      int puckX = 120, puckY = 158;
+      if (mapHasDest) {
+        float s = (mapViewerZoom == 1) ? 0.15f : (mapViewerZoom == 2) ? 0.27f : (mapViewerZoom == 3) ? 0.48f : 0.85f;
+        double latRad = mapViewerLat * (PI / 180.0);
+        double dLatM = (ride.lat - mapViewerLat) * 111320.0;
+        double dLonM = (ride.lon - mapViewerLon) * (111320.0 * cos(latRad));
+        if (ride.gpsFixed && isfinite(ride.lat) && ride.lat != 0.0) {
+          puckX = 120 + (int)(dLonM * s);
+          puckY = 158 - (int)(dLatM * s);
+        } else {
+          puckX = 153; puckY = 263;
         }
+      }
+      if ((x - puckX)*(x - puckX) + (y - puckY)*(y - puckY) <= 441) { // radius 21
+        mapSelfLocOpen = true;
+        uiRevision++;
         return;
       }
       return;
     }
     if(homePage==HOME_MAP_SEARCH){
-      // LAT input box (y=34..60)
-      if (x >= 12 && x <= 228 && y >= 34 && y <= 60) {
-        mapSearchField = 0;
+      // Top card Snap button (center 200, 64, radius 19)
+      if ((x - 200)*(x - 200) + (y - 64)*(y - 64) <= 361) {
+        if (mapSearchField == 0) {
+          mapSearchLat = (ride.gpsFixed && ride.lat != 0.0) ? String(ride.lat, 4) : "22.5726";
+        } else {
+          mapSearchLon = (ride.gpsFixed && ride.lon != 0.0) ? String(ride.lon, 4) : "22.5726";
+        }
         uiRevision++;
         return;
       }
-      // LON input box (y=64..90)
-      if (x >= 12 && x <= 228 && y >= 64 && y <= 90) {
-        mapSearchField = 1;
+
+      String& target = (mapSearchField == 0) ? mapSearchLat : mapSearchLon;
+
+      // Keypad Row 1 (y=101..156): 1, 2, 3, 4
+      if (y >= 101 && y <= 156 && x >= 6 && x <= 234) {
+        int col = constrain((x - 6) / 57, 0, 3);
+        const char* r1Keys[4] = {"1", "2", "3", "4"};
+        if (target.length() < 10) target += r1Keys[col];
         uiRevision++;
         return;
       }
-      // Keypad area (y=96..224)
-      if (x >= 14 && x <= 230 && y >= 96 && y <= 224) {
-        int kr = (y - 96) / 32;
-        int kc = (x - 14) / 72;
-        if (kr >= 0 && kr < 4 && kc >= 0 && kc < 3) {
-          const char* keys[4][3] = {
-            {"1", "2", "3"},
-            {"4", "5", "6"},
-            {"7", "8", "9"},
-            {".", "0", "DEL"}
-          };
-          String& target = (mapSearchField == 0) ? mapSearchLat : mapSearchLon;
-          if (kr == 3 && kc == 2) {
-            if (target.length() > 0) target.remove(target.length() - 1);
-          } else {
-            if (target.length() < 12) target += keys[kr][kc];
-          }
-          uiRevision++;
-          return;
-        }
+
+      // Keypad Row 2 (y=166..221): 5, 6, 7, 8
+      if (y >= 166 && y <= 221 && x >= 6 && x <= 234) {
+        int col = constrain((x - 6) / 57, 0, 3);
+        const char* r2Keys[4] = {"5", "6", "7", "8"};
+        if (target.length() < 10) target += r2Keys[col];
+        uiRevision++;
+        return;
       }
-      // Action row (y=230..264)
-      if (y >= 230 && y <= 264) {
-        // CLEAR (x=14..82)
-        if (x >= 12 && x <= 84) {
-          if (mapSearchField == 0) mapSearchLat = "";
-          else mapSearchLon = "";
+
+      // Keypad Row 3 (y=230..285): 9, 0, ., and BKSP
+      if (y >= 230 && y <= 285 && x >= 6 && x <= 234) {
+        int col = constrain((x - 6) / 57, 0, 3);
+        if (col == 3 || ((x - 200)*(x - 200) + (y - 257)*(y - 257) <= 576)) {
+          if (target.length() > 0) target.remove(target.length() - 1);
           uiRevision++;
           return;
-        }
-        // MY LOC (x=86..154)
-        if (x >= 86 && x <= 156) {
-          if (ride.gpsFixed && isfinite(ride.lat) && isfinite(ride.lon) && ride.lat != 0.0) {
-            mapSearchLat = String(ride.lat, 5);
-            mapSearchLon = String(ride.lon, 5);
-          } else {
-            mapSearchLat = "22.5946";
-            mapSearchLon = "88.4258";
-          }
+        } else if (col == 0) {
+          if (target.length() < 10) target += "9";
           uiRevision++;
           return;
-        }
-        // SEARCH (x=158..228)
-        if (x >= 158 && x <= 230) {
-          double lat = mapSearchLat.toDouble();
-          double lon = mapSearchLon.toDouble();
-          if (isfinite(lat) && isfinite(lon) && lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0 && (lat != 0.0 || lon != 0.0)) {
-            mapViewerLat = lat;
-            mapViewerLon = lon;
-            g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
-            homePage = HOME_MAPS;
-            uiRevision++;
-          }
+        } else if (col == 1) {
+          if (target.length() < 10) target += "0";
+          uiRevision++;
+          return;
+        } else if (col == 2) {
+          if (target.indexOf('.') < 0 && target.length() < 10) target += ".";
+          uiRevision++;
           return;
         }
       }
@@ -3317,7 +3477,7 @@ static void pollQuickTouch() {
     } else if(welcomeOpen && !quickOpen && homePage == HOME_MAPS && y >= 28 && y < 290){
       rootGesture=true;moved=false;startX=endX=x;startY=endY=y;
       sliderGesture=false;
-      bool inButtons = (x >= 8 && x <= 85 && y >= 34 && y <= 68) || (x >= 190 && y >= 34 && y <= 145);
+      bool inButtons = mapSelfLocOpen || (x >= 180 && y <= 155) || (x <= 60 && y >= 240) || (x >= 180 && y >= 240);
       mapPanGesture = !inButtons;
       if (mapPanGesture) {
         startPanLat = mapViewerLat;

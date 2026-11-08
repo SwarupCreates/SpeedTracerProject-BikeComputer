@@ -1255,6 +1255,8 @@ static void drawMapScreen() {
   const uint16_t roadCasing  = darkTheme ? 0x3186 : 0xD69A;
   const uint16_t roadFill    = darkTheme ? 0x52AA : 0xFFFF;
 
+  uint16_t* fb = display.getBuffer();
+
   auto clipAndDrawLine = [&](int x0, int y0, int x1, int y1, uint16_t color, int width) {
     if ((x0 < clipX1 && x1 < clipX1) || (x0 > clipX2 && x1 > clipX2) ||
         (y0 < clipY1 && y1 < clipY1) || (y0 > clipY2 && y1 > clipY2)) return;
@@ -1274,33 +1276,58 @@ static void drawMapScreen() {
         x1 = constrain(x1, clipX1, clipX2);
         y0 = constrain(y0, clipY1, clipY2);
         y1 = constrain(y1, clipY1, clipY2);
-        if (width <= 1) {
-          display.drawLine(x0, y0, x1, y1, color);
-        } else {
-          int dx = abs(x1 - x0);
-          int dy = abs(y1 - y0);
-          int h = width / 2;
-          if (dx >= dy) {
-            for (int k = -h; k <= width - 1 - h; k++) {
-              int ly0 = constrain(y0 + k, clipY1, clipY2);
-              int ly1 = constrain(y1 + k, clipY1, clipY2);
-              display.drawLine(x0, ly0, x1, ly1, color);
+        if (fb) {
+          if (width <= 1) {
+            int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+            int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+            int err = dx + dy;
+            while (true) {
+              fb[y0 * 240 + x0] = color;
+              if (x0 == x1 && y0 == y1) break;
+              int e2 = 2 * err;
+              if (e2 >= dy) { err += dy; x0 += sx; }
+              if (e2 <= dx) { err += dx; y0 += sy; }
             }
           } else {
-            for (int k = -h; k <= width - 1 - h; k++) {
-              int lx0 = constrain(x0 + k, clipX1, clipX2);
-              int lx1 = constrain(x1 + k, clipX1, clipX2);
-              display.drawLine(lx0, y0, lx1, y1, color);
+            int dx = abs(x1 - x0);
+            int dy = abs(y1 - y0);
+            int h = width / 2;
+            if (dx >= dy) {
+              for (int k = -h; k <= width - 1 - h; k++) {
+                int ly0 = y0 + k, ly1 = y1 + k;
+                if (ly0 < clipY1 || ly0 > clipY2 || ly1 < clipY1 || ly1 > clipY2) continue;
+                int curX0 = x0, curY0 = ly0, curX1 = x1, curY1 = ly1;
+                int ldx = abs(curX1 - curX0), lsx = curX0 < curX1 ? 1 : -1;
+                int ldy = -abs(curY1 - curY0), lsy = curY0 < curY1 ? 1 : -1;
+                int lerr = ldx + ldy;
+                while (true) {
+                  fb[curY0 * 240 + curX0] = color;
+                  if (curX0 == curX1 && curY0 == curY1) break;
+                  int le2 = 2 * lerr;
+                  if (le2 >= ldy) { lerr += ldy; curX0 += lsx; }
+                  if (le2 <= ldx) { lerr += ldx; curY0 += lsy; }
+                }
+              }
+            } else {
+              for (int k = -h; k <= width - 1 - h; k++) {
+                int lx0 = x0 + k, lx1 = x1 + k;
+                if (lx0 < clipX1 || lx0 > clipX2 || lx1 < clipX1 || lx1 > clipX2) continue;
+                int curX0 = lx0, curY0 = y0, curX1 = lx1, curY1 = y1;
+                int ldx = abs(curX1 - curX0), lsx = curX0 < curX1 ? 1 : -1;
+                int ldy = -abs(curY1 - curY0), lsy = curY0 < curY1 ? 1 : -1;
+                int lerr = ldx + ldy;
+                while (true) {
+                  fb[curY0 * 240 + curX0] = color;
+                  if (curX0 == curX1 && curY0 == curY1) break;
+                  int le2 = 2 * lerr;
+                  if (le2 >= ldy) { lerr += ldy; curX0 += lsx; }
+                  if (le2 <= ldx) { lerr += ldx; curY0 += lsy; }
+                }
+              }
             }
           }
-          if (width >= 3) {
-            if (x0 >= clipX1 + h && x0 <= clipX2 - h && y0 >= clipY1 + h && y0 <= clipY2 - h) {
-              display.fillCircle(x0, y0, h, color);
-            }
-            if (x1 >= clipX1 + h && x1 <= clipX2 - h && y1 >= clipY1 + h && y1 <= clipY2 - h) {
-              display.fillCircle(x1, y1, h, color);
-            }
-          }
+        } else {
+          display.drawLine(x0, y0, x1, y1, color);
         }
         return;
       } else if (c0 & c1) {
@@ -1336,6 +1363,10 @@ static void drawMapScreen() {
 
     int tileDeltaX = (tx - centerTX) * 4096 - centerU;
     int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    // Fast bounding box culling for the whole tile
+    if (tileDeltaX > maxDistU || tileDeltaX + 4096 < -maxDistU ||
+        tileDeltaY > maxDistU || tileDeltaY + 4096 < -maxDistU) continue;
 
     MapFeatureRecord* feats = g_mapCache.tiles[s].features;
     MapPoint12* pts = g_mapCache.tiles[s].points;
@@ -1387,6 +1418,13 @@ static void drawMapScreen() {
   const int minorCasingW = 5, minorFillW = 3;
   const int majorCasingW = 7, majorFillW = 5;
 
+  struct ProjectedSeg {
+    int16_t x0, y0, x1, y1;
+    uint8_t fillW;
+  };
+  static ProjectedSeg s_rideRoadFills[384];
+  int rideRoadFillCount = 0;
+
   for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
     if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
     int tx = g_mapCache.tiles[s].tileX;
@@ -1395,6 +1433,10 @@ static void drawMapScreen() {
 
     int tileDeltaX = (tx - centerTX) * 4096 - centerU;
     int tileDeltaY = (ty - centerTY) * 4096 - centerV;
+
+    // Fast bounding box culling for the whole tile
+    if (tileDeltaX > maxDistU || tileDeltaX + 4096 < -maxDistU ||
+        tileDeltaY > maxDistU || tileDeltaY + 4096 < -maxDistU) continue;
 
     MapFeatureRecord* feats = g_mapCache.tiles[s].features;
     MapPoint12* pts = g_mapCache.tiles[s].points;
@@ -1416,7 +1458,8 @@ static void drawMapScreen() {
           (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
 
       bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
-      int w = isMajor ? majorCasingW : minorCasingW;
+      int wCasing = isMajor ? majorCasingW : minorCasingW;
+      int wFill   = isMajor ? majorFillW : minorFillW;
 
       int sx0, sy0;
       projectTilePoint(p0X, p0Y, sx0, sy0);
@@ -1425,65 +1468,23 @@ static void drawMapScreen() {
           projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx0, sy0);
           continue;
         }
-        int pkX = tileDeltaX + pts[off + k].u;
-        int pkY = tileDeltaY + pts[off + k].v;
         int sx1, sy1;
-        projectTilePoint(pkX, pkY, sx1, sy1);
-        clipAndDrawLine(sx0, sy0, sx1, sy1, roadCasing, w);
+        projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx1, sy1);
+        clipAndDrawLine(sx0, sy0, sx1, sy1, roadCasing, wCasing);
+        if (rideRoadFillCount < 384) {
+          s_rideRoadFills[rideRoadFillCount++] = {(int16_t)sx0, (int16_t)sy0, (int16_t)sx1, (int16_t)sy1, (uint8_t)wFill};
+        }
         sx0 = sx1;
         sy0 = sy1;
       }
     }
   }
 
-  // PASS 3: Road Inner Fills
-  for (int s = 0; s < MapTileCache::CACHE_SIZE; s++) {
-    if (!g_mapCache.tiles[s].loaded || !g_mapCache.tiles[s].features || !g_mapCache.tiles[s].points) continue;
-    int tx = g_mapCache.tiles[s].tileX;
-    int ty = g_mapCache.tiles[s].tileY;
-    if (abs(tx - centerTX) > 1 || abs(ty - centerTY) > 1) continue;
-
-    int tileDeltaX = (tx - centerTX) * 4096 - centerU;
-    int tileDeltaY = (ty - centerTY) * 4096 - centerV;
-
-    MapFeatureRecord* feats = g_mapCache.tiles[s].features;
-    MapPoint12* pts = g_mapCache.tiles[s].points;
-    uint16_t featCount = g_mapCache.tiles[s].header.featureCount;
-
-    for (uint16_t f = 0; f < featCount; f++) {
-      uint8_t ft = feats[f].type;
-      if (ft != FEAT_MOTORWAY && ft != FEAT_PRIMARY && ft != FEAT_SECONDARY &&
-          ft != FEAT_RESIDENTIAL && ft != FEAT_CYCLEWAY) continue;
-      uint8_t cnt = feats[f].pointCount;
-      uint16_t off = feats[f].pointOffset;
-      if (cnt < 2) continue;
-
-      int p0X = tileDeltaX + pts[off].u;
-      int p0Y = tileDeltaY + pts[off].v;
-      int pEndX = tileDeltaX + pts[off + cnt - 1].u;
-      int pEndY = tileDeltaY + pts[off + cnt - 1].v;
-      if ((p0X > maxDistU && pEndX > maxDistU) || (p0X < -maxDistU && pEndX < -maxDistU) ||
-          (p0Y > maxDistU && pEndY > maxDistU) || (p0Y < -maxDistU && pEndY < -maxDistU)) continue;
-
-      bool isMajor = (ft == FEAT_MOTORWAY || ft == FEAT_PRIMARY || ft == FEAT_SECONDARY);
-      int w = isMajor ? majorFillW : minorFillW;
-
-      int sx0, sy0;
-      projectTilePoint(p0X, p0Y, sx0, sy0);
-      for (uint8_t k = 1; k < cnt; k++) {
-        if (abs(pts[off + k].u - pts[off + k - 1].u) > 500 || abs(pts[off + k].v - pts[off + k - 1].v) > 500) {
-          projectTilePoint(tileDeltaX + pts[off + k].u, tileDeltaY + pts[off + k].v, sx0, sy0);
-          continue;
-        }
-        int pkX = tileDeltaX + pts[off + k].u;
-        int pkY = tileDeltaY + pts[off + k].v;
-        int sx1, sy1;
-        projectTilePoint(pkX, pkY, sx1, sy1);
-        clipAndDrawLine(sx0, sy0, sx1, sy1, roadFill, w);
-        sx0 = sx1;
-        sy0 = sy1;
-      }
-    }
+  // PASS 3: Road Inner Fills (Fast re-stroke from cached screen segments!)
+  for (int i = 0; i < rideRoadFillCount; i++) {
+    clipAndDrawLine(s_rideRoadFills[i].x0, s_rideRoadFills[i].y0,
+                    s_rideRoadFills[i].x1, s_rideRoadFills[i].y1,
+                    roadFill, s_rideRoadFills[i].fillW);
   }
 
   // Fast Lat/Lon to pixel projection helper (with dynamic map counter-rotation)

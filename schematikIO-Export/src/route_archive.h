@@ -410,11 +410,18 @@ static void fillPolygon(const int* polyX, const int* polyY, int n, uint16_t colo
       }
       xInt[b + 1] = tmp;
     }
+    uint16_t* fb = display.getBuffer();
     for (int k = 0; k + 1 < intCount; k += 2) {
       int xa = max(clipX1, min(clipX2, xInt[k]));
       int xb = max(clipX1, min(clipX2, xInt[k + 1]));
       if (xb >= xa) {
-        display.drawFastHLine(xa, y, xb - xa + 1, color);
+        if (fb) {
+          uint16_t* row = fb + y * 240 + xa;
+          int count = xb - xa + 1;
+          while (count--) *row++ = color;
+        } else {
+          display.drawFastHLine(xa, y, xb - xa + 1, color);
+        }
       }
     }
   }

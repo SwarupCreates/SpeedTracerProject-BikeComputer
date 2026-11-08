@@ -41,6 +41,9 @@
 #define BLACK ST77XX_BLACK
 #define WHITE ST77XX_WHITE
 // ─── Data structures ─────────────────────────────────────────────────────────
+static float dynamicSeaLevelPa = 101325.0f;
+static bool altCalibrated = false;
+
 struct RideData {
   float    speedKmh     = 0;
   float    distanceKm   = 0;
@@ -286,9 +289,18 @@ static bool externalPresent(uint8_t address){
  return error==0;
 }
 static bool beginBarometer(){
- if(externalPresent(0x77))return bmp.begin_I2C(0x77,&Wire);
- if(externalPresent(0x76))return bmp.begin_I2C(0x76,&Wire);
- return false;
+  bool ok = false;
+  if(externalPresent(0x77)) ok = bmp.begin_I2C(0x77, &Wire);
+  else if(externalPresent(0x76)) ok = bmp.begin_I2C(0x76, &Wire);
+  if(ok){
+    bmp.setTemperatureOversampling(BMP3_NO_OVERSAMPLING);
+    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+    bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+    Serial.println("BMP3XX Barometer initialized successfully!");
+    return true;
+  }
+  return false;
 }
 uint32_t sensorMs=0, gpsByteMs=0;
 bool gpsDataReady=false;
@@ -2251,6 +2263,19 @@ void loop() {
       goodFixQuality = (gps.hdop.hdop() < 6.0f);
     }
 
+    // Auto-calibrate barometer sea level baseline when high-precision 3D GPS lock is acquired
+    if (!altCalibrated && bmpOk && isfinite(bmp.pressure) && bmp.pressure >= 30000.0f && ride.gpsFixed && gps.altitude.isValid() && ((gps.hdop.isValid() && gps.hdop.hdop() < 1.5f) || (geprcGps.lastPvt && geprcGps.pdop < 2.0f))) {
+      float gpsAlt = (float)gps.altitude.meters();
+      if (gpsAlt > -200.0f && gpsAlt < 9000.0f) {
+        float pTarget = bmp.pressure / powf(1.0f - (gpsAlt / 44330.0f), 5.255f);
+        if (pTarget >= 87000.0f && pTarget <= 112000.0f) {
+          dynamicSeaLevelPa = pTarget;
+          altCalibrated = true;
+          Serial.printf("Barometer calibrated to GPS baseline: %.1f Pa (GPS alt: %.1f m)\n", dynamicSeaLevelPa, gpsAlt);
+        }
+      }
+    }
+
     if (rideStarted && !ridePaused && !autoPaused) {
       static uint32_t lastDistCommitMs = 0;
 
@@ -2449,23 +2474,24 @@ void loop() {
     uiRevision++;
   }
   static float filteredGpsAlt = 0.0f;
-  static float baroSeaLevelPressure = 101325.0f; // Pa, auto-calibrated by GPS
 
-  // Barometer reading + GPS pressure calibration
+  // Barometer reading + GPS pressure calibration (iPhone-grade fusion)
   if(bmpOk && millis()-sensorMs>500){
     sensorMs=millis();
     if(bmp.performReading()&&isfinite(bmp.pressure)&&bmp.pressure>=30000&&bmp.pressure<=125000){
-      // When GPS fix is solid, continuously calibrate sea-level reference pressure:
-      if (ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age() < 2500 && startSatellites() >= 6) {
+      // Continuous slow drift calibration once baseline is established or when GPS is exceptionally solid
+      if (ride.gpsFixed && gps.altitude.isValid() && gps.altitude.age() < 2500 && startSatellites() >= 8 && ((gps.hdop.isValid() && gps.hdop.hdop() < 1.2f) || (geprcGps.lastPvt && geprcGps.pdop < 1.6f))) {
         float gpsAlt = (float)gps.altitude.meters();
         if (gpsAlt > -200.0f && gpsAlt < 9000.0f) {
           float pTarget = bmp.pressure / powf(1.0f - (gpsAlt / 44330.0f), 5.255f);
-          if (pTarget >= 90000.0f && pTarget <= 110000.0f) {
-            baroSeaLevelPressure = (0.998f * baroSeaLevelPressure) + (0.002f * pTarget);
+          if (pTarget >= 87000.0f && pTarget <= 112000.0f) {
+            dynamicSeaLevelPa = (0.998f * dynamicSeaLevelPa) + (0.002f * pTarget);
+            altCalibrated = true;
           }
         }
       }
-      float baroAlt = 44330.0f * (1.0f - powf(bmp.pressure / baroSeaLevelPressure, 0.1903f));
+      // Use the dynamically calibrated sea level pressure instead of hardcoded default
+      float baroAlt = 44330.0f * (1.0f - powf(bmp.pressure / dynamicSeaLevelPa, 0.1903f));
       ride.altM = baroAlt;
     } else {
       bmpOk=false;

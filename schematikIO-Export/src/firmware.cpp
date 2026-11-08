@@ -2655,6 +2655,7 @@ void loop() {
   server.handleClient();
   serviceAppRefresh();
   pollQuickTouch();
+  serviceKineticScroll();
 
   // Target 60 FPS display refresh (16ms period, zero-allocation scalar comparison)
   if (millis() - lastDispMs >= 16) {
@@ -2673,10 +2674,12 @@ void loop() {
       float destLat, destLon;
       uint8_t aPaused;
       int8_t ctrlSlider;
+      int16_t scrollPos;
     };
     int cHeading = (compass.ready && isfinite(compass.heading)) ? (int)roundf(compass.heading) : ride.heading;
+    int16_t activeScroll = (int16_t)(quickOpen ? quickScroll : (welcomeOpen ? (homePage == HOME_APPS ? appsScroll : (homePage == HOME_SETTINGS ? settingsScroll : archiveScroll)) : 0));
     UIState curState = {
-      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || ((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) || autoPaused) ? (millis() / 16) : 0),
+      (uint32_t)((gpsWaiting || gpsRadarInspector || countdownStart || countdownGoStart || ((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) || autoPaused || isScrollingActive()) ? (millis() / 16) : 0),
       (uint32_t)(millis() / 500),
       uiRevision,
       ride.elapsedSec / 60,
@@ -2689,7 +2692,8 @@ void loop() {
       routeLen, trackLen,
       nav.destLat, nav.destLon,
       (uint8_t)autoPaused,
-      (int8_t)controlSliderOffset
+      (int8_t)controlSliderOffset,
+      activeScroll
     };
     static UIState prevState = {};
     if (memcmp(&curState, &prevState, sizeof(UIState)) == 0) return;

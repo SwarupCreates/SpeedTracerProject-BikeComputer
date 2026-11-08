@@ -39,7 +39,10 @@ bool activityMapNorthUp = false;
 extern bool appsListView;
 extern float distAnchorLat, distAnchorLon;
 int appsScroll = 0;
-const int MAX_APPS_SCROLL = 220;
+const int MAX_APPS_SCROLL = 200;
+static inline int getAppsMaxScroll() {
+  return appsListView ? 268 : 200;
+}
 static int appsPage = 0;
 static double mapViewerLat = 22.594637;
 static double mapViewerLon = 88.425853;
@@ -71,6 +74,8 @@ static void getAppLoadingMeta(HomePage page, CustomIcon &icon, uint16_t &color) 
       icon = CustomIcon::mapAppIconLarge; color = 0x33FB; break;
     case HOME_COMPASS:
       icon = CustomIcon::compassIconLarge; color = 0xE800; break;
+    case HOME_SENSORS:
+      icon = CustomIcon::heartRateIcon; color = 0x051F; break;
     case HOME_ACTIVITY:
     case HOME_RIDES:
       icon = CustomIcon::activitiesIconLarge; color = 0xFA61; break;
@@ -87,13 +92,14 @@ static void getAppLoadingMeta(HomePage page, CustomIcon &icon, uint16_t &color) 
   }
 }
 
-static void drawLoadingScreen(const char* title = "Loading asset ...", const char* subtitle = "Please wait!") {
+static void drawLoadingScreen(const char* title = "Loading asset ...", const char* subtitle = "Please wait!", HomePage targetPage = HOME_MAIN) {
   statusBar(true, true);
   display.fillRect(0, 28, 240, 292, uiBg());
 
   CustomIcon appIcon;
   uint16_t appColor;
-  getAppLoadingMeta(homePage, appIcon, appColor);
+  HomePage p = (targetPage != HOME_MAIN) ? targetPage : homePage;
+  getAppLoadingMeta(p, appIcon, appColor);
 
   const int cx = 120, cy = 135;
   const int circleR = 34;
@@ -104,8 +110,8 @@ static void drawLoadingScreen(const char* title = "Loading asset ...", const cha
   // White app icon in the center of the circular container
   drawCustomIcon(display, cx - 18, cy - 18, 0xFFFF, appIcon, 36, 36);
 
-  // "Loading asset ..." in a bigger font than now (font size 2 = 18pt smooth font)
-  centeredLabel(10, 186, 220, "Loading asset ...", 2, uiFg());
+  // Display specific app loading title (font size 2 = 18pt smooth font)
+  centeredLabel(10, 186, 220, (title && strlen(title) > 0) ? title : "Loading ...", 2, uiFg());
   if (subtitle && strlen(subtitle) > 0) {
     centeredLabel(10, 212, 220, subtitle, 1, uiMuted());
   }
@@ -189,7 +195,7 @@ static void loadBrowser(){
   }
   dir.close();
 }
-static void openBrowser(String path){drawLoadingScreen("Loading files...", "Please wait!");browserPath=path;browserPage=0;homePage=HOME_FILES;fileDetailOpen=false;fileDeleteConfirm=false;loadBrowser();uiRevision++;}
+static void openBrowser(String path){homePage=HOME_FILES;drawLoadingScreen("Loading Files...", "Please wait!", HOME_FILES);browserPath=path;browserPage=0;fileDetailOpen=false;fileDeleteConfirm=false;loadBrowser();uiRevision++;}
 
 static void openFileDetail(int row){
   if(row<0 || row>=browserCount) return;
@@ -347,7 +353,7 @@ static void loadLibrary(){
   if(homePage==HOME_ROUTES){scan("/routes");if(!libraryMore)scan("/activities");if(!libraryMore)scan("/");}
   else {scan("/activities");if(!libraryMore)scan("/");}
 }
-static void openLibrary(HomePage page){drawLoadingScreen("Loading assets...", "Please wait!");homePage=page;libraryPage=0;loadLibrary();uiRevision++;}
+static void openLibrary(HomePage page){homePage=page;const char* t=(page==HOME_ROUTES)?"Loading Routes...":"Loading Activities...";drawLoadingScreen(t, "Please wait!", page);libraryPage=0;loadLibrary();uiRevision++;}
 // App refresh button removed per user request
 static bool refreshPending=false;
 static bool showAppRefresh(){ return false; }
@@ -655,7 +661,7 @@ static void libraryTap(int x,int y){
       if(y >= btnY && y < btnY + 34 && x >= 6 && x <= 234){
         if(rideStarted){libraryMessage="Save current activity first";uiRevision++;return;}
         if(previewLen<2){libraryMessage="GPX missing or invalid";uiRevision++;return;}
-        drawLoadingScreen("Starting Route...", "Please wait!");
+        drawLoadingScreen("Starting Route...", "Please wait!", HOME_ROUTES);
         routeLen=previewLen;for(int i=0;i<routeLen;i++)route[i]={float(preview[i].lat),float(preview[i].lon)};
         nav.routeIndex=0;nav.hasDestination=true;nav.destLat=route[routeLen-1].lat;nav.destLon=route[routeLen-1].lon;
         snapActiveRoute();
@@ -676,7 +682,7 @@ static void libraryTap(int x,int y){
           else if (SD_MMC.exists("/" + fn)) gpxPath = "/" + fn;
         }
         if (SD_MMC.exists(gpxPath) || previewLen >= 2) {
-          drawLoadingScreen("Loading Route...", "Please wait!");
+          drawLoadingScreen("Loading Route...", "Please wait!", HOME_ROUTES);
           prevActivityPage = homePage;
           prevActivitySelection = librarySelection;
           homePage = HOME_ROUTES;
@@ -696,7 +702,8 @@ static void libraryTap(int x,int y){
   }
   int row = (y - 38) / 64;
   if(y >= 38 && row >= 0 && row < libraryCount && (y - 38) % 64 < 54 && x >= 8 && x <= 232){
-    drawLoadingScreen("Loading assets...", "Please wait!");
+    bool routes = (homePage == HOME_ROUTES);
+    drawLoadingScreen(routes ? "Loading Route..." : "Loading Activity...", "Please wait!", homePage);
     prevActivitySelection = "";
     prevActivityPage = HOME_APPS;
     librarySelection=libraryPaths[row];
@@ -824,7 +831,7 @@ static void globalBack(){
     else if(isLibrary()){
       if(librarySelection.length()){
         if(prevActivitySelection.length()){
-          drawLoadingScreen("Loading assets...", "Please wait!");
+          drawLoadingScreen("Loading Activity...", "Please wait!", prevActivityPage);
           homePage = prevActivityPage;
           librarySelection = prevActivitySelection;
           prevActivitySelection = "";
@@ -2660,16 +2667,19 @@ static void quickTap(int x, int y) {
             mapViewerLat = ride.lat;
             mapViewerLon = ride.lon;
           }
-          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
           homePage = HOME_MAPS;
+          drawLoadingScreen("Loading Maps...", "Please wait!", HOME_MAPS);
+          g_mapCache.updatePosition(mapViewerLat, mapViewerLon);
           uiRevision++;
         }
         else if(hitApp == 1){ // Compass
           homePage = HOME_COMPASS;
+          drawLoadingScreen("Loading Compass...", "Please wait!", HOME_COMPASS);
           uiRevision++;
         }
         else if(hitApp == 2){ // Sensors
           homePage = HOME_SENSORS;
+          drawLoadingScreen("Loading Sensors...", "Please wait!", HOME_SENSORS);
           sensorsScroll = 0;
           sensorsGuideSubpage = 0;
           uiRevision++;
@@ -2682,12 +2692,14 @@ static void quickTap(int x, int y) {
         }
         else if(hitApp == 5){ // Settings
           homePage = HOME_SETTINGS;
+          drawLoadingScreen("Loading Settings...", "Please wait!", HOME_SETTINGS);
           settingsPage = SET_MAIN;
           settingsScroll = 0;
           uiRevision++;
         }
         else if(hitApp == 6){ // Activity Settings
           homePage = HOME_ACTIVITY_SETTINGS;
+          drawLoadingScreen("Loading Settings...", "Please wait!", HOME_ACTIVITY_SETTINGS);
           uiRevision++;
         }
         else if(hitApp == 7){ // My Files
@@ -2725,6 +2737,7 @@ static void quickTap(int x, int y) {
     if (y >= 250 && y < 320) {
       if (x < 120) {
         homePage = HOME_COMPASS;
+        drawLoadingScreen("Loading Compass...", "Please wait!", HOME_COMPASS);
         uiRevision++;
       } else {
         homePage = HOME_APPS;
@@ -2904,6 +2917,49 @@ static void quickTap(int x, int y) {
   uiRevision++;
 }
 
+// ─── 60 FPS Kinetic Scrolling Engine ───────────────────────────────────────
+static float scrollVelocity = 0.0f;
+static bool touchScrolling = false;
+static int lastTouchY = 0;
+static uint32_t lastTouchYMs = 0;
+
+static inline bool isScrollingActive() {
+  return (fabsf(scrollVelocity) > 0.2f) || touchScrolling;
+}
+
+static void serviceKineticScroll() {
+  if (fabsf(scrollVelocity) > 0.25f && !touchScrolling) {
+    if (quickOpen && !quickDetail) {
+      int next = constrain((int)roundf(quickScroll + scrollVelocity), 0, 140);
+      if (next == quickScroll || next == 0 || next == 140) scrollVelocity = 0.0f;
+      quickScroll = next;
+    } else if (isLibrary() && librarySelection.length()) {
+      int maxS = (homePage == HOME_ROUTES) ? 120 : ARCHIVE_MAX_SCROLL;
+      int next = constrain((int)roundf(archiveScroll + scrollVelocity), 0, maxS);
+      if (next == archiveScroll || next == 0 || next == maxS) scrollVelocity = 0.0f;
+      archiveScroll = next;
+    } else if (welcomeOpen && !quickOpen && homePage == HOME_APPS) {
+      int maxS = getAppsMaxScroll();
+      int next = constrain((int)roundf(appsScroll + scrollVelocity), 0, maxS);
+      if (next == appsScroll || next == 0 || next == maxS) scrollVelocity = 0.0f;
+      appsScroll = next;
+    } else if (welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN) {
+      int next = constrain((int)roundf(settingsScroll + scrollVelocity), 0, 140);
+      if (next == settingsScroll || next == 0 || next == 140) scrollVelocity = 0.0f;
+      settingsScroll = next;
+    } else if (gpsWaiting || gpsRadarInspector) {
+      int next = constrain((int)roundf(gpsScroll + scrollVelocity), 0, 128);
+      if (next == gpsScroll || next == 0 || next == 128) scrollVelocity = 0.0f;
+      gpsScroll = next;
+    } else {
+      scrollVelocity = 0.0f;
+    }
+    scrollVelocity *= 0.90f; // Silky smooth deceleration curve
+    if (fabsf(scrollVelocity) <= 0.25f) scrollVelocity = 0.0f;
+    uiRevision++;
+  }
+}
+
 static void pollQuickTouch() {
   static uint32_t poll = 0, lastContact = 0;
   static bool held = false;
@@ -2989,9 +3045,19 @@ static void pollQuickTouch() {
         quickTap(endX, endY);
       }
     }
+    touchScrolling = false;
+    if (moved && !sliderGesture && !mapPanGesture) {
+      if (fabsf(scrollVelocity) >= 0.8f) {
+        scrollVelocity = constrain(scrollVelocity, -28.0f, 28.0f);
+      } else {
+        scrollVelocity = 0.0f;
+      }
+    } else {
+      scrollVelocity = 0.0f;
+    }
     rootGesture=false;sliderGesture=false;mapPanGesture=false;held=false;candidateX=-1;
   };
-  if (!touchReady || millis() - poll < 25) return;
+  if (!touchReady || millis() - poll < 8) return;
   poll = millis();
 
   // Auto-reset PIN error dots after 1.5 seconds
@@ -3069,7 +3135,10 @@ static void pollQuickTouch() {
   }
   if(rootGesture){
     endX=x;endY=y;
-    if(abs(y-startY)>7 || abs(x-startX)>7)moved=true;
+    if(abs(y-startY)>5 || abs(x-startX)>5){
+      moved=true;
+      touchScrolling=true;
+    }
     if(sliderGesture)setBrightnessFromTouch(x);
     else if(homeSliderDragging){
       homeSliderOffset = constrain(x - homeSliderStartX, 0, 116);
@@ -3091,6 +3160,16 @@ static void pollQuickTouch() {
           g_mapCache.updatePosition(previewPanLat, previewPanLon);
           uiRevision++;
         } else {
+          uint32_t now = millis();
+          if (lastTouchYMs > 0 && now > lastTouchYMs) {
+            uint32_t dt = now - lastTouchYMs;
+            if (dt <= 60) {
+              float v = (float)(lastTouchY - y) / (float)dt * 16.0f;
+              scrollVelocity = 0.45f * scrollVelocity + 0.55f * v;
+            }
+          }
+          lastTouchY = y;
+          lastTouchYMs = now;
           int maxS = (homePage == HOME_ROUTES) ? 120 : ARCHIVE_MAX_SCROLL;
           int offset=constrain(startScroll+startY-y,0,maxS);
           if(offset!=archiveScroll){archiveScroll=offset;uiRevision++;}
@@ -3107,13 +3186,43 @@ static void pollQuickTouch() {
           uiRevision++;
         }
       } else if(welcomeOpen && !quickOpen && homePage == HOME_APPS){
-        int maxS = appsListView ? 220 : MAX_APPS_SCROLL;
+        uint32_t now = millis();
+        if (lastTouchYMs > 0 && now > lastTouchYMs) {
+          uint32_t dt = now - lastTouchYMs;
+          if (dt <= 60) {
+            float v = (float)(lastTouchY - y) / (float)dt * 16.0f;
+            scrollVelocity = 0.45f * scrollVelocity + 0.55f * v;
+          }
+        }
+        lastTouchY = y;
+        lastTouchYMs = now;
+        int maxS = getAppsMaxScroll();
         int offset=constrain(startScroll+startY-y,0,maxS);
         if(offset!=appsScroll){appsScroll=offset;uiRevision++;}
       } else if(welcomeOpen && !quickOpen && homePage == HOME_SETTINGS && settingsPage == SET_MAIN){
+        uint32_t now = millis();
+        if (lastTouchYMs > 0 && now > lastTouchYMs) {
+          uint32_t dt = now - lastTouchYMs;
+          if (dt <= 60) {
+            float v = (float)(lastTouchY - y) / (float)dt * 16.0f;
+            scrollVelocity = 0.45f * scrollVelocity + 0.55f * v;
+          }
+        }
+        lastTouchY = y;
+        lastTouchYMs = now;
         int offset=constrain(startScroll+startY-y,0,140);
         if(offset!=settingsScroll){settingsScroll=offset;uiRevision++;}
       } else if (quickOpen) {
+        uint32_t now = millis();
+        if (lastTouchYMs > 0 && now > lastTouchYMs) {
+          uint32_t dt = now - lastTouchYMs;
+          if (dt <= 60) {
+            float v = (float)(lastTouchY - y) / (float)dt * 16.0f;
+            scrollVelocity = 0.45f * scrollVelocity + 0.55f * v;
+          }
+        }
+        lastTouchY = y;
+        lastTouchYMs = now;
         int offset=constrain(startScroll+startY-y,0,140);
         if(offset!=quickScroll){quickScroll=offset;uiRevision++;}
       }
@@ -3126,8 +3235,14 @@ static void pollQuickTouch() {
     if(candidateX<0 || abs(x-candidateX)>12 || abs(y-candidateY)>12){
       candidateX=x;candidateY=y;candidateMs=millis();return;
     }
-    if(millis()-candidateMs<25)return;
+    if(millis()-candidateMs<10)return;
     held = true;candidateX=-1;
+    if (fabsf(scrollVelocity) > 0.8f) {
+      scrollVelocity = 0.0f; // Finger catch halts running glide
+      moved = true;          // Prevent accidental item tap
+    }
+    lastTouchY = y;
+    lastTouchYMs = millis();
     if (screenLocked) {
       if (lockScreenMode == LOCK_KEYPAD) {
         rootGesture = false;

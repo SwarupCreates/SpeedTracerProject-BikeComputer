@@ -145,7 +145,7 @@ static bool wipeSdCardDir(const char* dirPath) {
 }
 
 static void executeSdFormat() {
-  drawLoadingScreen("Formatting SD...", "Please wait!");
+  drawLoadingScreen("Formatting SD...", "Please wait!", HOME_SETTINGS);
   if (!sdOk) {
     resetMessage = "SD Card not mounted!";
     return;
@@ -159,7 +159,7 @@ static void executeSdFormat() {
 }
 
 static void executeSoftReset() {
-  drawLoadingScreen("Rebooting device...", "Please wait!");
+  drawLoadingScreen("Rebooting device...", "Please wait!", HOME_SETTINGS);
   if (rideStarted || activityFile) saveActivity();
   delay(600);
   ESP.restart();
@@ -919,7 +919,7 @@ static void tapSettings(int x, int y) {
     }
     // Shut Down
     else if (x >= 8 && x <= 232 && y >= 194 && y < 248) {
-      drawLoadingScreen("Shutting down...", "Saving data");
+      drawLoadingScreen("Shutting down...", "Saving data", HOME_SETTINGS);
       delay(400);
       enterPowerOff();
     }

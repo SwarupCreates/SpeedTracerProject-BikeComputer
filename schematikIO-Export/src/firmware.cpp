@@ -753,7 +753,16 @@ static void updateFusedHeading() {
     float diff = targetHeading - s_fusedHeading;
     while (diff < -180.0f) diff += 360.0f;
     while (diff > 180.0f)  diff -= 360.0f;
-    s_fusedHeading = fmodf(s_fusedHeading + diff * filterAlpha + 360.0f, 360.0f);
+
+    float absDiff = fabsf(diff);
+    if (absDiff > 0.35f) {
+      float alpha = filterAlpha;
+      if (absDiff < 1.5f) {
+        float t = (absDiff - 0.35f) / 1.15f;
+        alpha *= (0.25f + 0.75f * t); // Ease-in spring damping for fractional differences
+      }
+      s_fusedHeading = fmodf(s_fusedHeading + diff * alpha + 360.0f, 360.0f);
+    }
   }
 
   ride.heading = (int)lroundf(s_fusedHeading) % 360;

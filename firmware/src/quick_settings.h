@@ -1059,8 +1059,9 @@ static void drawCompassApp() {
   display.drawFastHLine(cx - 23, cy, 47, uiFg());
   display.drawFastVLine(cx, cy - 23, 47, uiFg());
 
-  // Current heading with smooth low-pass interpolation
+  // Current heading with spring-damped physical animation
   static float s_smoothCompassH = 0.0f;
+  static float s_compassVelocity = 0.0f;
   static bool s_compassInit = false;
   static uint32_t s_lastCompassFrameMs = 0;
   uint32_t nowCompassMs = millis();
@@ -1070,15 +1071,37 @@ static void drawCompassApp() {
   float rawH = (compass.ready && isfinite(compass.heading)) ? compass.heading : (ride.gpsFixed ? (float)ride.heading : 0.0f);
   if (!s_compassInit) {
     s_smoothCompassH = rawH;
+    s_compassVelocity = 0.0f;
     s_compassInit = true;
   } else {
     float diff = rawH - s_smoothCompassH;
     while (diff < -180.0f) diff += 360.0f;
     while (diff > 180.0f) diff -= 360.0f;
-    if (fabsf(diff) > 0.35f) {
-      float alpha = 1.0f - expf(-dtCompass * 12.0f);
-      s_smoothCompassH += diff * alpha;
+
+    float absDiff = fabsf(diff);
+
+    // Adaptive spring damping (eliminates fractional EMI micro-jitter while preserving 100% full turn sensitivity):
+    // For fractional differences (< 1.5 deg), heavy viscous damping (zeta up to 1.75) dampens high-frequency twitching.
+    // For intentional turns (> 2.0 deg), zeta relaxes to 1.05 (responsive, critically damped swing).
+    float t = constrain((absDiff - 0.35f) / 1.65f, 0.0f, 1.0f);
+    float zeta = 1.75f - 0.70f * t;
+    const float omega = 7.5f;
+    float kSpring = omega * omega;
+    float kDamping = 2.0f * zeta * omega;
+
+    float accel = kSpring * diff - kDamping * s_compassVelocity;
+    s_compassVelocity += accel * dtCompass;
+    s_smoothCompassH += s_compassVelocity * dtCompass;
+
+    // Smooth settle cushion at the end of motion
+    if (absDiff < 0.20f && fabsf(s_compassVelocity) < 0.40f) {
+      s_compassVelocity *= 0.80f;
+      if (fabsf(s_compassVelocity) < 0.05f) {
+        s_compassVelocity = 0.0f;
+        s_smoothCompassH = rawH;
+      }
     }
+
     while (s_smoothCompassH < 0.0f) s_smoothCompassH += 360.0f;
     while (s_smoothCompassH >= 360.0f) s_smoothCompassH -= 360.0f;
   }

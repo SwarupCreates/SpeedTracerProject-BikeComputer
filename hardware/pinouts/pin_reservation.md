@@ -18,7 +18,13 @@ These are the wires you need to connect yourself.
 | | RX | GPIO43 / board TXD | ESP32 sends configuration to GPS |
 | | SDA | GPIO11 | Compass I²C data |
 | | SCL | GPIO10 | Compass I²C clock |
-| **Waveshare BMP390 Barometer** | VCC | 3V3 | Power |
+| **7Semi BMP581 Altimeter** | V / 3V3 | 3V3 | Power (Do not bridge Vi to V) |
+| | GND | GND | Ground |
+| | SDI | GPIO11 | Pressure sensor I²C data (SDA) |
+| | SCK | GPIO10 | Pressure sensor I²C clock (SCL) |
+| | SDO | GND | Sets I²C address to `0x46` |
+| | CS | 3V3 / Float | Selects I²C mode (**Must NOT connect to GND!**) |
+| **Waveshare BMP390 Barometer (Legacy)** | VCC | 3V3 | Power |
 | | GND | GND | Ground |
 | | SDA | GPIO11 | Pressure sensor I²C data |
 | | SCL | GPIO10 | Pressure sensor I²C clock |
@@ -28,7 +34,8 @@ These are the wires you need to connect yourself.
 | | SCL | GPIO10 | Button expander I²C clock |
 
 > [!NOTE]
-> **GPIO11 and GPIO10 are shared**: connect all three modules to the same data and clock lines. This is intentional.
+> **GPIO11 and GPIO10 are shared**: connect the compass, barometer, and expander modules to the same data and clock lines. This is intentional.
+> For the carrier PCB assembly in the top cavity, see [Forehead PCB Guide](file:///c:/Users/srpcr/Desktop/Codespace/SpeedTracerProject/hardware/forehead_pcb/README.md).
 
 ### External Bus Settings
 
@@ -36,7 +43,8 @@ These are the wires you need to connect yourself.
 | :--- | :--- | :--- |
 | **GPS (GEPRC GEP-M1025Q)** | UART (Serial 1) | 115200 baud, 8N1 |
 | **QMC5883L Compass** | I²C (Wire 0) | Address `0x0D` |
-| **Waveshare BMP390** | I²C (Wire 0) | Address `0x77` default; firmware also checks `0x76` |
+| **7Semi BMP581 Barometer** | I²C (Wire 0) | Address `0x46` (SDO to GND); fallback `0x47` |
+| **Waveshare BMP390 (Legacy)**| I²C (Wire 0) | Address `0x77` default; firmware checks `0x76` |
 | **MCP23017 Expander** | I²C (Wire 0) | Address `0x20` |
 
 *For the BMP390, keep the module in its default I²C configuration. Its interrupt and SPI-only connections are unused.*

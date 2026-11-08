@@ -39,7 +39,7 @@ SpeedTracer is built around an ESP32-S3 and follows a modular, decoupled archite
 
 ### 2. Services (`services/`)
 - **DisplayService**: Manages the ST7789V2 display on FSPI (pins 40, 45, 42, 41, 39, backlight 5) and drawing primitives (arcs, progress bars, dividers).
-- **GPSService**: Handles the GEPRC M1025Q GNSS over UART (RX 44, TX 43), parses UBX NAV-PVT and NMEA fallback, reads the QMC5883L compass (0x0D), reads the BMP390 altimeter (0x77), calculates Haversine distance, grade %, virtual cadence, and virtual power.
+- **GPSService**: Handles the GEPRC M1025Q GNSS over UART (RX 44, TX 43), parses UBX NAV-PVT and NMEA fallback, reads the QMC5883L compass (0x0D), reads the 7Semi BMP581 / BMP390 altimeter (0x46 / 0x77 on the [Forehead PCB](file:///c:/Users/srpcr/Desktop/Codespace/SpeedTracerProject/hardware/forehead_pcb/README.md)), calculates Haversine distance, grade %, virtual cadence, and virtual power.
 - **InputService**: Interfaces with the Adafruit MCP23017 I2C expander (0x20) with debounced handlers for remote buttons (UP, DOWN, LEFT, RIGHT) and checks the power key (GPIO 6) for long-press shutdown via SYS_EN (GPIO 7).
 - **StorageService**: Interfaces with FAT32 MicroSD via HSPI (pins 14, 16, 17, 21), handles `/ride.csv` breadcrumb logging and `/route.json` route persistence.
 - **WebService**: Manages the SoftAP WiFi access point and embedded HTTP WebServer on port 80 with endpoints for telemetry, navigation, route upload, config NVS management, GPX export, and compass calibration.

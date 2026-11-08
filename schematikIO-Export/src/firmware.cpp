@@ -120,6 +120,8 @@ static const char* cardinalStr(int hdg);
 SPIClass lcdSPI(FSPI);
 // Compose off-screen, then transfer only changed 16x16 tiles. Never clear
 // the physical LCD between frames (the old direct clear caused visible wipes).
+bool isScrollingActive();
+
 class CycleDisplay : public GFXcanvas16 {
  Adafruit_ST7789 panel;
  uint32_t shown[300]={0}; // Tile fingerprints: 2.4 KB, not a second 154 KB framebuffer.
@@ -171,6 +173,7 @@ public:
      if(!compact){Serial.println("Display allocation failed");while(true)delay(1000);}
    }
    panel.init(w,h);
+   panel.setSPISpeed(80000000);
    // Rotate the physical panel only; keep the canvas and tile coordinates unchanged.
    // Portrait orientation with the USB-C connector below the screen.
    panel.setRotation(2);
@@ -226,6 +229,11 @@ public:
  void invertDisplay(bool v){panel.invertDisplay(v);}
  void refresh(){
     if(!buffer && !compact)return;
+    if(buffer && isScrollingActive()){
+      panel.drawRGBBitmap(0, 0, buffer, DISP_W, DISP_H);
+      first = true;
+      return;
+    }
     // Compare tiles with 32-bit unrolled word reads, merge adjacent changed tiles into one 16-row transfer.
     static uint16_t strip[DISP_W*16];
     for(int y=0;y<DISP_H;y+=16){
@@ -631,7 +639,7 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
   String batteryText;
   uint16_t batCol;
   if (!batteryConnected) {
-    batteryText = "N/A";
+    batteryText = "";
     batCol = uiMuted();
   } else if (batteryCharging) {
     batteryText = String(batteryPercent) + "%";
@@ -652,7 +660,9 @@ static void statusBar(bool showStatusIcons = true, bool clearPage = true) {
 
   int batX = 208;
   int batY = 8;
-  label(batX - 4 - textWidth(batteryText, 0), 10, batteryText, 0, batCol);
+  if (batteryText.length() > 0) {
+    label(batX - 4 - textWidth(batteryText, 0), 10, batteryText, 0, batCol);
+  }
   drawBatteryIcon(display, batX, batY, batteryPercent, batteryCharging, batteryAlert, batCol, batteryConnected);
 }
 
@@ -1799,6 +1809,7 @@ void setup() {
 
   // 3. Initialize Display & Turn ON Backlight IMMEDIATELY
   lcdSPI.begin(40, -1, 45, 42);
+  lcdSPI.setFrequency(80000000);
   display.init(240, 320);
   display.setRotation(0);
   display.invertDisplay(true);

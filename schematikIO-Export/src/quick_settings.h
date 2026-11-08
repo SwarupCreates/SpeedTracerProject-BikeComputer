@@ -41,7 +41,7 @@ extern float distAnchorLat, distAnchorLon;
 int appsScroll = 0;
 const int MAX_APPS_SCROLL = 200;
 static inline int getAppsMaxScroll() {
-  return appsListView ? 268 : 200;
+  return appsListView ? 320 : 250;
 }
 static int appsPage = 0;
 static double mapViewerLat = 22.594637;
@@ -1956,7 +1956,7 @@ static void initQuickTouch() {
     touchBus.end();
     busStarted=false;
   }
-  if (!busStarted) busStarted = touchBus.begin(1, 3, 100000);
+  if (!busStarted) busStarted = touchBus.begin(1, 3, 400000);
   if (!busStarted) {
     touchReady = false;
     Serial.println("Touch: I2C bus initialization failed");
@@ -2320,7 +2320,14 @@ bool drawLifecycleScreen() {
   else if(countdownStart) state="count:"+String((millis()-countdownStart)/40);
   else if((welcomeOpen || quickOpen) && homePage == HOME_COMPASS) state="compass:"+String(millis()/16)+":"+String((int)(compass.heading*10))+":"+String(darkTheme);
   else if((welcomeOpen || quickOpen) && homePage == HOME_SENSORS) state="sensors:"+String(millis()/250)+":"+String(antHR)+":"+String(antCad)+":"+String((int)(antSpeed*10))+":"+String(antPower)+":"+String(bleCount())+":"+String(sensorsGuideSubpage)+":"+String(darkTheme);
-  else if(welcomeOpen && !quickOpen) state="welcome:"+String(homePage)+":"+String(homeHeroClock)+":"+String(startSatellites())+":"+String(gpsDataReady)+":"+String(uiRevision)+":"+String(ride.gpsFixed)+":"+String(sdOk)+":"+String(millis()/500)+":"+String(bleCount())+":"+String(WiFi.status());
+  else if(welcomeOpen && !quickOpen) {
+    char sbuf[64];
+    snprintf(sbuf, sizeof(sbuf), "w:%d:%d:%d:%d:%u:%d:%d:%u:%d:%d",
+             (int)homePage, (int)homeHeroClock, startSatellites(), (int)gpsDataReady,
+             (unsigned)uiRevision, (int)ride.gpsFixed, (int)sdOk, (unsigned)(millis()/500),
+             bleCount(), (int)WiFi.status());
+    state = sbuf;
+  }
   if(quickOpen && !shutdownDialog && !gpsWaiting && !gpsRadarInspector && !countdownStart && !countdownGoStart){previous="";return false;}
   if(state.isEmpty()){previous="";return false;}
   if(state==previous)return true;
@@ -2329,8 +2336,8 @@ bool drawLifecycleScreen() {
     drawLockScreen();
     return true;
   }
-  display.fillScreen(uiBg());
   if(shutdownDialog) {
+    display.fillScreen(uiBg());
     label(24,72,"SHUT DOWN?",2,0xFFFF);
     label(16,116,"Current activity will be saved",1,0xFFFF);
     label(16,140,"USB uses deep-sleep standby",1,0x8410);
@@ -2338,11 +2345,14 @@ bool drawLifecycleScreen() {
     card(12,205,102,48,0x4208);label(30,222,"CANCEL",1,0xFFFF);
     card(126,205,102,48,0xF800);label(147,222,"CONFIRM",1,0xFFFF);
   } else if(gpsWaiting || gpsRadarInspector) {
+    display.fillScreen(uiBg());
     drawGpsRadarScreen();
   } else if(countdownStart || countdownGoStart) {
+    display.fillScreen(uiBg());
     drawCountdownScreen();
   } else {
     if(homePage!=HOME_MAIN){drawHomeSubpage();return true;}
+    display.fillScreen(uiBg());
     statusBar();
     if (homeHeroClock) {
       drawHomeClockWidget();
@@ -2946,11 +2956,16 @@ static bool touchScrolling = false;
 static int lastTouchY = 0;
 static uint32_t lastTouchYMs = 0;
 
-static inline bool isScrollingActive() {
+bool isScrollingActive() {
   return (fabsf(scrollVelocity) > 0.2f) || touchScrolling;
 }
 
 static void serviceKineticScroll() {
+  static uint32_t lastKineticMs = 0;
+  uint32_t now = millis();
+  if (now - lastKineticMs < 16) return; // Locked 60 FPS tick
+  lastKineticMs = now;
+
   if (fabsf(scrollVelocity) > 0.25f && !touchScrolling) {
     if (quickOpen && !quickDetail) {
       int next = constrain((int)roundf(quickScroll + scrollVelocity), 0, 140);
@@ -2977,7 +2992,7 @@ static void serviceKineticScroll() {
     } else {
       scrollVelocity = 0.0f;
     }
-    scrollVelocity *= 0.90f; // Silky smooth deceleration curve
+    scrollVelocity *= 0.92f; // Smooth physical glide per 16ms frame
     if (fabsf(scrollVelocity) <= 0.25f) scrollVelocity = 0.0f;
     uiRevision++;
   }
